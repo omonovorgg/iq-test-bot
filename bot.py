@@ -601,111 +601,251 @@ async def unlock_result_payment(conn, uid: int, payment_id: int) -> None:
 
 async def create_or_get_session(uid: int, language: str):
     assert pool is not None
+
     async with pool.acquire() as conn:
         async with conn.transaction():
-            user = await conn.fetchrow(
-                "SELECT attempts FROM users WHERE user_id=$1 FOR UPDATE", uid
-            )
-            if not user:
-                raise HTTPException(status_code=401, detail="USER_NOT_FOUND")
 
+            # Lock the user row so two simultaneous /start requests
+            # cannot create two sessions for the same user.
+            user = await conn.fetchrow(
+                "SELECT attempts FROM users WHERE user_id=$1 FOR UPDATE",
+                uid
+            )
+
+            if not user:
+                raise HTTPException(
+                    status_code=401,
+                    detail="USER_NOT_FOUND"
+                )
+
+            # Find an unfinished session.
             active = await conn.fetchrow("""
-                SELECT * FROM test_sessions
-                WHERE user_id=$1 AND completed=FALSE
+                SELECT *
+                FROM test_sessions
+                WHERE user_id=$1
+                  AND completed=FALSE
                 FOR UPDATE
             """, uid)
 
             if active:
                 active = await repair_session(conn, active)
-                answer_count = len(sanitize_answers(active["answers"]))
 
-                # A session with all 16 answers is NOT an active quiz anymore.
-                # Older versions could leave completed=FALSE with 16 answers,
-                # which made /api/session/start return index=16 forever.
+                answer_count = len(
+                    sanitize_answers(active["answers"])
+                )
+
+                # If an old session already contains all 16 answers,
+                # finalize it before creating a new test.
                 if answer_count >= QUESTIONS_COUNT:
-                    raw, correct = score_answers(sanitize_answers(active["answers"]))
+
+                    raw, correct = score_answers(
+                        sanitize_answers(active["answers"])
+                    )
+
                     iq = calculate_iq(raw)
-                    elapsed = max(0, round((now_utc() - active["started_at"]).total_seconds()))
+
+                    elapsed = max(
+                        0,
+                        round(
+                            (
+                                now_utc() -
+                                active["started_at"]
+                            ).total_seconds()
+                        )
+                    )
+
                     mode = await get_payment_mode()
 
+                    # Result-paid mode keeps the completed session
+                    # until the result payment is approved.
                     if mode == PAYMENT_MODE_RESULT:
-                        # Preserve the completed result until the result payment
-                        # is approved. finish_session() / the frontend can then
-                        # trigger the payment flow normally.
+
                         active = await conn.fetchrow("""
                             UPDATE test_sessions
-                            SET completed=TRUE, current_index=$2, raw_score=$3,
-                                correct=$4, result_iq=$5, result_raw=$3,
-                                result_correct=$4, result_elapsed=$6,
-                                result_unlocked=FALSE, result_counted=FALSE,
-                                finished_at=COALESCE(finished_at, NOW()),
+                            SET completed=TRUE,
+                                current_index=$2,
+                                raw_score=$3,
+                                correct=$4,
+                                result_iq=$5,
+                                result_raw=$3,
+                                result_correct=$4,
+                                result_elapsed=$6,
+                                result_unlocked=FALSE,
+                                result_counted=FALSE,
+                                finished_at=COALESCE(
+                                    finished_at,
+                                    NOW()
+                                ),
                                 last_activity=NOW()
                             WHERE user_id=$1
                             RETURNING *
-                        """, uid, QUESTIONS_COUNT, raw, correct, iq, elapsed)
-                        print(f"Session finalized for result payment: user={uid}")
+                        """,
+                            uid,
+                            QUESTIONS_COUNT,
+                            raw,
+                            correct,
+                            iq,
+                            elapsed
+                        )
+
+                        print(
+                            f"Session finalized for result payment: "
+                            f"user={uid}"
+                        )
+
                         return active, False
 
-                    # For free-result mode and the normal first-free/retest-paid
-                    # mode, a fully answered legacy session is finalized exactly
-                    # once, then removed so the next /start can create a new quiz.
+                    # Normal mode:
+                    # save the legacy result once, then remove the
+                    # old session so a new test can be created.
                     if not bool(active["result_counted"]):
+
                         await conn.execute("""
-                            INSERT INTO attempts(user_id, raw_score, iq_score, correct, elapsed)
+                            INSERT INTO attempts(
+                                user_id,
+                                raw_score,
+                                iq_score,
+                                correct,
+                                elapsed
+                            )
                             VALUES($1,$2,$3,$4,$5)
-                        """, uid, raw, iq, correct, elapsed)
+                        """,
+                            uid,
+                            raw,
+                            iq,
+                            correct,
+                            elapsed
+                        )
+
                         await conn.execute("""
-                            UPDATE users SET
-                                attempts=attempts+1,
-                                best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
-                                best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
-                                best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
+                            UPDATE users
+                            SET attempts=attempts+1,
+                                best_score=
+                                    CASE
+                                        WHEN best_score IS NULL
+                                             OR $2 > best_score
+                                        THEN $2
+                                        ELSE best_score
+                                    END,
+                                best_raw=
+                                    CASE
+                                        WHEN best_score IS NULL
+                                             OR $2 > best_score
+                                        THEN $3
+                                        ELSE best_raw
+                                    END,
+                                best_time=
+                                    CASE
+                                        WHEN best_score IS NULL
+                                             OR $2 > best_score
+                                             OR (
+                                                 $2 = best_score
+                                                 AND (
+                                                     best_time IS NULL
+                                                     OR $4 < best_time
+                                                 )
+                                             )
+                                        THEN $4
+                                        ELSE best_time
+                                    END,
                                 updated_at=NOW()
                             WHERE user_id=$1
-                        """, uid, iq, raw, elapsed)
+                        """,
+                            uid,
+                            iq,
+                            raw,
+                            elapsed
+                        )
 
-                    await conn.execute("DELETE FROM test_sessions WHERE user_id=$1", uid)
-                    # Refresh the locked user row because attempts may have just
-                    # changed and the payment decision below depends on it.
+                    await conn.execute("""
+                        DELETE FROM test_sessions
+                        WHERE user_id=$1
+                    """, uid)
+
+                    # Refresh attempts after finalizing the old session.
                     user = await conn.fetchrow(
-                        "SELECT attempts FROM users WHERE user_id=$1 FOR UPDATE", uid
+                        """
+                        SELECT attempts
+                        FROM users
+                        WHERE user_id=$1
+                        FOR UPDATE
+                        """,
+                        uid
                     )
+
                 else:
-                    age = (now_utc() - active["last_activity"]).total_seconds()
+                    # Continue an existing unfinished test.
+                    age = (
+                        now_utc() -
+                        active["last_activity"]
+                    ).total_seconds()
+
                     if age <= 7200:
                         return active, False
-                    await conn.execute(
-                        "DELETE FROM test_sessions WHERE user_id=$1", uid
-                    )
 
+                    # Session expired.
+                    await conn.execute("""
+                        DELETE FROM test_sessions
+                        WHERE user_id=$1
+                    """, uid)
+
+            # Determine payment requirement.
             mode = await get_payment_mode()
             payment_id = None
-            if mode == PAYMENT_MODE_RETEST and int(user["attempts"]) >= 1:
-                payment_id = await consume_approved_retest_payment(conn, uid)
+
+            if (
+                mode == PAYMENT_MODE_RETEST
+                and int(user["attempts"]) >= 1
+            ):
+
+                payment_id = await consume_approved_retest_payment(
+                    conn,
+                    uid
+                )
+
                 if payment_id is None:
                     price = await get_price()
+
                     raise HTTPException(
                         status_code=402,
                         detail="PAID_RETEST",
-                        headers={"X-Payment-Price": str(price)},
+                        headers={
+                            "X-Payment-Price": str(price)
+                        }
                     )
 
-            row = await conn.fetchrow("""
-    INSERT INTO test_sessions (
-        user_id,
-        language,
-        started_at,
-        last_activity,
-        payment_id
-    )
-    VALUES ($1, $2, NOW(), NOW(), $3)
-    ON CONFLICT (user_id)
-    DO UPDATE SET
-        last_activity = NOW()
-    RETURNING *
-""", uid, language, payment_id)
+            # Safety cleanup:
+            # In case a completed old session still exists for this
+            # user, remove it before creating the new test.
+            await conn.execute("""
+                DELETE FROM test_sessions
+                WHERE user_id=$1
+            """, uid)
 
-return row, True
+            # Create the new test session.
+            row = await conn.fetchrow("""
+                INSERT INTO test_sessions (
+                    user_id,
+                    language,
+                    started_at,
+                    last_activity,
+                    payment_id
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    NOW(),
+                    NOW(),
+                    $3
+                )
+                RETURNING *
+            """,
+                uid,
+                language,
+                payment_id
+            )
+
+            return row, True
 
 
 async def save_answer(uid: int, question_index: int, selected: int):
