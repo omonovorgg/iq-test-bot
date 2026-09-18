@@ -691,11 +691,21 @@ async def create_or_get_session(uid: int, language: str):
                     )
 
             row = await conn.fetchrow("""
-                INSERT INTO test_sessions (user_id, language, started_at, last_activity, payment_id)
-                VALUES ($1, $2, NOW(), NOW(), $3)
-                RETURNING *
-            """, uid, language, payment_id)
-            return row, True
+    INSERT INTO test_sessions (
+        user_id,
+        language,
+        started_at,
+        last_activity,
+        payment_id
+    )
+    VALUES ($1, $2, NOW(), NOW(), $3)
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+        last_activity = NOW()
+    RETURNING *
+""", uid, language, payment_id)
+
+return row, True
 
 
 async def save_answer(uid: int, question_index: int, selected: int):
