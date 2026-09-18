@@ -423,35 +423,117 @@ def payment_mode_label(mode: str) -> str:
 
 async def create_payment(uid: int, purpose: str) -> dict:
     if purpose not in {"retest", "result"}:
-        raise HTTPException(status_code=400, detail="INVALID_PAYMENT_PURPOSE")
+        raise HTTPException(
+            status_code=400,
+            detail="INVALID_PAYMENT_PURPOSE"
+        )
+
     assert pool is not None
+
     price = await get_price()
+
     if price <= 0:
-        raise HTTPException(status_code=400, detail="PAYMENTS_DISABLED")
+        raise HTTPException(
+            status_code=400,
+            detail="PAYMENTS_DISABLED"
+        )
+
     cards = await active_cards()
+
     if not cards:
-        raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
+        raise HTTPException(
+            status_code=503,
+            detail="NO_PAYMENT_CARD"
+        )
+
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            # -------------------------------------------------
+            # 1. AVVAL TASDIQLANGAN, LEKIN HALI ISHLATILMAGAN
+            #    TO‘LOVNI QIDIRAMIZ.
+            #
+            #    Foydalanuvchi Mini App'ni yopib qayta ochsa,
+            #    yangi payment yaratmaymiz.
+            # -------------------------------------------------
+
+            approved = await conn.fetchrow("""
+                SELECT id, amount, purpose, status, consumed
+                FROM payments
+                WHERE user_id=$1
+                  AND purpose=$2
+                  AND status='approved'
+                  AND consumed=FALSE
+                ORDER BY id DESC
+                LIMIT 1
+                FOR UPDATE
+            """, uid, purpose)
+
+            if approved:
+                payment_id = int(approved["id"])
+                amount = int(approved["amount"])
+
+                return {
+                    "payment_id": payment_id,
+                    "amount": amount,
+                    "cards": cards,
+                    "status": "approved",
+                    "already_approved": True,
+                }
+
+            # -------------------------------------------------
+            # 2. PENDING PAYMENT BOR BO‘LSA, SHUNI QAYTARAMIZ.
+            #    Yangi payment yaratmaymiz.
+            # -------------------------------------------------
+
             existing = await conn.fetchrow("""
                 SELECT id, amount, purpose, status
                 FROM payments
-                WHERE user_id=$1 AND purpose=$2 AND status='pending' AND consumed=FALSE
-                ORDER BY id DESC LIMIT 1
+                WHERE user_id=$1
+                  AND purpose=$2
+                  AND status='pending'
+                  AND consumed=FALSE
+                ORDER BY id DESC
+                LIMIT 1
                 FOR UPDATE
             """, uid, purpose)
+
             if existing:
                 payment_id = int(existing["id"])
                 amount = int(existing["amount"])
-            else:
-                row = await conn.fetchrow("""
-                    INSERT INTO payments(user_id, amount, purpose)
-                    VALUES($1,$2,$3) RETURNING id, amount
-                """, uid, price, purpose)
-                payment_id = int(row["id"])
-                amount = int(row["amount"])
-    return {"payment_id": payment_id, "amount": amount, "cards": cards}
 
+                return {
+                    "payment_id": payment_id,
+                    "amount": amount,
+                    "cards": cards,
+                    "status": "pending",
+                    "already_approved": False,
+                }
+
+            # -------------------------------------------------
+            # 3. UMUMAN PAYMENT YO‘Q BO‘LSA, YANGI YARATAMIZ.
+            # -------------------------------------------------
+
+            row = await conn.fetchrow("""
+                INSERT INTO payments(
+                    user_id,
+                    amount,
+                    purpose
+                )
+                VALUES($1,$2,$3)
+                RETURNING id, amount
+            """, uid, price, purpose)
+
+            payment_id = int(row["id"])
+            amount = int(row["amount"])
+
+    return {
+        "payment_id": payment_id,
+        "amount": amount,
+        "cards": cards,
+        "status": "pending",
+        "already_approved": False,
+    }
 
 async def payment_status(uid: int, payment_id: int) -> dict:
     assert pool is not None
