@@ -10,10 +10,6 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import asyncpg
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
-
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -23,7 +19,9 @@ from aiogram.types import (
     Message,
     WebAppInfo,
 )
-
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -43,6 +41,7 @@ PORT = int(os.environ.get("PORT", "10000"))
 BASE_DIR = Path(__file__).resolve().parent
 WEBAPP_DIR = BASE_DIR / "webapp"
 
+
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
 
@@ -55,43 +54,62 @@ if not WEBAPP_URL:
 if not WEBAPP_URL.startswith("https://"):
     raise RuntimeError("WEBAPP_URL must start with https://")
 
-
-# =========================================================
-# DATABASE URL
-# =========================================================
-
-def clean_db_url(url: str) -> str:
-    """
-    Neon connection URL'dagi asyncpg uchun
-    kerak bo'lmaydigan sslmode/channel_binding
-    parametrlarini olib tashlaydi.
-    """
-    parsed = urlsplit(url)
-
-    query = [
-        (key, value)
-        for key, value in parse_qsl(
-            parsed.query,
-            keep_blank_values=True,
-        )
-        if key.lower() not in {
-            "sslmode",
-            "channel_binding",
-        }
-    ]
-
-    return urlunsplit(
-        (
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            urlencode(query),
-            parsed.fragment,
-        )
+if not WEBAPP_DIR.exists():
+    raise RuntimeError(
+        f"webapp directory not found: {WEBAPP_DIR}"
     )
 
 
-DB_URL = clean_db_url(DATABASE_URL)
+# =========================================================
+# IQ TEST SETTINGS
+# =========================================================
+
+QUESTIONS_COUNT = 16
+
+CORRECT_ANSWERS = (
+    1,
+    1,
+    2,
+    0,
+    2,
+    2,
+    0,
+    0,
+    1,
+    2,
+    2,
+    1,
+    2,
+    1,
+    1,
+    2,
+)
+
+WEIGHTS = (
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    5,
+    5,
+)
+
+MAX_RAW = sum(WEIGHTS)
+
+
+# =========================================================
+# GLOBALS
+# =========================================================
 
 pool: asyncpg.Pool | None = None
 bot: Bot | None = None
@@ -103,73 +121,57 @@ app = FastAPI(
     title="IQ TEST BOT",
 )
 
-if not WEBAPP_DIR.exists():
-    raise RuntimeError(
-        f"webapp directory not found: {WEBAPP_DIR}"
-    )
-
 app.mount(
     "/static",
-    StaticFiles(directory=WEBAPP_DIR),
+    StaticFiles(directory=str(WEBAPP_DIR)),
     name="static",
 )
 
 
 # =========================================================
-# QUESTION ANSWERS / WEIGHTS
+# HELPERS
 # =========================================================
 
-# Frontenddagi QUESTIONS bilan aynan bir xil tartib.
-CORRECT_ANSWERS = [
-    1,  # 1
-    1,  # 2
-    2,  # 3
-    0,  # 4
-    2,  # 5
-    2,  # 6
-    0,  # 7
-    0,  # 8
-    1,  # 9
-    2,  # 10
-    2,  # 11
-    1,  # 12
-    2,  # 13
-    1,  # 14
-    1,  # 15
-    2,  # 16
-]
+def clean_db_url(url: str) -> str:
+    parts = urlsplit(url)
 
-WEIGHTS = [
-    1,  # 1
-    1,  # 2
-    1,  # 3
-    1,  # 4
-    2,  # 5
-    2,  # 6
-    2,  # 7
-    3,  # 8
-    3,  # 9
-    3,  # 10
-    4,  # 11
-    4,  # 12
-    4,  # 13
-    4,  # 14
-    5,  # 15
-    5,  # 16
-]
+    query = [
+        (key, value)
+        for key, value in parse_qsl(
+            parts.query,
+            keep_blank_values=True,
+        )
+        if key.lower()
+        not in {
+            "sslmode",
+            "channel_binding",
+        }
+    ]
 
-TOTAL_WEIGHT = sum(WEIGHTS)
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query),
+            parts.fragment,
+        )
+    )
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 # =========================================================
-# DATABASE INITIALIZATION / MIGRATION
+# DATABASE
 # =========================================================
 
 async def init_db() -> None:
     global pool
 
     pool = await asyncpg.create_pool(
-        DB_URL,
+        clean_db_url(DATABASE_URL),
         min_size=1,
         max_size=5,
         ssl="require",
@@ -182,285 +184,236 @@ async def init_db() -> None:
         # USERS
         # -------------------------------------------------
 
-        await conn.execute(
-            """
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                user_id BIGINT PRIMARY KEY
-            )
-            """
-        )
+                user_id BIGINT PRIMARY KEY,
+                first_name TEXT NOT NULL DEFAULT '',
+                last_name TEXT NOT NULL DEFAULT '',
+                username TEXT NOT NULL DEFAULT '',
+                language TEXT NOT NULL DEFAULT 'uz',
 
-        # Muhim:
-        # CREATE TABLE IF NOT EXISTS mavjud jadvalni
-        # yangilamaydi.
-        #
-        # Shuning uchun barcha ustunlarni alohida
-        # ADD COLUMN IF NOT EXISTS bilan tekshiramiz.
+                attempts INTEGER NOT NULL DEFAULT 0,
 
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS first_name
-            TEXT NOT NULL DEFAULT ''
-            """
-        )
+                best_score INTEGER,
+                best_raw INTEGER,
+                best_time INTEGER,
 
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS last_name
-            TEXT NOT NULL DEFAULT ''
-            """
-        )
+                referrals INTEGER NOT NULL DEFAULT 0,
+                cert_claimed BOOLEAN NOT NULL DEFAULT FALSE,
 
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS username
-            TEXT NOT NULL DEFAULT ''
-            """
-        )
+                referred_by BIGINT,
+                referral_counted BOOLEAN NOT NULL DEFAULT FALSE,
 
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS language
-            TEXT NOT NULL DEFAULT 'uz'
-            """
-        )
+                created_at TIMESTAMPTZ
+                    NOT NULL DEFAULT NOW(),
 
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS attempts
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS best_score
-            INTEGER
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS best_raw
-            INTEGER
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS best_time
-            INTEGER
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS referrals
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS cert_claimed
-            BOOLEAN NOT NULL DEFAULT FALSE
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS referred_by
-            BIGINT
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS referral_counted
-            BOOLEAN NOT NULL DEFAULT FALSE
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS created_at
-            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            """
-        )
-
-        await conn.execute(
-            """
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS updated_at
-            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            """
-        )
+                updated_at TIMESTAMPTZ
+                    NOT NULL DEFAULT NOW()
+            );
+        """)
 
         # -------------------------------------------------
         # TEST SESSIONS
         # -------------------------------------------------
 
-        await conn.execute(
-            """
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS test_sessions (
                 user_id BIGINT PRIMARY KEY
-                REFERENCES users(user_id)
-                ON DELETE CASCADE
-            )
-            """
-        )
+                    REFERENCES users(user_id)
+                    ON DELETE CASCADE,
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS current_index
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
+                current_index INTEGER
+                    NOT NULL DEFAULT 0,
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS answers
-            JSONB NOT NULL DEFAULT '[]'::jsonb
-            """
-        )
+                answers JSONB
+                    NOT NULL DEFAULT '[]'::jsonb,
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS raw_score
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
+                raw_score INTEGER
+                    NOT NULL DEFAULT 0,
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS correct
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
+                correct INTEGER
+                    NOT NULL DEFAULT 0,
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS language
-            TEXT NOT NULL DEFAULT 'uz'
-            """
-        )
+                language TEXT
+                    NOT NULL DEFAULT 'uz',
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS started_at
-            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            """
-        )
+                started_at TIMESTAMPTZ
+                    NOT NULL DEFAULT NOW(),
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS last_activity
-            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            """
-        )
+                last_activity TIMESTAMPTZ
+                    NOT NULL DEFAULT NOW(),
 
-        await conn.execute(
-            """
-            ALTER TABLE test_sessions
-            ADD COLUMN IF NOT EXISTS completed
-            BOOLEAN NOT NULL DEFAULT FALSE
-            """
-        )
+                completed BOOLEAN
+                    NOT NULL DEFAULT FALSE,
+
+                result_iq INTEGER,
+                result_raw INTEGER,
+                result_correct INTEGER,
+                result_elapsed INTEGER,
+
+                finished_at TIMESTAMPTZ
+            );
+        """)
 
         # -------------------------------------------------
         # ATTEMPTS
         # -------------------------------------------------
 
-        await conn.execute(
-            """
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS attempts (
                 id BIGSERIAL PRIMARY KEY,
+
                 user_id BIGINT NOT NULL
-                REFERENCES users(user_id)
-                ON DELETE CASCADE
-            )
-            """
-        )
+                    REFERENCES users(user_id)
+                    ON DELETE CASCADE,
 
-        await conn.execute(
-            """
-            ALTER TABLE attempts
-            ADD COLUMN IF NOT EXISTS raw_score
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
+                raw_score INTEGER NOT NULL,
+                iq_score INTEGER NOT NULL,
+                correct INTEGER NOT NULL,
+                elapsed INTEGER NOT NULL,
 
-        await conn.execute(
-            """
-            ALTER TABLE attempts
-            ADD COLUMN IF NOT EXISTS iq_score
-            INTEGER NOT NULL DEFAULT 40
-            """
-        )
+                created_at TIMESTAMPTZ
+                    NOT NULL DEFAULT NOW()
+            );
+        """)
 
-        await conn.execute(
-            """
-            ALTER TABLE attempts
-            ADD COLUMN IF NOT EXISTS correct
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
+        # =================================================
+        # SAFE MIGRATION
+        # =================================================
+        # Eski DB bo'lsa ham kerakli ustunlarni qo'shadi.
+        # Mavjud ustunlarga tegmaydi.
+        # =================================================
 
-        await conn.execute(
-            """
-            ALTER TABLE attempts
-            ADD COLUMN IF NOT EXISTS elapsed
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
+        await conn.execute("""
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                first_name TEXT NOT NULL DEFAULT '';
 
-        await conn.execute(
-            """
-            ALTER TABLE attempts
-            ADD COLUMN IF NOT EXISTS created_at
-            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            """
-        )
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                last_name TEXT NOT NULL DEFAULT '';
 
-        # -------------------------------------------------
-        # INDEXES
-        # -------------------------------------------------
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                username TEXT NOT NULL DEFAULT '';
 
-        await conn.execute(
-            """
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                language TEXT NOT NULL DEFAULT 'uz';
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                attempts INTEGER NOT NULL DEFAULT 0;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                best_score INTEGER;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                best_raw INTEGER;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                best_time INTEGER;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                referrals INTEGER NOT NULL DEFAULT 0;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                cert_claimed BOOLEAN NOT NULL DEFAULT FALSE;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                referred_by BIGINT;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                referral_counted BOOLEAN NOT NULL DEFAULT FALSE;
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                created_at TIMESTAMPTZ
+                NOT NULL DEFAULT NOW();
+
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS
+                updated_at TIMESTAMPTZ
+                NOT NULL DEFAULT NOW();
+
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                current_index INTEGER
+                NOT NULL DEFAULT 0;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                answers JSONB
+                NOT NULL DEFAULT '[]'::jsonb;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                raw_score INTEGER
+                NOT NULL DEFAULT 0;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                correct INTEGER
+                NOT NULL DEFAULT 0;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                language TEXT
+                NOT NULL DEFAULT 'uz';
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                started_at TIMESTAMPTZ
+                NOT NULL DEFAULT NOW();
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                last_activity TIMESTAMPTZ
+                NOT NULL DEFAULT NOW();
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                completed BOOLEAN
+                NOT NULL DEFAULT FALSE;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                result_iq INTEGER;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                result_raw INTEGER;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                result_correct INTEGER;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                result_elapsed INTEGER;
+
+            ALTER TABLE test_sessions
+                ADD COLUMN IF NOT EXISTS
+                finished_at TIMESTAMPTZ;
+        """)
+
+        await conn.execute("""
             CREATE INDEX IF NOT EXISTS
             idx_users_best_score
-            ON users(best_score DESC NULLS LAST)
-            """
-        )
+            ON users(best_score DESC NULLS LAST);
 
-        await conn.execute(
-            """
             CREATE INDEX IF NOT EXISTS
             idx_attempts_user_id
-            ON attempts(user_id)
-            """
-        )
+            ON attempts(user_id);
+        """)
 
     print("Database initialized successfully.")
 
@@ -482,8 +435,8 @@ async def upsert_user(
         referral_id = None
 
     async with pool.acquire() as conn:
-        await conn.execute(
-            """
+
+        await conn.execute("""
             INSERT INTO users (
                 user_id,
                 first_name,
@@ -491,20 +444,40 @@ async def upsert_user(
                 username,
                 referred_by
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5
+            )
 
             ON CONFLICT (user_id)
             DO UPDATE SET
-                first_name = EXCLUDED.first_name,
-                last_name = EXCLUDED.last_name,
-                username = EXCLUDED.username,
-                updated_at = NOW()
-            """,
-            uid,
-            tg_user.get("first_name", "") or "",
-            tg_user.get("last_name", "") or "",
-            tg_user.get("username", "") or "",
-            referral_id,
+
+                first_name =
+                    EXCLUDED.first_name,
+
+                last_name =
+                    EXCLUDED.last_name,
+
+                username =
+                    EXCLUDED.username,
+
+                referred_by =
+                    COALESCE(
+                        users.referred_by,
+                        EXCLUDED.referred_by
+                    ),
+
+                updated_at =
+                    NOW()
+        """,
+        uid,
+        tg_user.get("first_name", "") or "",
+        tg_user.get("last_name", "") or "",
+        tg_user.get("username", "") or "",
+        referral_id,
         )
 
 
@@ -512,113 +485,101 @@ async def get_user(uid: int):
     assert pool is not None
 
     async with pool.acquire() as conn:
-        return await conn.fetchrow(
-            """
+
+        return await conn.fetchrow("""
             SELECT *
             FROM users
             WHERE user_id = $1
-            """,
-            uid,
-        )
+        """, uid)
 
 
 # =========================================================
 # REFERRAL
 # =========================================================
 
-async def count_referral(uid: int) -> None:
-    """
-    Referral faqat taklif qilingan odam
-    testni boshlaganda hisoblanadi.
-    """
+async def count_referral(
+    user_id: int,
+) -> None:
 
     assert pool is not None
 
     async with pool.acquire() as conn:
+
         async with conn.transaction():
 
-            row = await conn.fetchrow(
-                """
+            row = await conn.fetchrow("""
                 SELECT
                     referred_by,
                     referral_counted
                 FROM users
                 WHERE user_id = $1
                 FOR UPDATE
-                """,
-                uid,
-            )
+            """, user_id)
 
             if not row:
                 return
 
-            referred_by = row["referred_by"]
-            already_counted = row["referral_counted"]
+            inviter_id = row["referred_by"]
 
-            if not referred_by:
+            if inviter_id is None:
                 return
 
-            if already_counted:
+            if inviter_id == user_id:
                 return
 
-            if int(referred_by) == uid:
+            if row["referral_counted"]:
                 return
 
-            inviter_exists = await conn.fetchval(
-                """
+            inviter_exists = await conn.fetchval("""
                 SELECT 1
                 FROM users
                 WHERE user_id = $1
-                """,
-                referred_by,
-            )
+            """, inviter_id)
 
             if not inviter_exists:
                 return
 
-            await conn.execute(
-                """
-                UPDATE users
-                SET referral_counted = TRUE,
-                    updated_at = NOW()
-                WHERE user_id = $1
-                """,
-                uid,
-            )
+            # Referral only becomes valid
+            # after referred user starts test.
 
-            await conn.execute(
-                """
+            await conn.execute("""
                 UPDATE users
-                SET referrals = referrals + 1,
+                SET
+                    referral_counted = TRUE,
                     updated_at = NOW()
                 WHERE user_id = $1
-                """,
-                referred_by,
-            )
+            """, user_id)
+
+            await conn.execute("""
+                UPDATE users
+                SET
+                    referrals = referrals + 1,
+                    updated_at = NOW()
+                WHERE user_id = $1
+            """, inviter_id)
 
 
 # =========================================================
-# SESSION
+# TEST SESSION
 # =========================================================
 
 async def create_or_get_session(
     uid: int,
     language: str,
 ):
+
     assert pool is not None
 
     async with pool.acquire() as conn:
+
         async with conn.transaction():
 
-            user = await conn.fetchrow(
-                """
+            user = await conn.fetchrow("""
                 SELECT attempts
                 FROM users
                 WHERE user_id = $1
                 FOR UPDATE
-                """,
-                uid,
-            )
+            """, uid)
 
             if not user:
                 raise HTTPException(
@@ -626,140 +587,89 @@ async def create_or_get_session(
                     detail="USER_NOT_FOUND",
                 )
 
-            active = await conn.fetchrow(
-                """
+            active = await conn.fetchrow("""
                 SELECT *
                 FROM test_sessions
                 WHERE user_id = $1
                   AND completed = FALSE
                 FOR UPDATE
-                """,
-                uid,
-            )
+            """, uid)
 
-            now = datetime.now(timezone.utc)
+            now = now_utc()
 
             if active:
-                last_activity = active["last_activity"]
 
-                if last_activity is None:
-                    age = 0
-                else:
-                    age = (
-                        now - last_activity
-                    ).total_seconds()
+                age = (
+                    now - active["last_activity"]
+                ).total_seconds()
 
-                # 2 soat ichida davom ettirish mumkin.
+                # Active for 2 hours.
                 if age <= 7200:
                     return active, False
 
-                # 2 soatdan eski sessionni bekor qilamiz.
-                await conn.execute(
-                    """
+                # Expired unfinished session.
+                await conn.execute("""
                     DELETE FROM test_sessions
                     WHERE user_id = $1
-                    """,
-                    uid,
-                )
+                """, uid)
 
-            # Birinchi test bepul.
-            # Keyingi test uchun payment keyin qo'shiladi.
+            # First test is free.
+            # Retest requires payment integration.
             if int(user["attempts"]) >= 1:
+
                 raise HTTPException(
                     status_code=402,
                     detail="PAID_RETEST",
                 )
 
-            row = await conn.fetchrow(
-                """
+            row = await conn.fetchrow("""
                 INSERT INTO test_sessions (
                     user_id,
-                    current_index,
-                    answers,
-                    raw_score,
-                    correct,
                     language,
                     started_at,
-                    last_activity,
-                    completed
+                    last_activity
                 )
                 VALUES (
                     $1,
-                    0,
-                    '[]'::jsonb,
-                    0,
-                    0,
                     $2,
                     NOW(),
-                    NOW(),
-                    FALSE
+                    NOW()
                 )
                 RETURNING *
-                """,
-                uid,
-                language,
+            """,
+            uid,
+            language,
             )
 
             return row, True
 
 
-def normalize_answers(value) -> list[int]:
-    """
-    asyncpg JSONB ba'zan list, ba'zan boshqa
-    JSON qiymat qaytarishi mumkin.
-    """
-    if value is None:
-        return []
-
-    if isinstance(value, list):
-        result = []
-
-        for item in value:
-            try:
-                result.append(int(item))
-            except (TypeError, ValueError):
-                pass
-
-        return result
-
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-
-            if isinstance(parsed, list):
-                return [
-                    int(x)
-                    for x in parsed
-                    if str(x).isdigit()
-                ]
-        except Exception:
-            pass
-
-    return []
-
+# =========================================================
+# SAVE ANSWER
+# =========================================================
 
 async def save_answer(
     uid: int,
     question_index: int,
     selected: int,
 ):
+
     assert pool is not None
 
     async with pool.acquire() as conn:
+
         async with conn.transaction():
 
-            row = await conn.fetchrow(
-                """
+            row = await conn.fetchrow("""
                 SELECT *
                 FROM test_sessions
                 WHERE user_id = $1
                   AND completed = FALSE
                 FOR UPDATE
-                """,
-                uid,
-            )
+            """, uid)
 
             if not row:
+
                 raise HTTPException(
                     status_code=409,
                     detail="SESSION_EXPIRED",
@@ -770,97 +680,87 @@ async def save_answer(
             )
 
             if question_index != current_index:
+
                 raise HTTPException(
                     status_code=409,
                     detail="OUT_OF_ORDER",
                 )
 
-            if not 0 <= selected <= 3:
+            if not 0 <= selected < 4:
+
                 raise HTTPException(
                     status_code=400,
                     detail="INVALID_ANSWER",
                 )
 
-            if current_index >= 16:
+            if current_index >= QUESTIONS_COUNT:
+
                 raise HTTPException(
                     status_code=409,
-                    detail="TEST_ALREADY_COMPLETE",
+                    detail="SESSION_COMPLETE",
                 )
 
-            answers = normalize_answers(
-                row["answers"]
+            answers = list(
+                row["answers"] or []
             )
 
-            # Faqat aynan navbatdagi savolga javob.
             answers.append(selected)
 
-            is_correct = (
-                selected
-                == CORRECT_ANSWERS[current_index]
+            correct = sum(
+                1
+                for i, answer
+                in enumerate(answers)
+                if answer ==
+                CORRECT_ANSWERS[i]
             )
 
-            new_correct = int(
-                row["correct"]
-            ) + (
-                1 if is_correct else 0
+            raw = sum(
+                WEIGHTS[i]
+                for i, answer
+                in enumerate(answers)
+                if answer ==
+                CORRECT_ANSWERS[i]
             )
 
-            new_raw = int(
-                row["raw_score"]
-            ) + (
-                WEIGHTS[current_index]
-                if is_correct
-                else 0
-            )
-
-            new_index = current_index + 1
-
-            await conn.execute(
-                """
+            await conn.execute("""
                 UPDATE test_sessions
+
                 SET
                     current_index = $2,
                     answers = $3::jsonb,
                     raw_score = $4,
                     correct = $5,
                     last_activity = NOW()
+
                 WHERE user_id = $1
-                """,
-                uid,
-                new_index,
-                json.dumps(answers),
-                new_raw,
-                new_correct,
+            """,
+            uid,
+            current_index + 1,
+            json.dumps(answers),
+            raw,
+            correct,
             )
 
-            return {
-                "index": new_index,
-                "correct": new_correct,
-                "raw": new_raw,
-            }
+            return current_index + 1
 
 
 # =========================================================
-# IQ SCORE
+# IQ CALCULATION
 # =========================================================
 
-def calculate_iq(raw_score: int) -> int:
-    """
-    ZAKO mahsulot skori.
-    Bu klinik/normativ IQ testi emas.
-    """
+def calculate_iq(raw: int) -> int:
 
-    ratio = (
-        raw_score / TOTAL_WEIGHT
+    raw = max(
+        0,
+        min(
+            int(raw),
+            MAX_RAW,
+        ),
     )
 
-    iq = round(
-        40 + ratio * 120
-    )
-
-    return max(
-        40,
-        min(160, iq),
+    return round(
+        40 +
+        (raw / MAX_RAW) * 120
     )
 
 
@@ -868,46 +768,74 @@ def calculate_iq(raw_score: int) -> int:
 # FINISH SESSION
 # =========================================================
 
-async def finish_session(uid: int):
+async def finish_session(
+    uid: int,
+):
+
     assert pool is not None
 
     async with pool.acquire() as conn:
+
         async with conn.transaction():
 
-            row = await conn.fetchrow(
-                """
+            row = await conn.fetchrow("""
                 SELECT *
                 FROM test_sessions
                 WHERE user_id = $1
-                  AND completed = FALSE
                 FOR UPDATE
-                """,
-                uid,
-            )
+            """, uid)
 
             if not row:
+
                 raise HTTPException(
                     status_code=409,
                     detail="SESSION_EXPIRED",
                 )
 
-            answers = normalize_answers(
-                row["answers"]
+            # -------------------------------------------------
+            # Already finished.
+            # This makes duplicate finish requests safe.
+            # -------------------------------------------------
+
+            if row["completed"]:
+
+                return (
+                    int(row["result_iq"]),
+                    int(row["result_raw"]),
+                    int(row["result_correct"]),
+                    int(row["result_elapsed"]),
+                )
+
+            answers = list(
+                row["answers"] or []
             )
 
-            if len(answers) != 16:
+            if len(answers) != QUESTIONS_COUNT:
+
                 raise HTTPException(
                     status_code=409,
                     detail="INCOMPLETE",
                 )
 
-            correct = 0
-            raw = 0
+            # -------------------------------------------------
+            # SERVER-SIDE SCORE
+            # -------------------------------------------------
 
-            for index, answer in enumerate(answers):
-                if answer == CORRECT_ANSWERS[index]:
-                    correct += 1
-                    raw += WEIGHTS[index]
+            correct = sum(
+                1
+                for i, answer
+                in enumerate(answers)
+                if answer ==
+                CORRECT_ANSWERS[i]
+            )
+
+            raw = sum(
+                WEIGHTS[i]
+                for i, answer
+                in enumerate(answers)
+                if answer ==
+                CORRECT_ANSWERS[i]
+            )
 
             iq = calculate_iq(raw)
 
@@ -915,15 +843,17 @@ async def finish_session(uid: int):
                 0,
                 round(
                     (
-                        datetime.now(timezone.utc)
+                        now_utc()
                         - row["started_at"]
                     ).total_seconds()
                 ),
             )
 
-            # Natijani saqlash
-            await conn.execute(
-                """
+            # -------------------------------------------------
+            # ATTEMPT
+            # -------------------------------------------------
+
+            await conn.execute("""
                 INSERT INTO attempts (
                     user_id,
                     raw_score,
@@ -938,21 +868,32 @@ async def finish_session(uid: int):
                     $4,
                     $5
                 )
-                """,
-                uid,
-                raw,
-                iq,
-                correct,
-                elapsed,
+            """,
+            uid,
+            raw,
+            iq,
+            correct,
+            elapsed,
             )
 
-            # User statistikasi
-            # MUHIM: bu yerda endi ortiqcha $4 argument yo'q.
-            await conn.execute(
-                """
+            # -------------------------------------------------
+            # UPDATE USER
+            #
+            # IMPORTANT:
+            # $1 = uid
+            # $2 = iq
+            # $3 = raw
+            # $4 = elapsed
+            #
+            # Old "$4 datatype" bug is removed.
+            # -------------------------------------------------
+
+            await conn.execute("""
                 UPDATE users
+
                 SET
-                    attempts = attempts + 1,
+                    attempts =
+                        attempts + 1,
 
                     best_score =
                         CASE
@@ -978,30 +919,49 @@ async def finish_session(uid: int):
                                      $2 = best_score
                                      AND (
                                          best_time IS NULL
-                                         OR $5 < best_time
+                                         OR $4 < best_time
                                      )
                                  )
-                            THEN $5
+                            THEN $4
                             ELSE best_time
                         END,
 
                     updated_at = NOW()
 
                 WHERE user_id = $1
-                """,
-                uid,
-                iq,
-                raw,
-                elapsed,
+            """,
+            uid,
+            iq,
+            raw,
+            elapsed,
             )
 
-            # Test session tugadi
-            await conn.execute(
-                """
-                DELETE FROM test_sessions
+            # -------------------------------------------------
+            # KEEP FINISHED SESSION
+            #
+            # Do NOT delete it.
+            # This prevents refresh/duplicate-finish problems.
+            # -------------------------------------------------
+
+            await conn.execute("""
+                UPDATE test_sessions
+
+                SET
+                    completed = TRUE,
+                    result_iq = $2,
+                    result_raw = $3,
+                    result_correct = $4,
+                    result_elapsed = $5,
+                    finished_at = NOW(),
+                    last_activity = NOW()
+
                 WHERE user_id = $1
-                """,
-                uid,
+            """,
+            uid,
+            iq,
+            raw,
+            correct,
+            elapsed,
             )
 
             return (
@@ -1016,51 +976,55 @@ async def finish_session(uid: int):
 # RANK
 # =========================================================
 
-async def get_rank(uid: int):
+async def get_rank(
+    uid: int,
+):
+
     assert pool is not None
 
     async with pool.acquire() as conn:
 
-        row = await conn.fetchrow(
-            """
+        row = await conn.fetchrow("""
             SELECT
                 best_score,
                 best_time
             FROM users
             WHERE user_id = $1
-            """,
-            uid,
-        )
+        """, uid)
 
-        if not row:
+        if (
+            not row
+            or row["best_score"] is None
+        ):
             return None
 
-        if row["best_score"] is None:
-            return None
-
-        rank = await conn.fetchval(
-            """
+        rank = await conn.fetchval("""
             SELECT COUNT(*) + 1
+
             FROM users
+
             WHERE best_score IS NOT NULL
+
               AND (
                     best_score > $1
+
                     OR (
                         best_score = $1
+
                         AND COALESCE(
                             best_time,
                             2147483647
                         )
-                        <
-                        COALESCE(
-                            $2,
+
+                        < COALESCE(
+                            $2::INTEGER,
                             2147483647
                         )
                     )
               )
-            """,
-            row["best_score"],
-            row["best_time"],
+        """,
+        row["best_score"],
+        row["best_time"],
         )
 
         return int(rank)
@@ -1075,12 +1039,14 @@ def validate_init_data(
 ) -> dict:
 
     if not init_data:
+
         raise HTTPException(
             status_code=401,
             detail="INVALID_INIT_DATA",
         )
 
     try:
+
         pairs = dict(
             parse_qsl(
                 init_data,
@@ -1105,37 +1071,52 @@ def validate_init_data(
             )
         )
 
-        now = int(
-            datetime.now(
-                timezone.utc
-            ).timestamp()
+        current_time = int(
+            now_utc().timestamp()
         )
 
-        # Telegram initData 24 soatdan eski bo'lmasin.
+        if auth_date <= 0:
+            raise ValueError(
+                "auth_date missing"
+            )
+
+        # 24 hour lifetime.
         if (
-            auth_date <= 0
-            or now - auth_date > 86400
+            current_time - auth_date
+            > 86400
         ):
             raise ValueError(
-                "auth_date expired"
+                "init data expired"
+            )
+
+        # Reject suspicious future timestamps.
+        if (
+            auth_date - current_time
+            > 60
+        ):
+            raise ValueError(
+                "init data from future"
             )
 
         data_check_string = "\n".join(
             f"{key}={value}"
-            for key, value in sorted(
-                pairs.items()
-            )
+            for key, value
+            in sorted(pairs.items())
         )
 
         secret_key = hmac.new(
             b"WebAppData",
-            BOT_TOKEN.encode(),
+            BOT_TOKEN.encode(
+                "utf-8"
+            ),
             hashlib.sha256,
         ).digest()
 
         calculated_hash = hmac.new(
             secret_key,
-            data_check_string.encode(),
+            data_check_string.encode(
+                "utf-8"
+            ),
             hashlib.sha256,
         ).hexdigest()
 
@@ -1147,7 +1128,9 @@ def validate_init_data(
                 "hash mismatch"
             )
 
-        raw_user = pairs.get("user")
+        raw_user = pairs.get(
+            "user"
+        )
 
         if not raw_user:
             raise ValueError(
@@ -1158,9 +1141,12 @@ def validate_init_data(
             raw_user
         )
 
-        if not user.get("id"):
+        if (
+            not isinstance(user, dict)
+            or not user.get("id")
+        ):
             raise ValueError(
-                "user id missing"
+                "invalid user"
             )
 
         return user
@@ -1169,10 +1155,6 @@ def validate_init_data(
         raise
 
     except Exception as exc:
-        print(
-            "Telegram initData validation error:",
-            repr(exc),
-        )
 
         raise HTTPException(
             status_code=401,
@@ -1195,11 +1177,12 @@ async def api_user(
 
 
 # =========================================================
-# WEB ROUTES
+# WEB
 # =========================================================
 
 @app.get("/")
 async def root():
+
     return {
         "status": "ok",
         "service": "IQ TEST BOT",
@@ -1210,24 +1193,26 @@ async def root():
 async def health():
 
     if pool is None:
+
         raise HTTPException(
             status_code=503,
             detail="DATABASE_NOT_READY",
         )
 
     async with pool.acquire() as conn:
+
         await conn.fetchval(
             "SELECT 1"
         )
 
     return {
-        "status": "ok",
-        "database": "ok",
+        "status": "ok"
     }
 
 
 @app.get("/app")
 async def app_page():
+
     return FileResponse(
         WEBAPP_DIR / "index.html"
     )
@@ -1235,10 +1220,10 @@ async def app_page():
 
 @app.get("/api/config")
 async def api_config():
+
     return {
         "bot_username": BOT_USERNAME,
         "zako_url": ZAKO_URL,
-        "webapp_url": WEBAPP_URL,
     }
 
 
@@ -1260,8 +1245,11 @@ async def api_start(
     )
 
     try:
+
         body = await request.json()
+
     except Exception:
+
         body = {}
 
     language = body.get(
@@ -1276,11 +1264,13 @@ async def api_start(
     }:
         language = "uz"
 
+    # Create/update user first.
     await upsert_user(
         tg_user
     )
 
-    # Referral aynan test boshlanganda hisoblanadi.
+    # Referral becomes valid
+    # when referred user starts test.
     await count_referral(
         uid
     )
@@ -1296,7 +1286,7 @@ async def api_start(
         0,
         round(
             (
-                datetime.now(timezone.utc)
+                now_utc()
                 - row["started_at"]
             ).total_seconds()
         ),
@@ -1312,13 +1302,13 @@ async def api_start(
         "index": int(
             row["current_index"]
         ),
-        "answers": normalize_answers(
-            row["answers"]
+        "answers": list(
+            row["answers"] or []
         ),
         "elapsed": elapsed,
         "attempts": int(
             user["attempts"]
-        ) if user else 0,
+        ),
     }
 
 
@@ -1340,14 +1330,18 @@ async def api_answer(
     )
 
     try:
+
         body = await request.json()
-    except Exception:
+
+    except Exception as exc:
+
         raise HTTPException(
             status_code=400,
             detail="INVALID_JSON",
-        )
+        ) from exc
 
     try:
+
         index = int(
             body.get(
                 "index",
@@ -1362,13 +1356,17 @@ async def api_answer(
             )
         )
 
-    except (TypeError, ValueError):
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+
         raise HTTPException(
             status_code=400,
             detail="INVALID_ANSWER",
-        )
+        ) from exc
 
-    result = await save_answer(
+    new_index = await save_answer(
         uid,
         index,
         selected,
@@ -1376,7 +1374,7 @@ async def api_answer(
 
     return {
         "ok": True,
-        **result,
+        "index": new_index,
     }
 
 
@@ -1398,7 +1396,9 @@ async def api_finish(
     )
 
     iq, raw, correct, elapsed = (
-        await finish_session(uid)
+        await finish_session(
+            uid
+        )
     )
 
     rank = await get_rank(
@@ -1440,6 +1440,7 @@ async def api_profile(
     )
 
     if not user:
+
         raise HTTPException(
             status_code=404,
             detail="USER_NOT_FOUND",
@@ -1450,28 +1451,29 @@ async def api_profile(
     )
 
     return {
-        "first_name": user[
-            "first_name"
-        ],
-        "last_name": user[
-            "last_name"
-        ],
-        "username": user[
-            "username"
-        ],
-        "attempts": int(
-            user["attempts"]
-        ),
-        "best_score": user[
-            "best_score"
-        ],
-        "best_time": user[
-            "best_time"
-        ],
-        "referrals": int(
-            user["referrals"]
-        ),
-        "rank": rank,
+        "first_name":
+            user["first_name"],
+
+        "last_name":
+            user["last_name"],
+
+        "username":
+            user["username"],
+
+        "attempts":
+            int(user["attempts"]),
+
+        "best_score":
+            user["best_score"],
+
+        "best_time":
+            user["best_time"],
+
+        "referrals":
+            int(user["referrals"]),
+
+        "rank":
+            rank,
     }
 
 
@@ -1492,49 +1494,43 @@ async def api_ranking(
 
     async with pool.acquire() as conn:
 
-        rows = await conn.fetch(
-            """
+        rows = await conn.fetch("""
             SELECT
                 first_name,
-                last_name,
                 username,
                 best_score,
                 best_time
+
             FROM users
+
             WHERE best_score IS NOT NULL
+
             ORDER BY
                 best_score DESC,
                 best_time ASC NULLS LAST,
                 created_at ASC
+
             LIMIT 50
-            """
-        )
-
-    items = []
-
-    for row in rows:
-        items.append(
-            {
-                "first_name": row[
-                    "first_name"
-                ],
-                "last_name": row[
-                    "last_name"
-                ],
-                "username": row[
-                    "username"
-                ],
-                "best_score": row[
-                    "best_score"
-                ],
-                "best_time": row[
-                    "best_time"
-                ],
-            }
-        )
+        """)
 
     return {
-        "items": items
+        "items": [
+            {
+                "first_name":
+                    row["first_name"],
+
+                "username":
+                    row["username"],
+
+                "best_score":
+                    row["best_score"],
+
+                "best_time":
+                    row["best_time"],
+            }
+
+            for row in rows
+        ]
     }
 
 
@@ -1542,29 +1538,37 @@ async def api_ranking(
 # CERTIFICATE
 # =========================================================
 
-def get_font(
+def load_font(
     size: int,
     bold: bool = False,
 ):
-    paths = []
 
-    if bold:
-        paths.extend(
-            [
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-            ]
-        )
-    else:
-        paths.extend(
-            [
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-            ]
-        )
+    candidates = [
+        (
+            "/usr/share/fonts/truetype/"
+            "dejavu/DejaVuSans-Bold.ttf"
+            if bold
+            else
+            "/usr/share/fonts/truetype/"
+            "dejavu/DejaVuSans.ttf"
+        ),
 
-    for path in paths:
+        (
+            "/usr/share/fonts/truetype/"
+            "liberation2/"
+            "LiberationSans-Bold.ttf"
+            if bold
+            else
+            "/usr/share/fonts/truetype/"
+            "liberation2/"
+            "LiberationSans-Regular.ttf"
+        ),
+    ]
+
+    for path in candidates:
+
         if os.path.exists(path):
+
             return ImageFont.truetype(
                 path,
                 size,
@@ -1591,12 +1595,13 @@ def make_certificate_png(
         image
     )
 
-    def center_text(
+    def center(
         text: str,
         y: int,
         font,
         fill: str = "#ffffff",
     ):
+
         box = draw.textbbox(
             (0, 0),
             text,
@@ -1607,18 +1612,16 @@ def make_certificate_png(
             box[2] - box[0]
         )
 
-        x = (
-            width - text_width
-        ) / 2
-
         draw.text(
-            (x, y),
+            (
+                (width - text_width) / 2,
+                y,
+            ),
             text,
             font=font,
             fill=fill,
         )
 
-    # Outer border
     draw.rounded_rectangle(
         (
             35,
@@ -1631,7 +1634,6 @@ def make_certificate_png(
         width=4,
     )
 
-    # Inner border
     draw.rounded_rectangle(
         (
             58,
@@ -1644,60 +1646,73 @@ def make_certificate_png(
         width=2,
     )
 
-    center_text(
+    center(
         "ZAKO IQ",
-        110,
-        get_font(64, True),
+        115,
+        load_font(
+            64,
+            True,
+        ),
         "#b8a8ff",
     )
 
-    center_text(
+    center(
         "IQ TEST CERTIFICATE",
         215,
-        get_font(30, True),
+        load_font(
+            30,
+            True,
+        ),
         "#aeb5c6",
     )
 
-    center_text(
+    center(
         str(iq),
-        285,
-        get_font(150, True),
+        290,
+        load_font(
+            150,
+            True,
+        ),
         "#ffffff",
     )
 
-    center_text(
+    center(
         "IQ SCORE",
         470,
-        get_font(30, True),
+        load_font(
+            30,
+            True,
+        ),
         "#b8a8ff",
     )
 
-    clean_name = (
-        name.strip()
-        if name
-        else "User"
-    )
-
-    center_text(
-        clean_name[:32],
+    center(
+        name[:32] or "User",
         545,
-        get_font(46, True),
+        load_font(
+            46,
+            True,
+        ),
         "#ffffff",
     )
 
-    center_text(
+    center(
         "ZAKO IQ testining taxminiy natijasi",
         640,
-        get_font(25),
+        load_font(
+            25
+        ),
         "#aeb5c6",
     )
 
-    center_text(
-        datetime.now(
-            timezone.utc
-        ).strftime("%Y-%m-%d"),
+    center(
+        now_utc().strftime(
+            "%Y-%m-%d"
+        ),
         700,
-        get_font(22),
+        load_font(
+            22
+        ),
         "#777f91",
     )
 
@@ -1729,53 +1744,54 @@ async def api_certificate(
         uid
     )
 
-    if not user:
+    if (
+        not user
+        or user["best_score"] is None
+    ):
+
         raise HTTPException(
             status_code=404,
             detail="NO_RESULT",
         )
 
-    if user["best_score"] is None:
-        raise HTTPException(
-            status_code=404,
-            detail="NO_RESULT",
-        )
+    if int(
+        user["referrals"]
+    ) < 2:
 
-    # 2 ta haqiqiy referral kerak.
-    if int(user["referrals"]) < 2:
         raise HTTPException(
             status_code=403,
             detail="REFERRALS_REQUIRED",
         )
 
     if not user["cert_claimed"]:
+
         assert pool is not None
 
         async with pool.acquire() as conn:
-            await conn.execute(
-                """
+
+            await conn.execute("""
                 UPDATE users
                 SET
                     cert_claimed = TRUE,
                     updated_at = NOW()
                 WHERE user_id = $1
-                """,
-                uid,
-            )
+            """, uid)
 
     data = make_certificate_png(
-        user["first_name"]
-        or "User",
-        int(user["best_score"]),
+        user["first_name"] or "User",
+        int(
+            user["best_score"]
+        ),
     )
 
-    return StreamingResponse(
-        iter([data]),
+    return Response(
+        content=data,
         media_type="image/png",
         headers={
             "Content-Disposition":
                 "inline; "
-                "filename=zako-iq-certificate.png"
+                "filename="
+                "zako-iq-certificate.png"
         },
     )
 
@@ -1785,21 +1801,26 @@ async def api_certificate(
 # =========================================================
 
 def bot_keyboard():
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🧠 IQ TESTNI BOSHLASH",
-                    web_app=WebAppInfo(
-                        url=WEBAPP_URL
-                    ),
+                    text=
+                        "🧠 IQ TESTNI BOSHLASH",
+                    web_app=
+                        WebAppInfo(
+                            url=WEBAPP_URL
+                        ),
                 )
             ]
         ]
     )
 
 
-@dp.message(CommandStart())
+@dp.message(
+    CommandStart()
+)
 async def start(
     message: Message,
 ):
@@ -1817,23 +1838,33 @@ async def start(
 
     if (
         len(parts) == 2
-        and parts[1].startswith("ref_")
+        and parts[1].startswith(
+            "ref_"
+        )
     ):
+
         try:
+
             referral_id = int(
                 parts[1][4:]
             )
+
         except ValueError:
+
             referral_id = None
 
     tg_user = {
-        "id": message.from_user.id,
+        "id":
+            message.from_user.id,
+
         "first_name":
             message.from_user.first_name
             or "",
+
         "last_name":
             message.from_user.last_name
             or "",
+
         "username":
             message.from_user.username
             or "",
@@ -1845,27 +1876,50 @@ async def start(
     )
 
     await message.answer(
-        (
-            "🧠 <b>IQ TEST BOT</b>\n\n"
-            "16 ta original mantiqiy puzzle "
-            "orqali o‘zingizni sinab ko‘ring.\n\n"
-            "• Birinchi test — bepul\n"
-            "• IQ SCORE\n"
-            "• Real reyting\n"
-            "• Sertifikat\n"
-            "• UZ / RU / EN\n\n"
-            "Test to‘liq Mini App ichida ishlaydi."
-        ),
-        reply_markup=bot_keyboard(),
+        "🧠 <b>IQ TEST BOT</b>\n\n"
+        "16 ta original mantiqiy puzzle "
+        "orqali o‘zingizni sinab ko‘ring.\n\n"
+        "• Birinchi test — bepul\n"
+        "• Natija va reyting\n"
+        "• Sertifikat\n"
+        "• UZ / RU / EN\n\n"
+        "Test Mini App ichida ishlaydi.",
+        reply_markup=
+            bot_keyboard(),
         parse_mode="HTML",
     )
 
 
 # =========================================================
-# WEB SERVER
+# TELEGRAM MENU BUTTON
+# =========================================================
+
+async def configure_bot():
+
+    assert bot is not None
+
+    await bot.set_chat_menu_button(
+        menu_button=
+            MenuButtonWebApp(
+                text="🧠 IQ TEST",
+                web_app=
+                    WebAppInfo(
+                        url=WEBAPP_URL
+                    ),
+            )
+    )
+
+    print(
+        "Telegram Mini App menu button configured."
+    )
+
+
+# =========================================================
+# FASTAPI / RENDER
 # =========================================================
 
 async def run_web():
+
     config = uvicorn.Config(
         app,
         host="0.0.0.0",
@@ -1905,26 +1959,7 @@ async def main():
         f"Bot started: @{BOT_USERNAME}"
     )
 
-    # Telegram chat menyusida ham Mini App chiqadi.
-    try:
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="🧠 IQ TEST",
-                web_app=WebAppInfo(
-                    url=WEBAPP_URL
-                ),
-            )
-        )
-
-        print(
-            "Telegram Mini App menu button configured."
-        )
-
-    except Exception as exc:
-        print(
-            "Menu button setup warning:",
-            repr(exc),
-        )
+    await configure_bot()
 
     try:
 
@@ -1935,12 +1970,10 @@ async def main():
 
     finally:
 
-        try:
-            await bot.session.close()
-        except Exception:
-            pass
+        await bot.session.close()
 
         if pool is not None:
+
             await pool.close()
 
 
