@@ -1,5367 +1,1890 @@
-"use strict";
-
-/*
- * ============================================================
- * ZAKO IQ — Telegram Mini App
- * app.js
- *
- * VERSION:
- * 2026-09-18
- *
- * IMPORTANT:
- * Backend is the source of truth.
- *
- * Flow:
- * START
- *   ↓
- * ANSWER #1
- *   ↓
- * ANSWER #2
- *   ↓
- * ...
- * ANSWER #16
- *   ↓
- * FINISH
- *
- * NEVER call /finish before /answer #16 succeeds.
- * ============================================================
- */
-
-
 /* ============================================================
-   TELEGRAM
-============================================================ */
+   IQ TEST — webapp/app.js
+   Local-first test engine
+   - No request per answer
+   - Local autosave
+   - Offline-safe
+   - One final sync
+   - Idempotent attempt_id
+   - Compatible with the current index.html
+   ============================================================ */
 
-const tg = window.Telegram?.WebApp || null;
+(() => {
+  "use strict";
 
+  const tg = window.Telegram?.WebApp || null;
+  const API = "";
 
-/* ============================================================
-   CONSTANTS
-============================================================ */
+  const STORAGE_KEY = "iq_test_active_v3";
+  const QUEUE_KEY = "iq_test_sync_queue_v3";
+  const LANG_KEY = "iq_test_lang_v3";
 
-const QUESTIONS_COUNT = 16;
+  const QUESTION_COUNT = 16;
+  const TOTAL_SECONDS = 8 * 60;
 
-const LETTERS = [
-    "A",
-    "B",
-    "C",
-    "D"
-];
+  const state = {
+    lang: localStorage.getItem(LANG_KEY) || "uz",
+    package: null,
+    session: null,
+    result: null,
+    ranking: null,
+    busy: false,
+    finishing: false,
+    clockTimer: null,
+    saveTimer: null
+  };
 
-const SUPPORTED_LANGUAGES = [
-    "uz",
-    "ru",
-    "en"
-];
+  const LETTERS = ["A", "B", "C", "D"];
 
-
-/* ============================================================
-   STATE
-============================================================ */
-
-const state = {
-
-    lang:
-        localStorage.getItem("iq_lang") || "uz",
-
-    screen:
-        "home",
-
-    session:
-        null,
-
-    result:
-        null,
-
-    profile:
-        null,
-
-    config: {
-
-        bot_username:
-            "",
-
-        zako_url:
-            "https://t.me/zako_tbot"
-    },
-
-    busy:
-        false,
-
-    busyFinish:
-        false,
-
-    answerSubmitting:
-        false,
-
-    recovering:
-        false,
-
-    timer:
-        null,
-
-    timerBaseElapsed:
-        0,
-
-    timerClientStarted:
-        0,
-
-    initialized:
-        false
-};
-
-
-/* ============================================================
-   TEXT
-============================================================ */
-
-const TEXT = {
-
+  const T = {
     uz: {
-
-        eyebrow:
-            "16 TA MANTIQIY PUZZLE",
-
-        title:
-            "IQ darajangizni\nsinab ko‘ring",
-
-        subtitle:
-            "16 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.",
-
-        start:
-            "TESTNI BOSHLASH",
-
-        ranking:
-            "Reyting",
-
-        rankingSub:
-            "Eng yuqori natijalar",
-
-        profile:
-            "Profil",
-
-        profileSub:
-            "Natijalaringiz",
-
-        next:
-            "DAVOM ETISH",
-
-        finished:
-            "TEST YAKUNLANDI",
-
-        yourResult:
-            "Sizning natijangiz",
-
-        iqScore:
-            "IQ SCORE",
-
-        correct:
-            "To‘g‘ri javob",
-
-        time:
-            "Vaqt",
-
-        rank:
-            "Reyting",
-
-        certificate:
-            "SERTIFIKAT OLISH",
-
-        share:
-            "NATIJANI ULASHISH",
-
-        improve:
-            "IQ'IMNI RIVOJLANTIRISH",
-
-        rankingDesc:
-            "Eng yaxshi natijalar",
-
-        profileDesc:
-            "Sizning IQ statistikangiz",
-
-        bestIq:
-            "ENG YAXSHI IQ",
-
-        tests:
-            "Testlar",
-
-        referrals:
-            "Takliflar",
-
-        invite:
-            "DO‘STLARNI TAKLIF QILISH",
-
-        chooseLanguage:
-            "Tilni tanlang",
-
-        logic:
-            "MANTIQIY PUZZLE",
-
-        number:
-            "SONLI PUZZLE",
-
-        letters:
-            "HARFLAR PUZZLE",
-
-        visual:
-            "VIZUAL PUZZLE",
-
-        memory:
-            "XOTIRA PUZZLE",
-
-        loading:
-            "Yuklanmoqda…",
-
-        paid:
-            "Birinchi testingiz bepul. Keyingi test narxi 3 000 so‘m.",
-
-        retest:
-            "QAYTA TEST — 3 000 SO‘M",
-
-        session:
-            "Sizda davom etayotgan test mavjud.",
-
-        sessionContinue:
-            "TESTNI DAVOM ETTIRISH",
-
-        error:
-            "Xatolik yuz berdi. Qaytadan urinib ko‘ring.",
-
-        network:
-            "Internet bilan aloqa uzildi. Qayta urinib ko‘ring.",
-
-        noData:
-            "Ma’lumot topilmadi.",
-
-        certificateRequired:
-            "Sertifikat uchun 2 ta real taklif kerak.",
-
-        certificateNoResult:
-            "Avval IQ testini topshiring.",
-
-        certificateError:
-            "Sertifikatni olishda xatolik yuz berdi.",
-
-        resultNote:
-            "Bu ZAKO IQ testining taxminiy mahsulot skoridir, klinik IQ baholashi emas.",
-
-        inviteText:
-            "Do‘stingizni IQ testga taklif qiling!",
-
-        copied:
-            "Natija nusxalandi.",
-
-        shareText:
-            "Natijamni ko‘ring!",
-
-        noRanking:
-            "Hali reytingda natijalar yo‘q.",
-
-        cannotOpen:
-            "Havolani ochib bo‘lmadi.",
-
-        back:
-            "ORQAGA",
-
-        home:
-            "BOSH SAHIFA",
-
-        leaveTest:
-            "Testdan chiqmoqchimisiz? Hozirgi javob saqlanmasligi mumkin.",
-
-        cancel:
-            "BEKOR QILISH",
-
-        leave:
-            "CHIQISH",
-
-        user:
-            "Foydalanuvchi",
-
-        answerAccepted:
-            "Javob qabul qilindi."
+      title: "IQ TEST",
+      desc: "16 ta original mantiqiy puzzle orqali fikrlash qobiliyatingizni sinab ko‘ring.",
+      start: "TESTNI BOSHLASH",
+      ranking: "Reyting",
+      profile: "Profil",
+      free: "Birinchi test — bepul",
+      why: "Natija va reytingingiz avtomatik saqlanadi.",
+      question: "MANTIQIY PUZZLE",
+      time: "Vaqt",
+      correct: "To‘g‘ri",
+      score: "IQ",
+      rank: "Reyting",
+      done: "TEST YAKUNLANDI",
+      next: "DAVOM ETISH",
+      finish: "NATIJANI KO‘RISH",
+      loading: "Yuklanmoqda…",
+      sending: "Natija tekshirilmoqda…",
+      offline: "Internet yo‘q. Test baribir davom etadi.",
+      synced: "Natija serverga saqlandi.",
+      pending: "Natija internet tiklanganda yuboriladi.",
+      error: "Xatolik yuz berdi.",
+      retry: "QAYTA URINISH",
+      back: "Orqaga",
+      tests: "Testlar",
+      best: "Eng yaxshi IQ",
+      referrals: "Takliflar",
+      retest: "QAYTA TEST",
+      paid: "Keyingi test pullik.",
+      quit: "Testdan chiqasizmi?",
+      quitText: "Joriy natija saqlanadi va keyin davom ettirishingiz mumkin.",
+      stay: "TESTDA QOLISH",
+      leave: "CHIQISH",
+      noData: "Ma’lumot topilmadi.",
+      telegramOnly: "Bu ilovani Telegram ichidan oching.",
+      share: "NATIJANI ULASHISH",
+      certificate: "SERTIFIKAT",
+      develop: "IQ’IMNI RIVOJLANTIRISH",
+      cannotStart: "Testni boshlab bo‘lmadi.",
+      cannotFinish: "Natijani yuborib bo‘lmadi.",
+      sync: "Sinxronlashtirilmoqda…"
     },
-
 
     ru: {
-
-        eyebrow:
-            "16 ЛОГИЧЕСКИХ ЗАДАЧ",
-
-        title:
-            "Проверьте\nсвой IQ",
-
-        subtitle:
-            "16 логических задач для проверки вашего мышления.",
-
-        start:
-            "НАЧАТЬ ТЕСТ",
-
-        ranking:
-            "Рейтинг",
-
-        rankingSub:
-            "Лучшие результаты",
-
-        profile:
-            "Профиль",
-
-        profileSub:
-            "Ваша статистика",
-
-        next:
-            "ПРОДОЛЖИТЬ",
-
-        finished:
-            "ТЕСТ ЗАВЕРШЁН",
-
-        yourResult:
-            "Ваш результат",
-
-        iqScore:
-            "IQ SCORE",
-
-        correct:
-            "Правильных ответов",
-
-        time:
-            "Время",
-
-        rank:
-            "Рейтинг",
-
-        certificate:
-            "ПОЛУЧИТЬ СЕРТИФИКАТ",
-
-        share:
-            "ПОДЕЛИТЬСЯ РЕЗУЛЬТАТОМ",
-
-        improve:
-            "РАЗВИВАТЬ IQ",
-
-        rankingDesc:
-            "Лучшие результаты",
-
-        profileDesc:
-            "Ваша статистика IQ",
-
-        bestIq:
-            "ЛУЧШИЙ IQ",
-
-        tests:
-            "Тесты",
-
-        referrals:
-            "Приглашения",
-
-        invite:
-            "ПРИГЛАСИТЬ ДРУЗЕЙ",
-
-        chooseLanguage:
-            "Выберите язык",
-
-        logic:
-            "ЛОГИЧЕСКАЯ ЗАДАЧА",
-
-        number:
-            "ЧИСЛОВАЯ ЗАДАЧА",
-
-        letters:
-            "БУКВЕННАЯ ЗАДАЧА",
-
-        visual:
-            "ВИЗУАЛЬНАЯ ЗАДАЧА",
-
-        memory:
-            "ЗАДАЧА НА ПАМЯТЬ",
-
-        loading:
-            "Загрузка…",
-
-        paid:
-            "Первая попытка бесплатна. Следующий тест — 3 000 сум.",
-
-        retest:
-            "ПОВТОРНЫЙ ТЕСТ — 3 000 СУМ",
-
-        session:
-            "У вас уже есть незавершённый тест.",
-
-        sessionContinue:
-            "ПРОДОЛЖИТЬ ТЕСТ",
-
-        error:
-            "Произошла ошибка. Попробуйте ещё раз.",
-
-        network:
-            "Соединение с интернетом потеряно. Попробуйте снова.",
-
-        noData:
-            "Данные не найдены.",
-
-        certificateRequired:
-            "Для сертификата нужны 2 реальных приглашения.",
-
-        certificateNoResult:
-            "Сначала пройдите IQ-тест.",
-
-        certificateError:
-            "Не удалось получить сертификат.",
-
-        resultNote:
-            "Это приблизительный продуктовый балл ZAKO IQ, а не клиническая оценка IQ.",
-
-        inviteText:
-            "Приглашаю тебя пройти IQ-тест!",
-
-        copied:
-            "Результат скопирован.",
-
-        shareText:
-            "Посмотри мой результат!",
-
-        noRanking:
-            "В рейтинге пока нет результатов.",
-
-        cannotOpen:
-            "Не удалось открыть ссылку.",
-
-        back:
-            "НАЗАД",
-
-        home:
-            "ГЛАВНАЯ",
-
-        leaveTest:
-            "Выйти из теста? Текущий ответ может не сохраниться.",
-
-        cancel:
-            "ОТМЕНА",
-
-        leave:
-            "ВЫЙТИ",
-
-        user:
-            "Пользователь",
-
-        answerAccepted:
-            "Ответ принят."
+      title: "IQ TEST",
+      desc: "Проверьте логическое мышление с помощью 16 оригинальных задач.",
+      start: "НАЧАТЬ ТЕСТ",
+      ranking: "Рейтинг",
+      profile: "Профиль",
+      free: "Первая попытка — бесплатно",
+      why: "Результат и рейтинг сохраняются автоматически.",
+      question: "ЛОГИЧЕСКАЯ ЗАДАЧА",
+      time: "Время",
+      correct: "Верно",
+      score: "IQ",
+      rank: "Рейтинг",
+      done: "ТЕСТ ЗАВЕРШЁН",
+      next: "ПРОДОЛЖИТЬ",
+      finish: "ПОКАЗАТЬ РЕЗУЛЬТАТ",
+      loading: "Загрузка…",
+      sending: "Результат проверяется…",
+      offline: "Нет интернета. Тест продолжится.",
+      synced: "Результат сохранён.",
+      pending: "Результат будет отправлен после восстановления интернета.",
+      error: "Произошла ошибка.",
+      retry: "ПОВТОРИТЬ",
+      back: "Назад",
+      tests: "Тесты",
+      best: "Лучший IQ",
+      referrals: "Приглашения",
+      retest: "ПОВТОРНЫЙ ТЕСТ",
+      paid: "Следующая попытка платная.",
+      quit: "Выйти из теста?",
+      quitText: "Текущий прогресс будет сохранён.",
+      stay: "ОСТАТЬСЯ",
+      leave: "ВЫЙТИ",
+      noData: "Данные не найдены.",
+      telegramOnly: "Откройте приложение внутри Telegram.",
+      share: "ПОДЕЛИТЬСЯ",
+      certificate: "СЕРТИФИКАТ",
+      develop: "РАЗВИВАТЬ IQ",
+      cannotStart: "Не удалось начать тест.",
+      cannotFinish: "Не удалось отправить результат.",
+      sync: "Синхронизация…"
     },
-
 
     en: {
-
-        eyebrow:
-            "16 LOGIC PUZZLES",
-
-        title:
-            "Test\nyour IQ",
-
-        subtitle:
-            "Challenge your reasoning with 16 logic puzzles.",
-
-        start:
-            "START TEST",
-
-        ranking:
-            "Ranking",
-
-        rankingSub:
-            "Top results",
-
-        profile:
-            "Profile",
-
-        profileSub:
-            "Your statistics",
-
-        next:
-            "CONTINUE",
-
-        finished:
-            "TEST COMPLETE",
-
-        yourResult:
-            "Your result",
-
-        iqScore:
-            "IQ SCORE",
-
-        correct:
-            "Correct answers",
-
-        time:
-            "Time",
-
-        rank:
-            "Ranking",
-
-        certificate:
-            "GET CERTIFICATE",
-
-        share:
-            "SHARE RESULT",
-
-        improve:
-            "DEVELOP MY IQ",
-
-        rankingDesc:
-            "Top results",
-
-        profileDesc:
-            "Your IQ statistics",
-
-        bestIq:
-            "BEST IQ",
-
-        tests:
-            "Tests",
-
-        referrals:
-            "Invites",
-
-        invite:
-            "INVITE FRIENDS",
-
-        chooseLanguage:
-            "Choose language",
-
-        logic:
-            "LOGIC PUZZLE",
-
-        number:
-            "NUMBER PUZZLE",
-
-        letters:
-            "LETTER PUZZLE",
-
-        visual:
-            "VISUAL PUZZLE",
-
-        memory:
-            "MEMORY PUZZLE",
-
-        loading:
-            "Loading…",
-
-        paid:
-            "Your first attempt is free. The next test costs 3,000 UZS.",
-
-        retest:
-            "RETAKE TEST — 3,000 UZS",
-
-        session:
-            "You already have an unfinished test.",
-
-        sessionContinue:
-            "CONTINUE TEST",
-
-        error:
-            "Something went wrong. Please try again.",
-
-        network:
-            "Internet connection lost. Please try again.",
-
-        noData:
-            "No data found.",
-
-        certificateRequired:
-            "2 real invites are required for the certificate.",
-
-        certificateNoResult:
-            "Take the IQ test first.",
-
-        certificateError:
-            "Could not get the certificate.",
-
-        resultNote:
-            "This is an approximate ZAKO IQ product score, not a clinical IQ assessment.",
-
-        inviteText:
-            "Try this IQ test!",
-
-        copied:
-            "Result copied.",
-
-        shareText:
-            "Check out my result!",
-
-        noRanking:
-            "There are no ranking results yet.",
-
-        cannotOpen:
-            "Could not open the link.",
-
-        back:
-            "BACK",
-
-        home:
-            "HOME",
-
-        leaveTest:
-            "Leave the test? Your current answer may not be saved.",
-
-        cancel:
-            "CANCEL",
-
-        leave:
-            "LEAVE",
-
-        user:
-            "User",
-
-        answerAccepted:
-            "Answer accepted."
+      title: "IQ TEST",
+      desc: "Test your reasoning with 16 original logic puzzles.",
+      start: "START TEST",
+      ranking: "Ranking",
+      profile: "Profile",
+      free: "First attempt — free",
+      why: "Your result and ranking are saved automatically.",
+      question: "LOGIC PUZZLE",
+      time: "Time",
+      correct: "Correct",
+      score: "IQ",
+      rank: "Ranking",
+      done: "TEST COMPLETE",
+      next: "CONTINUE",
+      finish: "VIEW RESULT",
+      loading: "Loading…",
+      sending: "Checking result…",
+      offline: "No internet. The test will continue.",
+      synced: "Result saved.",
+      pending: "Result will be sent when internet returns.",
+      error: "Something went wrong.",
+      retry: "RETRY",
+      back: "Back",
+      tests: "Tests",
+      best: "Best IQ",
+      referrals: "Invites",
+      retest: "RETAKE TEST",
+      paid: "The next attempt is paid.",
+      quit: "Leave the test?",
+      quitText: "Your current progress will be saved.",
+      stay: "STAY",
+      leave: "LEAVE",
+      noData: "No data found.",
+      telegramOnly: "Open this app inside Telegram.",
+      share: "SHARE RESULT",
+      certificate: "CERTIFICATE",
+      develop: "DEVELOP MY IQ",
+      cannotStart: "Could not start the test.",
+      cannotFinish: "Could not submit the result.",
+      sync: "Synchronizing…"
     }
-};
+  };
 
+  function t(key) {
+    return T[state.lang]?.[key] || T.uz[key] || key;
+  }
 
-/* ============================================================
-   QUESTIONS
-============================================================ */
-
-const QUESTIONS = [
-
-    {
-        category: "logic",
-
-        text: {
-            uz:
-                "Qaysi belgi ketma-ketlikni davom ettiradi?",
-
-            ru:
-                "Какой символ продолжает последовательность?",
-
-            en:
-                "Which symbol continues the sequence?"
-        },
-
-        puzzle: `
-            <svg viewBox="0 0 360 220"
-                 role="img"
-                 aria-label="Pattern puzzle">
-
-                <g fill="none"
-                   stroke="currentColor"
-                   stroke-width="4"
-                   stroke-linecap="round"
-                   stroke-linejoin="round">
-
-                    <circle cx="65" cy="55" r="18"/>
-                    <path d="M120 37 L138 73 L102 73 Z"/>
-                    <circle cx="190" cy="55" r="18"/>
-                    <path d="M245 37 L263 73 L227 73 Z"/>
-
-                    <path d="M47 110 L65 146 L83 110 Z"/>
-                    <circle cx="120" cy="128" r="18"/>
-                    <path d="M172 110 L190 146 L208 110 Z"/>
-                    <circle cx="245" cy="128" r="18"/>
-
-                    <circle cx="190" cy="182" r="18"/>
-                    <path d="M245 164 L263 200 L227 200 Z"/>
-
-                </g>
-
-                <text x="292"
-                      y="195"
-                      font-size="44"
-                      font-weight="800"
-                      fill="currentColor">?</text>
-
-            </svg>
-        `,
-
-        options: {
-            uz: ["●", "▲", "■", "◆"],
-            ru: ["●", "▲", "■", "◆"],
-            en: ["●", "▲", "■", "◆"]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Qaysi son yetishmayapti?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?",
-
-            ru:
-                "Какого числа не хватает?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?",
-
-            en:
-                "Which number is missing?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?"
-        },
-
-        options: {
-            uz: ["27", "30", "32", "33"],
-            ru: ["27", "30", "32", "33"],
-            en: ["27", "30", "32", "33"]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Sonlar ketma-ketligini davom ettiring:\n\n2, 6, 12, 20, 30, ?",
-
-            ru:
-                "Продолжите последовательность:\n\n2, 6, 12, 20, 30, ?",
-
-            en:
-                "Continue the sequence:\n\n2, 6, 12, 20, 30, ?"
-        },
-
-        options: {
-            uz: ["40", "41", "42", "44"],
-            ru: ["40", "41", "42", "44"],
-            en: ["40", "41", "42", "44"]
-        }
-    },
-
-
-    {
-        category: "visual",
-
-        text: {
-            uz:
-                "Naqshdagi yetishmayotgan juftlikni toping.",
-
-            ru:
-                "Найдите недостающую пару в узоре.",
-
-            en:
-                "Find the missing pair in the pattern."
-        },
-
-        puzzle: `
-            <svg viewBox="0 0 360 230"
-                 role="img"
-                 aria-label="Matrix puzzle">
-
-                <g fill="none"
-                   stroke="currentColor"
-                   stroke-width="4">
-
-                    <rect x="20" y="20"
-                          width="85"
-                          height="75"
-                          rx="12"/>
-
-                    <circle cx="62"
-                            cy="57"
-                            r="17"/>
-
-                    <rect x="137" y="20"
-                          width="85"
-                          height="75"
-                          rx="12"/>
-
-                    <path d="M179 38 L196 72 L162 72 Z"/>
-
-                    <rect x="254" y="20"
-                          width="85"
-                          height="75"
-                          rx="12"/>
-
-                    <circle cx="296"
-                            cy="57"
-                            r="17"/>
-
-                    <rect x="20" y="125"
-                          width="85"
-                          height="75"
-                          rx="12"/>
-
-                    <path d="M62 143 L79 177 L45 177 Z"/>
-
-                    <rect x="137" y="125"
-                          width="85"
-                          height="75"
-                          rx="12"/>
-
-                    <rect x="254" y="125"
-                          width="85"
-                          height="75"
-                          rx="12"/>
-
-                </g>
-
-                <text x="294"
-                      y="180"
-                      font-size="42"
-                      font-weight="800"
-                      fill="currentColor">?</text>
-
-            </svg>
-        `,
-
-        options: {
-            uz: ["◇ □", "○ □", "◇ ○", "△ □"],
-            ru: ["◇ □", "○ □", "◇ ○", "△ □"],
-            en: ["◇ □", "○ □", "◇ ○", "△ □"]
-        }
-    },
-
-
-    {
-        category: "letters",
-
-        text: {
-            uz:
-                "Harflar ketma-ketligini davom ettiring:\n\nB, E, I, N, T, ?",
-
-            ru:
-                "Продолжите последовательность букв:\n\nB, E, I, N, T, ?",
-
-            en:
-                "Continue the letter sequence:\n\nB, E, I, N, T, ?"
-        },
-
-        options: {
-            uz: ["Y", "Z", "A", "B"],
-            ru: ["Y", "Z", "A", "B"],
-            en: ["Y", "Z", "A", "B"]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Sonlar ketma-ketligini davom ettiring:\n\n3, 7, 15, 31, 63, ?",
-
-            ru:
-                "Продолжите последовательность:\n\n3, 7, 15, 31, 63, ?",
-
-            en:
-                "Continue the sequence:\n\n3, 7, 15, 31, 63, ?"
-        },
-
-        options: {
-            uz: ["95", "111", "127", "129"],
-            ru: ["95", "111", "127", "129"],
-            en: ["95", "111", "127", "129"]
-        }
-    },
-
-
-    {
-        category: "logic",
-
-        text: {
-            uz:
-                "Faqat bitta yozuv rost.\n\nQizil: “Kalit ko‘k qutida.”\nKo‘k: “Kalit ko‘k qutida emas.”\nYashil: “Kalit qizil qutida emas.”\n\nKalit qaysi qutida?",
-
-            ru:
-                "Только одно утверждение истинно.\n\nКрасная: «Ключ в синей коробке».\nСиняя: «Ключ не в синей коробке».\nЗелёная: «Ключ не в красной коробке».\n\nВ какой коробке ключ?",
-
-            en:
-                "Only one statement is true.\n\nRed: “The key is in the blue box.”\nBlue: “The key is not in the blue box.”\nGreen: “The key is not in the red box.”\n\nWhich box contains the key?"
-        },
-
-        puzzle: `
-            <svg viewBox="0 0 360 180"
-                 role="img"
-                 aria-label="Three boxes">
-
-                <g fill="none"
-                   stroke="currentColor"
-                   stroke-width="4">
-
-                    <rect x="18"
-                          y="42"
-                          width="98"
-                          height="92"
-                          rx="16"/>
-
-                    <rect x="131"
-                          y="42"
-                          width="98"
-                          height="92"
-                          rx="16"/>
-
-                    <rect x="244"
-                          y="42"
-                          width="98"
-                          height="92"
-                          rx="16"/>
-
-                </g>
-
-                <text x="42"
-                      y="96"
-                      font-size="15"
-                      font-weight="800"
-                      fill="currentColor">
-                    QIZIL
-                </text>
-
-                <text x="158"
-                      y="96"
-                      font-size="15"
-                      font-weight="800"
-                      fill="currentColor">
-                    KO‘K
-                </text>
-
-                <text x="262"
-                      y="96"
-                      font-size="15"
-                      font-weight="800"
-                      fill="currentColor">
-                    YASHIL
-                </text>
-
-            </svg>
-        `,
-
-        options: {
-            uz: [
-                "Qizil",
-                "Ko‘k",
-                "Yashil",
-                "Aniqlab bo‘lmaydi"
-            ],
-
-            ru: [
-                "Красная",
-                "Синяя",
-                "Зелёная",
-                "Нельзя определить"
-            ],
-
-            en: [
-                "Red",
-                "Blue",
-                "Green",
-                "Cannot determine"
-            ]
-        }
-    },
-
-
-    {
-        category: "visual",
-
-        text: {
-            uz:
-                "Belgi 90° buriladi va rang navbat bilan o‘zgaradi. Keyingi belgi qaysi?",
-
-            ru:
-                "Символ поворачивается на 90°, а цвет чередуется. Какой следующий?",
-
-            en:
-                "The symbol rotates 90° and the color alternates. What comes next?"
-        },
-
-        puzzle: `
-            <svg viewBox="0 0 360 170"
-                 role="img"
-                 aria-label="Rotation sequence">
-
-                <text x="20"
-                      y="105"
-                      font-size="39"
-                      fill="currentColor">
-                    ○↑
-                </text>
-
-                <text x="92"
-                      y="105"
-                      font-size="28"
-                      fill="currentColor">
-                    →
-                </text>
-
-                <text x="132"
-                      y="105"
-                      font-size="39"
-                      fill="currentColor">
-                    ●→
-                </text>
-
-                <text x="212"
-                      y="105"
-                      font-size="28"
-                      fill="currentColor">
-                    →
-                </text>
-
-                <text x="252"
-                      y="105"
-                      font-size="39"
-                      fill="currentColor">
-                    ○↓
-                </text>
-
-            </svg>
-        `,
-
-        options: {
-            uz: ["○↑", "○→", "●↑", "●↓"],
-            ru: ["○↑", "○→", "●↑", "●↓"],
-            en: ["○↑", "○→", "●↑", "●↓"]
-        }
-    },
-
-
-    {
-        category: "logic",
-
-        text: {
-            uz:
-                "A B dan oldin.\nB D dan oldin.\nD E dan oldin.\nC A dan keyin.\n\nQaysi tartib mumkin?",
-
-            ru:
-                "A перед B.\nB перед D.\nD перед E.\nC после A.\n\nКакой порядок возможен?",
-
-            en:
-                "A is before B.\nB is before D.\nD is before E.\nC is after A.\n\nWhich order is possible?"
-        },
-
-        options: {
-            uz: [
-                "B-A-D-E-C",
-                "A-C-B-D-E",
-                "D-A-B-C-E",
-                "E-D-B-A-C"
-            ],
-
-            ru: [
-                "B-A-D-E-C",
-                "A-C-B-D-E",
-                "D-A-B-C-E",
-                "E-D-B-A-C"
-            ],
-
-            en: [
-                "B-A-D-E-C",
-                "A-C-B-D-E",
-                "D-A-B-C-E",
-                "E-D-B-A-C"
-            ]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Qoidani toping:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?",
-
-            ru:
-                "Найдите правило:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?",
-
-            en:
-                "Find the rule:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?"
-        },
-
-        options: {
-            uz: ["30", "32", "35", "36"],
-            ru: ["30", "32", "35", "36"],
-            en: ["30", "32", "35", "36"]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Qaysi son yetishmayapti?\n\n1, 4, 10, 22, 46, ?",
-
-            ru:
-                "Какого числа не хватает?\n\n1, 4, 10, 22, 46, ?",
-
-            en:
-                "Which number is missing?\n\n1, 4, 10, 22, 46, ?"
-        },
-
-        options: {
-            uz: ["82", "90", "94", "96"],
-            ru: ["82", "90", "94", "96"],
-            en: ["82", "90", "94", "96"]
-        }
-    },
-
-
-    {
-        category: "logic",
-
-        text: {
-            uz:
-                "Qoida:\nAgar kartaning old tomonida unli harf bo‘lsa, orqasida juft son bo‘lishi kerak.\n\nQaysi kartalarni albatta tekshirish kerak?",
-
-            ru:
-                "Правило:\nЕсли на одной стороне карты гласная, на другой должно быть чётное число.\n\nКакие карты нужно проверить?",
-
-            en:
-                "Rule:\nIf a card has a vowel on one side, it must have an even number on the other side.\n\nWhich cards must be checked?"
-        },
-
-        puzzle: `
-            <svg viewBox="0 0 360 155"
-                 role="img"
-                 aria-label="Cards">
-
-                <g fill="none"
-                   stroke="currentColor"
-                   stroke-width="4">
-
-                    <rect x="15"
-                          y="18"
-                          width="72"
-                          height="115"
-                          rx="13"/>
-
-                    <rect x="101"
-                          y="18"
-                          width="72"
-                          height="115"
-                          rx="13"/>
-
-                    <rect x="187"
-                          y="18"
-                          width="72"
-                          height="115"
-                          rx="13"/>
-
-                    <rect x="273"
-                          y="18"
-                          width="72"
-                          height="115"
-                          rx="13"/>
-
-                </g>
-
-                <text x="38"
-                      y="91"
-                      font-size="42"
-                      font-weight="800"
-                      fill="currentColor">
-                    A
-                </text>
-
-                <text x="124"
-                      y="91"
-                      font-size="42"
-                      font-weight="800"
-                      fill="currentColor">
-                    D
-                </text>
-
-                <text x="208"
-                      y="91"
-                      font-size="42"
-                      font-weight="800"
-                      fill="currentColor">
-                    4
-                </text>
-
-                <text x="296"
-                      y="91"
-                      font-size="42"
-                      font-weight="800"
-                      fill="currentColor">
-                    7
-                </text>
-
-            </svg>
-        `,
-
-        options: {
-            uz: [
-                "Faqat A",
-                "A va 7",
-                "D va 4",
-                "4 va 7"
-            ],
-
-            ru: [
-                "Только A",
-                "A и 7",
-                "D и 4",
-                "4 и 7"
-            ],
-
-            en: [
-                "Only A",
-                "A and 7",
-                "D and 4",
-                "4 and 7"
-            ]
-        }
-    },
-
-
-    {
-        category: "memory",
-
-        text: {
-            uz:
-                "K — 7 — ▲ — M — 3 — ● — R — 9\n\n▲ belgisidan 3 ta o‘rin keyin nima turibdi?",
-
-            ru:
-                "K — 7 — ▲ — M — 3 — ● — R — 9\n\nЧто находится через 3 позиции после ▲?",
-
-            en:
-                "K — 7 — ▲ — M — 3 — ● — R — 9\n\nWhat is 3 positions after ▲?"
-        },
-
-        options: {
-            uz: ["M", "3", "●", "R"],
-            ru: ["M", "3", "●", "R"],
-            en: ["M", "3", "●", "R"]
-        }
-    },
-
-
-    {
-        category: "logic",
-
-        text: {
-            uz:
-                "Barcha A lar B.\nBa’zi B lar C.\n\nQaysi xulosa majburiy ravishda to‘g‘ri?",
-
-            ru:
-                "Все A являются B.\nНекоторые B являются C.\n\nКакой вывод обязательно верен?",
-
-            en:
-                "All A are B.\nSome B are C.\n\nWhich conclusion is necessarily true?"
-        },
-
-        options: {
-            uz: [
-                "Ba’zi A lar C",
-                "Ba’zi A lar C ekanini aniqlab bo‘lmaydi",
-                "Barcha C lar A",
-                "Barcha B lar A"
-            ],
-
-            ru: [
-                "Некоторые A — C",
-                "Нельзя определить, есть ли A среди C",
-                "Все C — A",
-                "Все B — A"
-            ],
-
-            en: [
-                "Some A are C",
-                "Cannot determine whether any A are C",
-                "All C are A",
-                "All B are A"
-            ]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Ketma-ketlikni davom ettiring:\n\n4, 9, 19, 39, 79, ?",
-
-            ru:
-                "Продолжите последовательность:\n\n4, 9, 19, 39, 79, ?",
-
-            en:
-                "Continue the sequence:\n\n4, 9, 19, 39, 79, ?"
-        },
-
-        options: {
-            uz: ["149", "159", "169", "179"],
-            ru: ["149", "159", "169", "179"],
-            en: ["149", "159", "169", "179"]
-        }
-    },
-
-
-    {
-        category: "number",
-
-        text: {
-            uz:
-                "Yakuniy ketma-ketlik:\n\n3, 7, 15, 31, 63, 127, ?",
-
-            ru:
-                "Финальная последовательность:\n\n3, 7, 15, 31, 63, 127, ?",
-
-            en:
-                "Final sequence:\n\n3, 7, 15, 31, 63, 127, ?"
-        },
-
-        options: {
-            uz: ["191", "223", "255", "257"],
-            ru: ["191", "223", "255", "257"],
-            en: ["191", "223", "255", "257"]
-        }
-    }
-
-];
-
-
-/* ============================================================
-   HELPERS
-============================================================ */
-
-function tr(key) {
-
-    return (
-        TEXT[state.lang]?.[key] ??
-        TEXT.uz?.[key] ??
-        key
-    );
-}
-
-
-function escapeHTML(value) {
-
+  function esc(value) {
     return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
 
+  function uuid() {
+    if (crypto?.randomUUID) return crypto.randomUUID();
 
-function formatTime(seconds) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
 
-    const total =
-        Math.max(
-            0,
-            Math.floor(
-                Number(seconds) || 0
-            )
-        );
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
-    const minutes =
-        Math.floor(
-            total / 60
-        );
-
-    const secs =
-        total % 60;
+    const h = [...bytes].map(x => x.toString(16).padStart(2, "0"));
 
     return (
-        String(minutes).padStart(2, "0") +
-        ":" +
-        String(secs).padStart(2, "0")
+      h.slice(0, 4).join("") + "-" +
+      h.slice(4, 6).join("") + "-" +
+      h.slice(6, 8).join("") + "-" +
+      h.slice(8, 10).join("") + "-" +
+      h.slice(10, 16).join("")
     );
-}
+  }
 
-
-function telegramInitData() {
-
+  function initData() {
     return tg?.initData || "";
-}
+  }
 
+  function telegramReady() {
+    if (!tg) return;
 
-function telegramUser() {
+    try {
+      tg.ready();
+      tg.expand();
 
-    return tg?.initDataUnsafe?.user || null;
-}
+      if (tg.setHeaderColor) {
+        tg.setHeaderColor("#080b12");
+      }
 
-
-function showToast(message) {
-
-    const toast =
-        document.getElementById("toast");
-
-    if (!toast) {
-        return;
+      if (tg.setBackgroundColor) {
+        tg.setBackgroundColor("#080b12");
+      }
+    } catch (e) {
+      console.warn("Telegram WebApp init:", e);
     }
+  }
 
-    toast.textContent =
-        String(message);
+  function isOnline() {
+    return navigator.onLine !== false;
+  }
 
-    toast.classList.add("show");
+  function now() {
+    return Date.now();
+  }
 
-    clearTimeout(
-        showToast.timeout
-    );
-
-    showToast.timeout =
-        setTimeout(
-            () => {
-                toast.classList.remove("show");
-            },
-            2600
-        );
-}
-
-
-function setBusy(value) {
-
-    state.busy =
-        Boolean(value);
-}
-
-
-function categoryText(category) {
-
-    return tr(
-        category || "logic"
-    );
-}
-
-
-function clampQuestionIndex(index) {
-
-    const value =
-        Number(index);
-
-    if (!Number.isFinite(value)) {
-        return 0;
+  function safeJSONParse(value, fallback = null) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
     }
+  }
 
-    return Math.max(
-        0,
-        Math.min(
-            QUESTIONS_COUNT,
-            Math.floor(value)
-        )
-    );
-}
+  function saveActiveSession() {
+    if (!state.session) return;
 
-
-function normalizeAnswers(answers) {
-
-    if (!Array.isArray(answers)) {
-        return [];
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          version: 3,
+          savedAt: now(),
+          ...state.session
+        })
+      );
+    } catch (e) {
+      console.warn("localStorage save failed:", e);
     }
+  }
 
-    return answers
-        .slice(0, QUESTIONS_COUNT)
-        .map((value) => {
+  function loadActiveSession() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
 
-            const number =
-                Number(value);
+      const data = safeJSONParse(raw);
 
-            return (
-                Number.isInteger(number) &&
-                number >= 0 &&
-                number <= 3
-            )
-                ? number
-                : null;
+      if (!data || data.version !== 3) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+
+      if (
+        !data.attemptId ||
+        !Array.isArray(data.questions) ||
+        !Array.isArray(data.answers)
+      ) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearActiveSession() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+  }
+
+  function queueResult(payload) {
+    try {
+      const queue = safeJSONParse(
+        localStorage.getItem(QUEUE_KEY) || "[]",
+        []
+      );
+
+      const exists = queue.some(
+        x => x?.attempt_id === payload.attempt_id
+      );
+
+      if (!exists) {
+        queue.push(payload);
+      }
+
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    } catch (e) {
+      console.error("Queue error:", e);
+    }
+  }
+
+  function getQueue() {
+    return safeJSONParse(
+      localStorage.getItem(QUEUE_KEY) || "[]",
+      []
+    );
+  }
+
+  function setQueue(queue) {
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    } catch {}
+  }
+
+  async function syncQueue() {
+    if (!isOnline()) return;
+
+    const queue = getQueue();
+
+    if (!queue.length) return;
+
+    const remaining = [];
+
+    for (const payload of queue) {
+      try {
+        await api("/api/session/finish", {
+          method: "POST",
+          body: JSON.stringify(payload)
         });
-}
+      } catch (e) {
+        remaining.push(payload);
+      }
+    }
 
+    setQueue(remaining);
+  }
 
-/* ============================================================
-   API
-============================================================ */
+  async function api(path, options = {}) {
+    const controller = new AbortController();
 
-async function api(
-    path,
-    options = {}
-) {
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 15000);
 
     const headers = {
-
-        "Content-Type":
-            "application/json",
-
-        "X-Telegram-Init-Data":
-            telegramInitData(),
-
-        ...(options.headers || {})
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData(),
+      "Cache-Control": "no-cache",
+      ...(options.headers || {})
     };
 
-
-    let response;
-
     try {
+      const response = await fetch(API + path, {
+        ...options,
+        headers,
+        cache: "no-store",
+        signal: controller.signal
+      });
 
-        response =
-            await fetch(
-                path,
-                {
-                    ...options,
-                    headers,
-                    cache: "no-store"
-                }
-            );
+      const text = await response.text();
 
-    } catch (error) {
+      let data = {};
 
-        console.error(
-            "Network error:",
-            error
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { detail: text };
+        }
+      }
+
+      if (!response.ok) {
+        const error = new Error(
+          data?.detail ||
+          data?.error ||
+          `HTTP_${response.status}`
         );
 
-        const networkError =
-            new Error(
-                "NETWORK_ERROR"
-            );
-
-        networkError.cause =
-            error;
-
-        throw networkError;
-    }
-
-
-    let data = null;
-
-
-    const contentType =
-        response.headers.get(
-            "content-type"
-        ) || "";
-
-
-    if (
-        contentType.includes(
-            "application/json"
-        )
-    ) {
-
-        try {
-
-            data =
-                await response.json();
-
-        } catch {
-
-            data = null;
-        }
-
-    } else {
-
-        try {
-
-            const text =
-                await response.text();
-
-            data = {
-                message:
-                    text
-            };
-
-        } catch {
-
-            data = null;
-        }
-    }
-
-
-    if (!response.ok) {
-
-        const error =
-            new Error(
-                data?.detail ||
-                data?.message ||
-                `HTTP_${response.status}`
-            );
-
-        error.status =
-            response.status;
-
-        error.detail =
-            data?.detail ||
-            data?.message ||
-            "";
-
-        error.data =
-            data;
+        error.status = response.status;
+        error.code = data?.code || data?.error || data?.detail;
 
         throw error;
+      }
+
+      return data;
+    } finally {
+      clearTimeout(timeout);
     }
+  }
 
-
-    return data;
-}
-
-
-/* ============================================================
-   SCREEN
-============================================================ */
-
-function activateScreen(screenId) {
-
-    document
-        .querySelectorAll(".screen")
-        .forEach(
-            (screen) => {
-
-                screen.classList.remove(
-                    "active"
-                );
-            }
-        );
-
-
-    const target =
-        document.getElementById(
-            screenId
-        );
-
-
-    if (target) {
-
-        target.classList.add(
-            "active"
-        );
-    }
-
-
-    state.screen =
-        screenId.replace(
-            "Screen",
-            ""
-        );
-
-
-    window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "instant"
+  function showScreen(id) {
+    document.querySelectorAll(".screen").forEach(screen => {
+      screen.classList.remove("active");
     });
 
+    const screen = document.getElementById(id);
 
-    updateBackButton();
-}
-
-
-function updateBackButton() {
-
-    const button =
-        document.getElementById(
-            "backBtn"
-        );
-
-    if (!button) {
-        return;
+    if (screen) {
+      screen.classList.add("active");
     }
 
+    window.scrollTo({
+      top: 0,
+      behavior: "instant"
+    });
+  }
 
-    button.style.visibility =
-        state.screen === "home"
-            ? "hidden"
-            : "visible";
-}
+  function setLoader(visible) {
+    const loader = document.getElementById("globalLoader");
 
+    if (!loader) return;
 
-/* ============================================================
-   TELEGRAM SETUP
-============================================================ */
+    loader.classList.toggle("hidden", !visible);
+  }
 
-function setupTelegram() {
+  let toastTimer = null;
 
-    if (!tg) {
+  function toast(message) {
+    const el = document.getElementById("toast");
+    const msg = document.getElementById("toastMessage");
 
-        console.warn(
-            "Telegram WebApp SDK unavailable."
-        );
+    if (!el || !msg) return;
 
-        return;
-    }
+    msg.textContent = message;
 
+    el.classList.add("visible");
 
-    try {
+    clearTimeout(toastTimer);
 
-        tg.ready();
+    toastTimer = setTimeout(() => {
+      el.classList.remove("visible");
+    }, 2400);
+  }
 
-        tg.expand();
+  function updateOfflineUI() {
+    const banner = document.getElementById("offlineBanner");
 
+    if (!banner) return;
 
-        if (
-            typeof tg.disableVerticalSwipes ===
-            "function"
-        ) {
+    banner.classList.toggle("visible", !isOnline());
+  }
 
-            tg.disableVerticalSwipes();
-        }
+  function formatTime(seconds) {
+    seconds = Math.max(0, Math.floor(seconds));
 
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
 
-        if (
-            typeof tg.setHeaderColor ===
-            "function"
-        ) {
-
-            tg.setHeaderColor(
-                "#080a10"
-            );
-        }
-
-
-        if (
-            typeof tg.setBackgroundColor ===
-            "function"
-        ) {
-
-            tg.setBackgroundColor(
-                "#080a10"
-            );
-        }
-
-    } catch (error) {
-
-        console.warn(
-            "Telegram setup:",
-            error
-        );
-    }
-}
-
-
-function applyTheme() {
-
-    if (!tg) {
-        return;
-    }
-
-
-    const theme =
-        tg.colorScheme || "dark";
-
-
-    document.body.classList.toggle(
-        "light",
-        theme === "light"
+    return (
+      String(minutes).padStart(2, "0") +
+      ":" +
+      String(secs).padStart(2, "0")
     );
-}
+  }
 
+  function elapsedSeconds() {
+    if (!state.session) return 0;
 
-/* ============================================================
-   CONFIG
-============================================================ */
+    return Math.max(
+      0,
+      Math.floor(
+        (now() - state.session.startedAt) / 1000
+      )
+    );
+  }
 
-async function loadConfig() {
+  function remainingSeconds() {
+    if (!state.session) return TOTAL_SECONDS;
 
-    try {
+    return Math.max(
+      0,
+      Math.ceil(
+        (state.session.deadline - now()) / 1000
+      )
+    );
+  }
 
-        const config =
-            await api(
-                "/api/config"
-            );
+  function updateTimer() {
+    const timer = document.getElementById("timer");
 
+    if (!timer || !state.session) return;
 
-        if (
-            !config ||
-            typeof config !== "object"
-        ) {
+    const remaining = remainingSeconds();
 
-            return;
-        }
+    timer.textContent = formatTime(remaining);
 
-
-        if (
-            typeof config.bot_username ===
-            "string"
-        ) {
-
-            state.config.bot_username =
-                config.bot_username;
-        }
-
-
-        if (
-            typeof config.zako_url ===
-            "string" &&
-            /^https:\/\//i.test(
-                config.zako_url
-            )
-        ) {
-
-            state.config.zako_url =
-                config.zako_url;
-        }
-
-    } catch (error) {
-
-        console.warn(
-            "Config unavailable:",
-            error
-        );
-    }
-}
-
-
-/* ============================================================
-   LANGUAGE
-============================================================ */
-
-function openLanguageModal() {
-
-    const modal =
-        document.getElementById(
-            "languageModal"
-        );
-
-    if (!modal) {
-        return;
-    }
-
-
-    modal.classList.remove(
-        "hidden"
+    timer.classList.toggle(
+      "warning",
+      remaining <= 120 && remaining > 30
     );
 
-
-    document
-        .querySelectorAll(
-            ".language-option"
-        )
-        .forEach(
-            (button) => {
-
-                const selected =
-                    button.dataset.lang ===
-                    state.lang;
-
-
-                const check =
-                    button.querySelector("b");
-
-
-                if (check) {
-
-                    check.textContent =
-                        selected
-                            ? "✓"
-                            : "";
-                }
-
-
-                button.classList.toggle(
-                    "selected",
-                    selected
-                );
-            }
-        );
-}
-
-
-function closeLanguageModal() {
-
-    const modal =
-        document.getElementById(
-            "languageModal"
-        );
-
-    if (modal) {
-
-        modal.classList.add(
-            "hidden"
-        );
-    }
-}
-
-
-function setLanguage(language) {
-
-    if (
-        !SUPPORTED_LANGUAGES.includes(
-            language
-        )
-    ) {
-
-        return;
-    }
-
-
-    state.lang =
-        language;
-
-
-    localStorage.setItem(
-        "iq_lang",
-        language
+    timer.classList.toggle(
+      "danger",
+      remaining <= 30
     );
 
+    if (remaining <= 0 && !state.finishing) {
+      finishTest("timeout");
+    }
+  }
 
-    closeLanguageModal();
+  function startClock() {
+    clearInterval(state.clockTimer);
 
-    updateLanguageButton();
+    updateTimer();
 
+    state.clockTimer = setInterval(() => {
+      updateTimer();
+    }, 500);
+  }
 
-    if (
-        state.screen === "test" &&
-        state.session
-    ) {
+  function stopClock() {
+    clearInterval(state.clockTimer);
+    state.clockTimer = null;
+  }
 
-        renderTest();
+  function getQuestionText(question) {
+    if (!question) return "";
 
-        return;
+    if (typeof question.text === "string") {
+      return question.text;
     }
 
-
-    if (
-        state.screen === "result" &&
-        state.result
-    ) {
-
-        renderResult();
-
-        return;
+    if (question.text) {
+      return (
+        question.text[state.lang] ||
+        question.text.uz ||
+        question.text.en ||
+        Object.values(question.text)[0] ||
+        ""
+      );
     }
 
+    return question.q || "";
+  }
 
-    if (
-        state.screen === "ranking"
-    ) {
+  function getQuestionOptions(question) {
+    if (!question) return [];
 
-        loadRanking();
-
-        return;
+    if (Array.isArray(question.options)) {
+      return question.options;
     }
 
-
-    if (
-        state.screen === "profile"
-    ) {
-
-        loadProfile();
-
-        return;
+    if (Array.isArray(question.a)) {
+      return question.a;
     }
 
-
-    renderHome();
-}
-
-
-function updateLanguageButton() {
-
-    const button =
-        document.getElementById(
-            "langBtn"
-        );
-
-
-    if (button) {
-
-        button.textContent =
-            state.lang.toUpperCase();
+    if (question.a && typeof question.a === "object") {
+      return (
+        question.a[state.lang] ||
+        question.a.uz ||
+        question.a.en ||
+        Object.values(question.a)[0] ||
+        []
+      );
     }
-}
 
+    if (Array.isArray(question.opts)) {
+      return question.opts;
+    }
 
-/* ============================================================
-   HOME
-============================================================ */
+    if (question.opts && typeof question.opts === "object") {
+      return (
+        question.opts[state.lang] ||
+        question.opts.uz ||
+        question.opts.en ||
+        Object.values(question.opts)[0] ||
+        []
+      );
+    }
 
-function renderHome() {
+    return [];
+  }
 
-    stopTimer();
-
-
-    activateScreen(
-        "homeScreen"
+  function getVisual(question) {
+    return (
+      question?.visual ||
+      question?.svg ||
+      question?.image ||
+      ""
     );
+  }
 
+  function renderHome() {
+    stopClock();
 
-    updateLanguageButton();
-
-
-    document
-        .querySelectorAll(
-            "[data-i18n]"
-        )
-        .forEach(
-            (element) => {
-
-                const key =
-                    element.dataset.i18n;
-
-
-                const value =
-                    TEXT[state.lang]?.[key];
-
-
-                if (
-                    typeof value ===
-                    "string"
-                ) {
-
-                    element.textContent =
-                        value;
-                }
-            }
-        );
-}
-
-
-/* ============================================================
-   SESSION OBJECT
-============================================================ */
-
-function buildSession(data) {
-
-    const answers =
-        normalizeAnswers(
-            data?.answers
-        );
-
-
-    let index =
-        clampQuestionIndex(
-            data?.index ?? 0
-        );
-
-
-    /*
-     * Normal healthy session:
-     *
-     * index === answers.length
-     *
-     * Example:
-     * 0 answers → index 0
-     * 5 answers → index 5
-     * 16 answers → index 16
-     *
-     * We do NOT silently overwrite the backend
-     * source of truth.
-     */
-
-    return {
-
-        user_id:
-            data?.user_id,
-
-        created:
-            Boolean(
-                data?.created
-            ),
-
-        index,
-
-        answers,
-
-        elapsed:
-            Math.max(
-                0,
-                Number(
-                    data?.elapsed || 0
-                )
-            ),
-
-        attempts:
-            Number(
-                data?.attempts || 0
-            ),
-
-        selected:
-            null
-    };
-}
-
-
-/* ============================================================
-   SESSION START
-============================================================ */
-
-async function startTest() {
     const startBtn = document.getElementById("startBtn");
+    const rankingBtn = document.getElementById("rankingBtn");
 
-    /*
-     * HARD LOCK
-     *
-     * Bir vaqtning o'zida faqat bitta start request.
-     * Telegram WebView'da double-tap yoki duplicate event
-     * bo'lsa ham ikkinchi request ketmaydi.
-     */
-    if (
-        state.busy ||
-        state.answerSubmitting ||
-        state.busyFinish
-    ) {
+    if (startBtn) {
+      startBtn.textContent = t("start");
+    }
+
+    if (rankingBtn) {
+      rankingBtn.textContent = t("ranking");
+    }
+
+    showScreen("homeScreen");
+
+    const active = loadActiveSession();
+
+    if (active) {
+      toast(t("session"));
+    }
+  }
+
+  async function startTest() {
+    if (state.busy) return;
+
+    const existing = loadActiveSession();
+
+    if (existing) {
+      state.session = existing;
+
+      if (
+        Array.isArray(existing.questions) &&
+        existing.questions.length === QUESTION_COUNT &&
+        existing.index < QUESTION_COUNT &&
+        existing.deadline > now()
+      ) {
+        renderQuestion();
         return;
+      }
+
+      clearActiveSession();
     }
 
     state.busy = true;
 
-    if (startBtn) {
-        startBtn.disabled = true;
-        startBtn.setAttribute(
-            "aria-busy",
-            "true"
-        );
-    }
+    setLoader(true);
 
     try {
-        console.log(
-            "[ZAKO IQ] START: request"
-        );
+      /*
+       * IMPORTANT:
+       * Only one request is made to obtain the test package/start attempt.
+       * Answers are NOT sent to the server individually.
+       */
+      const data = await api("/api/test/package", {
+        method: "POST",
+        body: JSON.stringify({
+          language: state.lang
+        })
+      });
 
-        const data = await api(
-            "/api/session/start",
-            {
-                method: "POST",
-                body: JSON.stringify({
-                    language: state.lang
-                })
-            }
-        );
+      const questions =
+        data.questions ||
+        data.items ||
+        data.package?.questions;
 
-        console.log(
-            "[ZAKO IQ] START: response",
-            data
-        );
+      if (!Array.isArray(questions) || questions.length !== QUESTION_COUNT) {
+        throw new Error("INVALID_QUESTION_PACKAGE");
+      }
 
-        /*
-         * Backend response must be an object.
-         */
-        if (
-            !data ||
-            typeof data !== "object"
-        ) {
-            throw new Error(
-                "INVALID_SESSION_RESPONSE"
-            );
-        }
+      const attemptId =
+        data.attempt_id ||
+        data.attemptId ||
+        uuid();
 
-        /*
-         * Validate answers.
-         */
-        if (
-            data.answers !== undefined &&
-            !Array.isArray(data.answers)
-        ) {
-            throw new Error(
-                "INVALID_SESSION_ANSWERS"
-            );
-        }
+      const serverSeconds = Number(
+        data.time_limit ||
+        data.timeLimit ||
+        TOTAL_SECONDS
+      );
 
-        /*
-         * Build local session.
-         */
-        const session =
-            buildSession(data);
+      const duration =
+        Number.isFinite(serverSeconds) &&
+        serverSeconds > 0
+          ? serverSeconds
+          : TOTAL_SECONDS;
 
-        if (!session) {
-            throw new Error(
-                "SESSION_BUILD_FAILED"
-            );
-        }
+      state.package = data;
 
-        state.session =
-            session;
+      state.session = {
+        version: 3,
+        attemptId,
+        questions,
+        index: 0,
+        answers: Array(QUESTION_COUNT).fill(null),
+        startedAt: now(),
+        deadline: now() + duration * 1000,
+        duration,
+        language: state.lang,
+        completed: false
+      };
 
-        console.log(
-            "[ZAKO IQ] SESSION:",
-            state.session
-        );
+      saveActiveSession();
 
-        const answerCount =
-            Array.isArray(
-                state.session.answers
-            )
-                ? state.session.answers.filter(
-                    (value) =>
-                        Number.isInteger(value) &&
-                        value >= 0 &&
-                        value <= 3
-                ).length
-                : 0;
-
-        /*
-         * IMPORTANT:
-         *
-         * Do not use answers.length here.
-         * We need the number of REAL answers.
-         */
-        if (
-            answerCount ===
-            QUESTIONS_COUNT
-        ) {
-            state.session.index =
-                QUESTIONS_COUNT;
-
-            console.log(
-                "[ZAKO IQ] Session already complete."
-            );
-
-            await finishTest();
-
-            return;
-        }
-
-        /*
-         * An incomplete session can never be
-         * sent to /finish.
-         */
-        if (
-            state.session.index >=
-                QUESTIONS_COUNT &&
-            answerCount <
-                QUESTIONS_COUNT
-        ) {
-            console.error(
-                "[ZAKO IQ] INVALID SESSION STATE",
-                {
-                    index:
-                        state.session.index,
-                    answerCount,
-                    answers:
-                        state.session.answers
-                }
-            );
-
-            /*
-             * Try server-side recovery.
-             */
-            await recoverSession();
-
-            return;
-        }
-
-        /*
-         * Backend should point at the next
-         * unanswered question.
-         */
-        if (
-            state.session.index !==
-            answerCount
-        ) {
-            console.warn(
-                "[ZAKO IQ] SESSION INDEX MISMATCH",
-                {
-                    index:
-                        state.session.index,
-                    answerCount
-                }
-            );
-
-            /*
-             * Do not blindly continue with a
-             * corrupted state.
-             */
-            await recoverSession();
-
-            return;
-        }
-
-        /*
-         * Render test.
-         */
-        console.log(
-            "[ZAKO IQ] Rendering test..."
-        );
-
-        renderTest();
-
-        /*
-         * HARD CHECK:
-         * renderTest() must activate testScreen.
-         */
-        const testScreen =
-            document.getElementById(
-                "testScreen"
-            );
-
-        if (
-            !testScreen ||
-            !testScreen.classList.contains(
-                "active"
-            )
-        ) {
-            console.error(
-                "[ZAKO IQ] TEST SCREEN DID NOT ACTIVATE",
-                {
-                    testScreenExists:
-                        Boolean(testScreen),
-                    active:
-                        testScreen
-                            ? testScreen.classList.contains(
-                                "active"
-                            )
-                            : false,
-                    session:
-                        state.session
-                }
-            );
-
-            throw new Error(
-                "TEST_SCREEN_NOT_ACTIVATED"
-            );
-        }
-
-        console.log(
-            "[ZAKO IQ] TEST STARTED SUCCESSFULLY"
-        );
-
+      renderQuestion();
     } catch (error) {
-        console.error(
-            "[ZAKO IQ] startTest ERROR:",
-            error
-        );
+      /*
+       * Compatibility fallback:
+       * Some backend versions use /api/session/start instead of
+       * /api/test/package.
+       */
+      if (
+        error.status === 404 ||
+        error.code === "NOT_FOUND"
+      ) {
+        try {
+          const data = await api("/api/session/start", {
+            method: "POST",
+            body: JSON.stringify({
+              language: state.lang
+            })
+          });
 
-        handleStartError(
-            error
-        );
+          const questions =
+            data.questions ||
+            data.items ||
+            data.package?.questions;
 
-    } finally {
-        state.busy =
-            false;
+          if (
+            !Array.isArray(questions) ||
+            questions.length !== QUESTION_COUNT
+          ) {
+            throw new Error("INVALID_QUESTION_PACKAGE");
+          }
 
-        if (startBtn) {
-            startBtn.disabled =
-                false;
+          const attemptId =
+            data.attempt_id ||
+            data.attemptId ||
+            uuid();
 
-            startBtn.removeAttribute(
-                "aria-busy"
-            );
+          const duration =
+            Number(
+              data.time_limit ||
+              data.timeLimit ||
+              TOTAL_SECONDS
+            ) || TOTAL_SECONDS;
+
+          state.package = data;
+
+          state.session = {
+            version: 3,
+            attemptId,
+            questions,
+            index: Number(data.index || 0),
+            answers: Array.isArray(data.answers)
+              ? data.answers.slice(0, QUESTION_COUNT)
+              : Array(QUESTION_COUNT).fill(null),
+            startedAt: now(),
+            deadline: now() + duration * 1000,
+            duration,
+            language: state.lang,
+            completed: false
+          };
+
+          while (
+            state.session.answers.length <
+            QUESTION_COUNT
+          ) {
+            state.session.answers.push(null);
+          }
+
+          saveActiveSession();
+          renderQuestion();
+
+          return;
+        } catch (fallbackError) {
+          handleStartError(fallbackError);
+          return;
         }
+      }
+
+      handleStartError(error);
+    } finally {
+      state.busy = false;
+      setLoader(false);
     }
-}
+  }
 
-
-/* ============================================================
-   START ERROR
-============================================================ */
-
-function handleStartError(error) {
+  function handleStartError(error) {
+    console.error("START TEST:", error);
 
     if (
-        error.status === 402 ||
-        error.detail === "PAID_RETEST"
+      error.status === 402 ||
+      error.code === "PAID_RETEST"
     ) {
-
-        showToast(
-            tr("paid")
-        );
-
-        return;
+      openPaymentModal();
+      return;
     }
 
+    toast(t("cannotStart"));
+  }
 
-    if (
-        error.message ===
-        "NETWORK_ERROR"
-    ) {
-
-        showToast(
-            tr("network")
-        );
-
-        return;
-    }
-
-
-    if (
-        error.detail ===
-        "INVALID_INIT_DATA"
-    ) {
-
-        showToast(
-            "Telegram Mini App auth xatosi."
-        );
-
-        return;
-    }
-
-
-    if (
-        error.detail ===
-        "SESSION_ACTIVE"
-    ) {
-
-        showToast(
-            tr("session")
-        );
-
-        return;
-    }
-
-
-    showToast(
-        tr("error")
-    );
-}
-
-
-/* ============================================================
-   TEST RENDER
-============================================================ */
-
-function renderTest() {
-
+  function renderQuestion() {
     if (!state.session) {
-
-        renderHome();
-
-        return;
+      renderHome();
+      return;
     }
 
+    const s = state.session;
 
-    const index =
-        clampQuestionIndex(
-            state.session.index
-        );
-
-
-    const answerCount =
-        Array.isArray(
-            state.session.answers
-        )
-            ? state.session.answers.length
-            : 0;
-
-
-    /*
-     * Only render finish state if there
-     * are actually 16 accepted answers.
-     */
-
-    if (
-        answerCount ===
-        QUESTIONS_COUNT
-    ) {
-
-        state.session.index =
-            QUESTIONS_COUNT;
-
-        finishTest();
-
-        return;
+    if (s.index >= QUESTION_COUNT) {
+      finishTest("completed");
+      return;
     }
 
+    const q = s.questions[s.index];
 
-    if (
-        index >=
-        QUESTIONS_COUNT
-    ) {
-
-        console.error(
-            "Invalid test state:",
-            {
-                index,
-                answerCount
-            }
-        );
-
-
-        showToast(
-            tr("error")
-        );
-
-        return;
+    if (!q) {
+      toast(t("error"));
+      return;
     }
 
-
-    const question =
-        QUESTIONS[index];
-
-
-    if (!question) {
-
-        showToast(
-            tr("error")
-        );
-
-        return;
-    }
-
-
-    const questionText =
-        question.text[state.lang] ||
-        question.text.uz;
-
-
-    const options =
-        question.options[state.lang] ||
-        question.options.uz;
-
+    const number = s.index + 1;
+    const text = getQuestionText(q);
+    const options = getQuestionOptions(q);
+    const visual = getVisual(q);
 
     const questionNumber =
-        String(
-            index + 1
-        ).padStart(
-            2,
-            "0"
-        );
+      document.getElementById("questionNumber");
 
+    const progressFill =
+      document.getElementById("progressFill");
 
-    const progress =
-        Math.min(
-            100,
-            (
-                index /
-                QUESTIONS_COUNT
-            ) * 100
-        );
+    const category =
+      document.getElementById("questionCategory");
 
+    const questionText =
+      document.getElementById("questionText");
 
     const puzzle =
-        question.puzzle
-            ? `
-                <div class="puzzle">
-                    ${question.puzzle}
-                </div>
-              `
-            : "";
+      document.getElementById("puzzle");
 
+    const answers =
+      document.getElementById("answers");
 
-    const answersHTML =
-        options
-            .map(
-                (
-                    option,
-                    optionIndex
-                ) => {
+    const nextBtn =
+      document.getElementById("nextBtn");
 
-                    return `
-                        <button
-                            type="button"
-                            class="answer-btn"
-                            data-answer="${optionIndex}"
-                            aria-label="${escapeHTML(
-                                LETTERS[optionIndex] +
-                                ": " +
-                                option
-                            )}"
-                        >
-
-                            <span
-                                class="answer-letter"
-                            >
-                                ${LETTERS[optionIndex]}
-                            </span>
-
-                            <span
-                                class="answer-text"
-                            >
-                                ${escapeHTML(
-                                    option
-                                )}
-                            </span>
-
-                        </button>
-                    `;
-                }
-            )
-            .join("");
-
-
-    const questionScreen =
-        document.getElementById(
-            "testScreen"
-        );
-
-
-    if (!questionScreen) {
-        return;
+    if (questionNumber) {
+      questionNumber.textContent =
+        `${number} / ${QUESTION_COUNT}`;
     }
 
+    if (progressFill) {
+      progressFill.style.width =
+        `${((number - 1) / QUESTION_COUNT) * 100}%`;
+    }
 
-    questionScreen.innerHTML = `
+    if (category) {
+      category.textContent = t("question");
+    }
 
-        <div class="test-head">
+    if (questionText) {
+      questionText.innerHTML = esc(text).replace(
+        /\n/g,
+        "<br>"
+      );
+    }
 
-            <div>
+    if (puzzle) {
+      if (visual) {
+        puzzle.innerHTML = visual;
+        puzzle.classList.remove("hidden");
+      } else {
+        puzzle.innerHTML = "";
+        puzzle.classList.add("hidden");
+      }
+    }
 
-                <span id="questionNumber">
-                    ${questionNumber} / ${QUESTIONS_COUNT}
-                </span>
+    if (answers) {
+      answers.innerHTML = options
+        .map((option, index) => {
+          const selected =
+            Number(s.answers[s.index]) === index;
 
-                <div class="progress">
+          let content = option;
 
-                    <div
-                        id="progressFill"
-                        style="width:${progress}%"
-                    ></div>
+          if (
+            typeof option === "object" &&
+            option !== null
+          ) {
+            content =
+              option.html ||
+              option.svg ||
+              option.text ||
+              option.label ||
+              "";
+          }
 
-                </div>
+          const safeContent =
+            typeof content === "string" &&
+            /<svg|<div|<span|<img|<path|<circle|<rect/i.test(
+              content
+            )
+              ? content
+              : esc(content);
 
-            </div>
+          return `
+            <button
+              type="button"
+              class="answer${selected ? " selected" : ""}"
+              data-answer="${index}"
+              aria-label="${esc(
+                `${LETTERS[index]} ${String(
+                  typeof content === "string"
+                    ? content.replace(/<[^>]*>/g, "")
+                    : ""
+                )}`
+              )}"
+            >
+              <span class="answer-visual">
+                ${safeContent}
+              </span>
+            </button>
+          `;
+        })
+        .join("");
 
-
-            <div class="timer">
-
-                <span>◷</span>
-
-                <span id="timer">
-                    00:00
-                </span>
-
-            </div>
-
-        </div>
-
-
-        <div class="question-card">
-
-            <div class="question-category">
-
-                ${escapeHTML(
-                    categoryText(
-                        question.category
-                    )
-                )}
-
-            </div>
-
-
-            <h2 id="questionText">
-                ${escapeHTML(
-                    questionText
-                )}
-            </h2>
-
-
-            ${puzzle}
-
-        </div>
-
-
-        <div
-            id="answers"
-            class="answers"
-        >
-            ${answersHTML}
-        </div>
-
-
-        <button
-            id="nextBtn"
-            class="next-btn"
-            type="button"
-            disabled
-        >
-
-            <span>
-                ${escapeHTML(
-                    tr("next")
-                )}
-            </span>
-
-            <span>
-                →
-            </span>
-
-        </button>
-    `;
-
-
-    activateScreen(
-        "testScreen"
-    );
-
-
-    bindTestButtons();
-
-
-    startTimer();
-}
-
-
-/* ============================================================
-   TEST BUTTONS
-============================================================ */
-
-function bindTestButtons() {
-
-    document
-        .querySelectorAll(
-            "[data-answer]"
-        )
-        .forEach(
-            (button) => {
-
-                button.addEventListener(
-                    "click",
-                    () => {
-
-                        if (
-                            state.busy ||
-                            state.answerSubmitting
-                        ) {
-
-                            return;
-                        }
-
-
-                        const index =
-                            Number(
-                                button.dataset.answer
-                            );
-
-
-                        selectAnswer(
-                            index
-                        );
-                    }
-                );
-            }
-        );
-
-
-    const next =
-        document.getElementById(
-            "nextBtn"
-        );
-
-
-    if (next) {
-
-        next.addEventListener(
+      answers
+        .querySelectorAll("[data-answer]")
+        .forEach(button => {
+          button.addEventListener(
             "click",
-            submitSelectedAnswer
-        );
-    }
-}
-
-
-/* ============================================================
-   SELECT ANSWER
-============================================================ */
-
-function selectAnswer(index) {
-
-    if (
-        state.busy ||
-        state.answerSubmitting ||
-        !state.session
-    ) {
-
-        return;
+            () => chooseAnswer(
+              Number(button.dataset.answer)
+            ),
+            { passive: true }
+          );
+        });
     }
 
+    if (nextBtn) {
+      nextBtn.textContent =
+        number === QUESTION_COUNT
+          ? t("finish")
+          : t("next");
 
-    if (
-        !Number.isInteger(index) ||
-        index < 0 ||
-        index > 3
-    ) {
+      nextBtn.disabled =
+        !Number.isInteger(s.answers[s.index]);
 
-        return;
-    }
-
-
-    state.session.selected =
-        index;
-
-
-    document
-        .querySelectorAll(
-            "[data-answer]"
-        )
-        .forEach(
-            (button) => {
-
-                const active =
-                    Number(
-                        button.dataset.answer
-                    ) === index;
-
-
-                button.classList.toggle(
-                    "selected",
-                    active
-                );
-
-
-                button.classList.remove(
-                    "locked"
-                );
-            }
-        );
-
-
-    const next =
-        document.getElementById(
-            "nextBtn"
-        );
-
-
-    if (next) {
-
-        next.disabled =
-            false;
-    }
-}
-
-
-/* ============================================================
-   SUBMIT ANSWER
-============================================================ */
-
-async function submitSelectedAnswer() {
-
-    if (
-        state.busy ||
-        state.answerSubmitting ||
-        !state.session
-    ) {
-
-        return;
-    }
-
-
-    const selected =
-        state.session.selected;
-
-
-    if (
-        selected === null ||
-        selected === undefined
-    ) {
-
-        return;
-    }
-
-
-    const index =
-        Number(
-            state.session.index
-        );
-
-
-    if (
-        !Number.isInteger(index) ||
-        index < 0 ||
-        index >= QUESTIONS_COUNT
-    ) {
-
-        console.error(
-            "Invalid answer index:",
-            index
-        );
-
-        return;
-    }
-
-
-    state.answerSubmitting =
-        true;
-
-
-    const answerButtons =
-        Array.from(
-            document.querySelectorAll(
-                "[data-answer]"
-            )
-        );
-
-
-    const next =
-        document.getElementById(
-            "nextBtn"
-        );
-
-
-    /*
-     * Lock immediately.
-     *
-     * This is critical because two taps
-     * must never create two answer requests.
-     */
-
-    answerButtons.forEach(
-        (button) => {
-
-            button.disabled =
-                true;
-
-            button.classList.add(
-                "locked"
-            );
+      nextBtn.onclick = () => {
+        if (!Number.isInteger(s.answers[s.index])) {
+          return;
         }
+
+        goNext();
+      };
+    }
+
+    showScreen("testScreen");
+    startClock();
+    updateTimer();
+  }
+
+  function chooseAnswer(answerIndex) {
+    if (
+      state.busy ||
+      !state.session ||
+      state.finishing
+    ) {
+      return;
+    }
+
+    const index = state.session.index;
+
+    if (
+      index < 0 ||
+      index >= QUESTION_COUNT
+    ) {
+      return;
+    }
+
+    if (
+      !Number.isInteger(answerIndex) ||
+      answerIndex < 0 ||
+      answerIndex > 3
+    ) {
+      return;
+    }
+
+    state.session.answers[index] = answerIndex;
+
+    saveActiveSession();
+
+    const answers =
+      document.querySelectorAll("[data-answer]");
+
+    answers.forEach(button => {
+      button.classList.toggle(
+        "selected",
+        Number(button.dataset.answer) === answerIndex
+      );
+    });
+
+    const nextBtn =
+      document.getElementById("nextBtn");
+
+    if (nextBtn) {
+      nextBtn.disabled = false;
+    }
+  }
+
+  function goNext() {
+    if (
+      !state.session ||
+      state.finishing
+    ) {
+      return;
+    }
+
+    const index = state.session.index;
+
+    if (
+      !Number.isInteger(state.session.answers[index])
+    ) {
+      return;
+    }
+
+    if (index >= QUESTION_COUNT - 1) {
+      finishTest("completed");
+      return;
+    }
+
+    state.session.index += 1;
+
+    saveActiveSession();
+
+    renderQuestion();
+  }
+
+  function buildFinishPayload() {
+    if (!state.session) {
+      throw new Error("NO_SESSION");
+    }
+
+    const answers = state.session.answers.map(
+      (answer, index) => ({
+        questionId:
+          state.session.questions[index]?.id ??
+          String(index + 1),
+
+        answerIndex:
+          Number.isInteger(answer)
+            ? answer
+            : null
+      })
     );
 
+    return {
+      attempt_id: state.session.attemptId,
 
-    if (next) {
+      answers,
 
-        next.disabled =
-            true;
-    }
+      language: state.session.language,
 
+      elapsed:
+        Math.min(
+          state.session.duration,
+          elapsedSeconds()
+        ),
 
-    try {
-
-        const data =
-            await api(
-                "/api/session/answer",
-                {
-                    method: "POST",
-
-                    body:
-                        JSON.stringify({
-                            index,
-                            selected
-                        })
-                }
-            );
-
-
-        /*
-         * SERVER ACCEPTED THE ANSWER.
-         *
-         * Only now do we modify the local
-         * session state.
-         */
-
-        if (
-            !data ||
-            typeof data !== "object"
-        ) {
-
-            throw new Error(
-                "INVALID_ANSWER_RESPONSE"
-            );
-        }
-
-
-        const serverIndex =
-            clampQuestionIndex(
-                data.index ??
-                (index + 1)
-            );
-
-
-        if (
-            !Array.isArray(
-                state.session.answers
-            )
-        ) {
-
-            state.session.answers = [];
-        }
-
-
-        state.session.answers[index] =
-            selected;
-
-
-        /*
-         * Backend should return index + 1.
-         * Use server value as authority.
-         */
-
-        state.session.index =
-            serverIndex;
-
-
-        state.session.selected =
-            null;
-
-
-        const answerCount =
-            state.session.answers
-                .filter(
-                    (value) =>
-                        Number.isInteger(
-                            value
-                        )
-                )
-                .length;
-
-
-        /*
-         * FINAL QUESTION
-         *
-         * /answer succeeded first.
-         * Only now is /finish allowed.
-         */
-
-        if (
-            index ===
-            QUESTIONS_COUNT - 1 &&
-            answerCount ===
-            QUESTIONS_COUNT &&
-            serverIndex >=
-            QUESTIONS_COUNT
-        ) {
-
-            await finishTest();
-
-            return;
-        }
-
-
-        /*
-         * Safety:
-         *
-         * If backend says 16 but local
-         * answer count is not 16, NEVER finish.
-         */
-
-        if (
-            serverIndex >=
-            QUESTIONS_COUNT &&
-            answerCount <
-            QUESTIONS_COUNT
-        ) {
-
-            console.error(
-                "Server returned completed index without 16 answers:",
-                {
-                    serverIndex,
-                    answerCount
-                }
-            );
-
-
-            await recoverSession();
-
-            return;
-        }
-
-
-        renderTest();
-
-    } catch (error) {
-
-        console.error(
-            "submitSelectedAnswer:",
-            error
-        );
-
-
-        /*
-         * Server rejected the answer.
-         *
-         * Restore the exact question state.
-         */
-
-        state.session.index =
-            index;
-
-        state.session.selected =
-            selected;
-
-
-        if (
-            error.detail ===
-            "OUT_OF_ORDER"
-        ) {
-
-            await recoverSession();
-
-            return;
-        }
-
-
-        if (
-            error.detail ===
-            "SESSION_COMPLETE"
-        ) {
-
-            await recoverSession();
-
-            return;
-        }
-
-
-        if (
-            error.detail ===
-            "SESSION_EXPIRED"
-        ) {
-
-            showToast(
-                tr("session")
-            );
-
-            return;
-        }
-
-
-        if (
-            error.message ===
-            "NETWORK_ERROR"
-        ) {
-
-            showToast(
-                tr("network")
-            );
-
-            return;
-        }
-
-
-        showToast(
-            tr("error")
-        );
-
-    } finally {
-
-        state.answerSubmitting =
-            false;
-    }
-}
-
-
-/* ============================================================
-   SESSION RECOVERY
-============================================================ */
-
-async function recoverSession() {
-
-    if (
-        state.recovering
-    ) {
-
-        return;
-    }
-
-
-    state.recovering =
-        true;
-
-
-    stopTimer();
-
-
-    try {
-
-        const data =
-            await api(
-                "/api/session/start",
-                {
-                    method: "POST",
-
-                    body:
-                        JSON.stringify({
-                            language:
-                                state.lang
-                        })
-                }
-            );
-
-
-        if (
-            !data ||
-            typeof data !== "object"
-        ) {
-
-            throw new Error(
-                "INVALID_SESSION"
-            );
-        }
-
-
-        const recovered =
-            buildSession(
-                data
-            );
-
-
-        const answerCount =
-            recovered.answers.length;
-
-
-        /*
-         * If all 16 answers are really
-         * present, finish is safe.
-         */
-
-        if (
-            answerCount ===
-            QUESTIONS_COUNT
-        ) {
-
-            recovered.index =
-                QUESTIONS_COUNT;
-
-            state.session =
-                recovered;
-
-            await finishTest();
-
-            return;
-        }
-
-
-        /*
-         * Never finish an incomplete session.
-         */
-
-        if (
-            recovered.index >=
-            QUESTIONS_COUNT &&
-            answerCount <
-            QUESTIONS_COUNT
-        ) {
-
-            console.error(
-                "Cannot recover inconsistent session:",
-                {
-                    index:
-                        recovered.index,
-
-                    answers:
-                        answerCount
-                }
-            );
-
-
-            showToast(
-                tr("error")
-            );
-
-            return;
-        }
-
-
-        state.session =
-            recovered;
-
-
-        renderTest();
-
-    } catch (error) {
-
-        console.error(
-            "recoverSession:",
-            error
-        );
-
-
-        if (
-            error.status === 402 ||
-            error.detail === "PAID_RETEST"
-        ) {
-
-            showToast(
-                tr("paid")
-            );
-
-        } else if (
-            error.message ===
-            "NETWORK_ERROR"
-        ) {
-
-            showToast(
-                tr("network")
-            );
-
-        } else {
-
-            showToast(
-                tr("error")
-            );
-        }
-
-    } finally {
-
-        state.recovering =
-            false;
-    }
-}
-
-
-/* ============================================================
-   TIMER
-============================================================ */
-
-function startTimer() {
-
-    stopTimer();
-
-
-    if (!state.session) {
-        return;
-    }
-
-
-    state.timerBaseElapsed =
-        Math.max(
-            0,
-            Number(
-                state.session.elapsed || 0
-            )
-        );
-
-
-    state.timerClientStarted =
-        Date.now();
-
-
-    const update = () => {
-
-        const timer =
-            document.getElementById(
-                "timer"
-            );
-
-
-        if (!timer) {
-            return;
-        }
-
-
-        const liveElapsed =
-            state.timerBaseElapsed +
-            Math.floor(
-                (
-                    Date.now() -
-                    state.timerClientStarted
-                ) / 1000
-            );
-
-
-        timer.textContent =
-            formatTime(
-                liveElapsed
-            );
+      finished_at:
+        new Date().toISOString()
     };
+  }
 
-
-    update();
-
-
-    state.timer =
-        window.setInterval(
-            update,
-            500
-        );
-}
-
-
-function stopTimer() {
-
+  async function finishTest(reason = "completed") {
     if (
-        state.timer !== null
+      state.finishing ||
+      !state.session
     ) {
-
-        window.clearInterval(
-            state.timer
-        );
-
-        state.timer =
-            null;
+      return;
     }
-}
 
+    state.finishing = true;
+    state.busy = true;
 
-/* ============================================================
-   FINISH
-============================================================ */
+    stopClock();
 
-async function finishTest() {
-
-    stopTimer();
-
+    const payload = buildFinishPayload();
 
     /*
-     * Never finish without a session.
+     * Never submit an incomplete test silently.
+     * Timeout may finish it, but all answer positions remain explicit.
      */
+    payload.finish_reason = reason;
 
-    if (!state.session) {
+    if (!isOnline()) {
+      queueResult(payload);
+      clearActiveSession();
 
-        return;
+      state.result = {
+        iq: "—",
+        correct: payload.answers.filter(
+          x => Number.isInteger(x.answerIndex)
+        ).length,
+        elapsed: payload.elapsed,
+        rank: "—",
+        pending: true
+      };
+
+      state.finishing = false;
+      state.busy = false;
+
+      renderResult();
+      return;
     }
-
-
-    /*
-     * CRITICAL SAFETY CHECK.
-     *
-     * Frontend is not allowed to call /finish
-     * unless 16 answers actually exist.
-     */
-
-    const answerCount =
-        Array.isArray(
-            state.session.answers
-        )
-            ? state.session.answers
-                .filter(
-                    (value) =>
-                        Number.isInteger(
-                            value
-                        )
-                )
-                .length
-            : 0;
-
-
-    if (
-        answerCount !==
-        QUESTIONS_COUNT
-    ) {
-
-        console.error(
-            "finishTest blocked:",
-            {
-                answerCount,
-                index:
-                    state.session.index
-            }
-        );
-
-
-        await recoverSession();
-
-        return;
-    }
-
-
-    if (
-        state.busyFinish
-    ) {
-
-        return;
-    }
-
-
-    state.busyFinish =
-        true;
-
 
     try {
+      showSendingState();
 
-        const result =
-            await api(
-                "/api/session/finish",
-                {
-                    method: "POST",
-
-                    body: "{}"
-                }
-            );
-
-
-        if (
-            !result ||
-            typeof result !== "object"
-        ) {
-
-            throw new Error(
-                "INVALID_RESULT"
-            );
+      const result = await api(
+        "/api/session/finish",
+        {
+          method: "POST",
+          body: JSON.stringify(payload)
         }
+      );
 
+      /*
+       * Server is authoritative.
+       * Client never calculates the IQ score.
+       */
+      state.result = normalizeResult(result);
 
-        const iq =
-            Number(
-                result.iq
-            );
+      clearActiveSession();
 
+      renderResult();
+    } catch (error) {
+      console.error("FINISH TEST:", error);
 
-        const raw =
-            Number(
-                result.raw || 0
-            );
+      /*
+       * Network errors are queued.
+       * This prevents losing the completed test.
+       */
+      if (
+        !isOnline() ||
+        error.name === "AbortError" ||
+        error instanceof TypeError
+      ) {
+        queueResult(payload);
 
-
-        const correct =
-            Number(
-                result.correct || 0
-            );
-
-
-        const elapsed =
-            Number(
-                result.elapsed || 0
-            );
-
-
-        if (
-            !Number.isFinite(iq) ||
-            !Number.isFinite(correct) ||
-            !Number.isFinite(elapsed)
-        ) {
-
-            throw new Error(
-                "INVALID_RESULT"
-            );
-        }
-
+        clearActiveSession();
 
         state.result = {
-
-            iq,
-
-            raw,
-
-            correct,
-
-            elapsed,
-
-            rank:
-                result.rank === null ||
-                result.rank === undefined
-                    ? null
-                    : Number(
-                        result.rank
-                    )
+          iq: "—",
+          correct: payload.answers.filter(
+            x => Number.isInteger(x.answerIndex)
+          ).length,
+          elapsed: payload.elapsed,
+          rank: "—",
+          pending: true
         };
 
-
-        /*
-         * Completed session is safely stored
-         * on backend.
-         */
-
-        state.session =
-            null;
-
-
         renderResult();
-
-    } catch (error) {
-
-        console.error(
-            "finishTest:",
-            error
-        );
-
-
-        if (
-            error.detail ===
-            "INCOMPLETE"
-        ) {
-
-            /*
-             * Do not hide the problem.
-             * Re-sync with backend.
-             */
-
-            await recoverSession();
-
-        } else if (
-            error.detail ===
-            "SESSION_COMPLETE"
-        ) {
-
-            await recoverSession();
-
-        } else if (
-            error.detail ===
-            "SESSION_EXPIRED"
-        ) {
-
-            showToast(
-                tr("session")
-            );
-
-            state.session =
-                null;
-
-            renderHome();
-
-        } else if (
-            error.message ===
-            "NETWORK_ERROR"
-        ) {
-
-            showToast(
-                tr("network")
-            );
-
-        } else {
-
-            showToast(
-                tr("error")
-            );
-        }
-
+      } else {
+        toast(t("cannotFinish"));
+      }
     } finally {
-
-        state.busyFinish =
-            false;
+      state.finishing = false;
+      state.busy = false;
     }
-}
+  }
 
+  function showSendingState() {
+    const status =
+      document.getElementById("syncStatus");
 
-/* ============================================================
-   RESULT
-============================================================ */
-
-function renderResult() {
-
-    stopTimer();
-
-
-    if (!state.result) {
-
-        renderHome();
-
-        return;
+    if (status) {
+      status.textContent = t("sending");
+      status.className =
+        "sync-status pending";
     }
+  }
 
+  function normalizeResult(data) {
+    const source =
+      data?.result ||
+      data?.data ||
+      data ||
+      {};
 
-    const result =
-        state.result;
+    return {
+      iq:
+        source.iq ??
+        source.iq_score ??
+        source.score ??
+        "—",
 
+      correct:
+        source.correct ??
+        source.correct_count ??
+        0,
 
-    const screen =
-        document.getElementById(
-            "resultScreen"
-        );
+      elapsed:
+        source.elapsed ??
+        source.time ??
+        0,
 
+      rank:
+        source.rank ??
+        source.position ??
+        null,
 
-    if (!screen) {
-        return;
-    }
+      synced: true
+    };
+  }
 
+  function renderResult() {
+    stopClock();
+
+    const result = state.result || {};
+
+    const score =
+      document.getElementById("score");
+
+    const correctCount =
+      document.getElementById("correctCount");
+
+    const resultTime =
+      document.getElementById("resultTime");
 
     const rank =
-        result.rank !== null &&
-        result.rank !== undefined
-            ? `#${result.rank}`
-            : "—";
+      document.getElementById("rank");
 
+    const syncStatus =
+      document.getElementById("syncStatus");
 
-    screen.innerHTML = `
-
-        <div class="result-header">
-
-            <div class="success-icon">
-                ✓
-            </div>
-
-
-            <div class="eyebrow">
-                ${escapeHTML(
-                    tr("finished")
-                )}
-            </div>
-
-
-            <h1>
-                ${escapeHTML(
-                    tr("yourResult")
-                )}
-            </h1>
-
-        </div>
-
-
-        <div class="score-card">
-
-            <span>
-                ${escapeHTML(
-                    tr("iqScore")
-                )}
-            </span>
-
-
-            <strong>
-                ${escapeHTML(
-                    result.iq
-                )}
-            </strong>
-
-
-            <small>
-                ${escapeHTML(
-                    tr("resultNote")
-                )}
-            </small>
-
-        </div>
-
-
-        <div class="result-stats">
-
-            <div>
-
-                <strong>
-                    ${escapeHTML(
-                        `${result.correct}/${QUESTIONS_COUNT}`
-                    )}
-                </strong>
-
-
-                <span>
-                    ${escapeHTML(
-                        tr("correct")
-                    )}
-                </span>
-
-            </div>
-
-
-            <div>
-
-                <strong>
-                    ${escapeHTML(
-                        formatTime(
-                            result.elapsed
-                        )
-                    )}
-                </strong>
-
-
-                <span>
-                    ${escapeHTML(
-                        tr("time")
-                    )}
-                </span>
-
-            </div>
-
-
-            <div>
-
-                <strong>
-                    ${escapeHTML(
-                        rank
-                    )}
-                </strong>
-
-
-                <span>
-                    ${escapeHTML(
-                        tr("rank")
-                    )}
-                </span>
-
-            </div>
-
-        </div>
-
-
-        <button
-            id="certificateBtn"
-            class="primary-btn"
-            type="button"
-        >
-
-            <span>
-                🎓
-            </span>
-
-
-            <span>
-                ${escapeHTML(
-                    tr("certificate")
-                )}
-            </span>
-
-
-            <span class="arrow">
-                →
-            </span>
-
-        </button>
-
-
-        <button
-            id="shareBtn"
-            class="secondary-btn"
-            type="button"
-        >
-
-            <span>
-                ↗
-            </span>
-
-
-            <span>
-                ${escapeHTML(
-                    tr("share")
-                )}
-            </span>
-
-        </button>
-
-
-        <button
-            id="retestBtn"
-            class="secondary-btn"
-            type="button"
-        >
-
-            <span>
-                🔄
-            </span>
-
-
-            <span>
-                ${escapeHTML(
-                    tr("retest")
-                )}
-            </span>
-
-        </button>
-
-
-        <button
-            id="zakoBtn"
-            class="secondary-btn"
-            type="button"
-        >
-
-            <span>
-                🚀
-            </span>
-
-
-            <span>
-                ${escapeHTML(
-                    tr("improve")
-                )}
-            </span>
-
-        </button>
-    `;
-
-
-    activateScreen(
-        "resultScreen"
-    );
-
-
-    document
-        .getElementById(
-            "certificateBtn"
-        )
-        ?.addEventListener(
-            "click",
-            showCertificate
-        );
-
-
-    document
-        .getElementById(
-            "shareBtn"
-        )
-        ?.addEventListener(
-            "click",
-            shareResult
-        );
-
-
-    document
-        .getElementById(
-            "retestBtn"
-        )
-        ?.addEventListener(
-            "click",
-            startRetest
-        );
-
-
-    document
-        .getElementById(
-            "zakoBtn"
-        )
-        ?.addEventListener(
-            "click",
-            openZako
-        );
-}
-
-
-/* ============================================================
-   RETEST
-============================================================ */
-
-async function startRetest() {
-
-    if (
-        state.busy ||
-        state.answerSubmitting ||
-        state.busyFinish
-    ) {
-
-        return;
+    if (score) {
+      score.textContent =
+        result.iq ?? "—";
     }
 
+    if (correctCount) {
+      correctCount.textContent =
+        `${result.correct ?? 0}/${QUESTION_COUNT}`;
+    }
 
-    setBusy(true);
+    if (resultTime) {
+      resultTime.textContent =
+        formatTime(result.elapsed ?? 0);
+    }
 
+    if (rank) {
+      rank.textContent =
+        result.rank
+          ? `#${result.rank}`
+          : "—";
+    }
+
+    if (syncStatus) {
+      if (result.pending) {
+        syncStatus.textContent = t("pending");
+        syncStatus.className =
+          "sync-status pending";
+      } else {
+        syncStatus.textContent = t("synced");
+        syncStatus.className =
+          "sync-status success";
+      }
+    }
+
+    /*
+     * Score ring:
+     * This is visual only.
+     * It does NOT calculate the actual score.
+     */
+    const scoreNumber =
+      Number(result.iq);
+
+    const screen =
+      document.getElementById("resultScreen");
+
+    if (
+      screen &&
+      Number.isFinite(scoreNumber)
+    ) {
+      const normalized =
+        Math.max(
+          0,
+          Math.min(
+            1,
+            (scoreNumber - 70) / 108
+          )
+        );
+
+      screen.style.setProperty(
+        "--score-progress",
+        `${normalized * 360}deg`
+      );
+    }
+
+    showScreen("resultScreen");
+  }
+
+  async function openRanking() {
+    showScreen("rankingScreen");
+
+    const loading =
+      document.getElementById("rankingLoading");
+
+    const list =
+      document.getElementById("rankingList");
+
+    const empty =
+      document.getElementById("rankingEmpty");
+
+    const error =
+      document.getElementById("rankingError");
+
+    if (loading) loading.classList.remove("hidden");
+    if (list) list.innerHTML = "";
+    if (empty) empty.classList.add("hidden");
+    if (error) error.classList.add("hidden");
 
     try {
+      const data =
+        await api("/api/ranking");
 
-        const data =
-            await api(
-                "/api/session/start",
-                {
-                    method: "POST",
+      const items =
+        data.items ||
+        data.ranking ||
+        [];
 
-                    body:
-                        JSON.stringify({
-                            language:
-                                state.lang
-                        })
-                }
-            );
+      if (!Array.isArray(items) || !items.length) {
+        if (empty) empty.classList.remove("hidden");
+        return;
+      }
 
+      if (!list) return;
 
-        /*
-         * If backend eventually supports payment,
-         * a new session will be returned here.
-         */
+      list.innerHTML = items
+        .map((item, index) => {
+          const position =
+            item.rank ??
+            item.position ??
+            index + 1;
 
-        if (
-            data &&
-            typeof data === "object"
-        ) {
+          const name =
+            item.first_name ||
+            item.name ||
+            item.username ||
+            "User";
 
-            state.session =
-                buildSession(
-                    data
-                );
+          const score =
+            item.best_score ??
+            item.iq ??
+            item.score ??
+            "—";
 
+          return `
+            <div class="ranking-item">
+              <div class="ranking-position">
+                ${esc(position)}
+              </div>
 
-            const answerCount =
-                state.session.answers.length;
+              <div class="ranking-user">
+                <div class="ranking-name">
+                  ${esc(name)}
+                </div>
 
+                <div class="ranking-meta">
+                  ${t("score")}
+                </div>
+              </div>
 
-            if (
-                answerCount ===
-                QUESTIONS_COUNT
-            ) {
+              <div class="ranking-score">
+                ${esc(score)}
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    } catch (e) {
+      console.error("RANKING:", e);
 
-                await finishTest();
-
-                return;
-            }
-
-
-            renderTest();
-
-            return;
-        }
-
-
-        throw new Error(
-            "INVALID_SESSION"
-        );
-
-    } catch (error) {
-
-        console.error(
-            "startRetest:",
-            error
-        );
-
-
-        if (
-            error.status === 402 ||
-            error.detail === "PAID_RETEST"
-        ) {
-
-            showToast(
-                tr("paid")
-            );
-
-        } else if (
-            error.message ===
-            "NETWORK_ERROR"
-        ) {
-
-            showToast(
-                tr("network")
-            );
-
-        } else {
-
-            showToast(
-                tr("error")
-            );
-        }
-
+      if (error) {
+        error.classList.remove("hidden");
+      }
     } finally {
-
-        setBusy(false);
+      if (loading) {
+        loading.classList.add("hidden");
+      }
     }
-}
+  }
 
-
-/* ============================================================
-   CERTIFICATE
-============================================================ */
-
-async function showCertificate() {
-
-    if (
-        state.busy
-    ) {
-
-        return;
-    }
-
-
-    setBusy(true);
-
-
+  async function openProfile() {
+    /*
+     * The current index.html does not contain a dedicated profile
+     * screen, so profile data is represented through a toast for now.
+     * This deliberately avoids creating DOM elements that do not exist.
+     */
     try {
-
-        const response =
-            await fetch(
-                "/api/certificate",
-                {
-                    method: "GET",
-
-                    headers: {
-                        "X-Telegram-Init-Data":
-                            telegramInitData()
-                    },
-
-                    cache:
-                        "no-store"
-                }
-            );
-
-
-        if (!response.ok) {
-
-            let detail =
-                "";
-
-
-            try {
-
-                const data =
-                    await response.json();
-
-                detail =
-                    data?.detail || "";
-
-            } catch {
-
-                detail =
-                    "";
-            }
-
-
-            if (
-                response.status === 403 ||
-                detail ===
-                    "REFERRALS_REQUIRED"
-            ) {
-
-                showInviteRequirement();
-
-                return;
-            }
-
-
-            if (
-                response.status === 404 ||
-                detail ===
-                    "NO_RESULT"
-            ) {
-
-                showToast(
-                    tr(
-                        "certificateNoResult"
-                    )
-                );
-
-                return;
-            }
-
-
-            showToast(
-                tr(
-                    "certificateError"
-                )
-            );
-
-            return;
-        }
-
-
-        const blob =
-            await response.blob();
-
-
-        const url =
-            URL.createObjectURL(
-                blob
-            );
-
-
-        const overlay =
-            document.createElement(
-                "div"
-            );
-
-
-        overlay.style.cssText = `
-            position:fixed;
-            inset:0;
-            z-index:9999;
-            padding:
-                max(18px, env(safe-area-inset-top))
-                16px
-                max(18px, env(safe-area-inset-bottom));
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            justify-content:center;
-            gap:14px;
-            background:rgba(0,0,0,.88);
-            backdrop-filter:blur(14px);
-            -webkit-backdrop-filter:blur(14px);
-        `;
-
-
-        const image =
-            document.createElement(
-                "img"
-            );
-
-
-        image.src =
-            url;
-
-
-        image.alt =
-            "ZAKO IQ Certificate";
-
-
-        image.style.cssText = `
-            display:block;
-            width:min(100%, 620px);
-            max-height:78dvh;
-            object-fit:contain;
-            border-radius:20px;
-            box-shadow:
-                0 25px 80px rgba(0,0,0,.55);
-        `;
-
-
-        const close =
-            document.createElement(
-                "button"
-            );
-
-
-        close.className =
-            "primary-btn";
-
-
-        close.type =
-            "button";
-
-
-        close.style.maxWidth =
-            "620px";
-
-
-        close.textContent =
-            tr("back");
-
-
-        close.addEventListener(
-            "click",
-            () => {
-
-                URL.revokeObjectURL(
-                    url
-                );
-
-                overlay.remove();
-            }
-        );
-
-
-        overlay.appendChild(
-            image
-        );
-
-
-        overlay.appendChild(
-            close
-        );
-
-
-        document.body.appendChild(
-            overlay
-        );
-
-    } catch (error) {
-
-        console.error(
-            "certificate:",
-            error
-        );
-
-
-        showToast(
-            tr(
-                "certificateError"
-            )
-        );
-
-    } finally {
-
-        setBusy(false);
+      const data =
+        await api("/api/profile");
+
+      const score =
+        data.best_score ??
+        data.iq ??
+        "—";
+
+      const attempts =
+        data.attempts ??
+        0;
+
+      toast(
+        `${t("best")}: ${score} • ${t("tests")}: ${attempts}`
+      );
+    } catch (e) {
+      toast(t("noData"));
     }
-}
+  }
 
+  function openPaymentModal() {
+    const modal =
+      document.getElementById("paymentModal");
 
-/* ============================================================
-   CERTIFICATE REQUIREMENT
-============================================================ */
+    if (!modal) {
+      toast(t("paid"));
+      return;
+    }
 
-function showInviteRequirement() {
+    modal.classList.remove("hidden");
 
-    const overlay =
-        document.createElement(
-            "div"
-        );
-
-
-    overlay.style.cssText = `
-        position:fixed;
-        inset:0;
-        z-index:9998;
-        padding:
-            max(18px, env(safe-area-inset-top))
-            18px
-            max(18px, env(safe-area-inset-bottom));
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        background:rgba(0,0,0,.72);
-        backdrop-filter:blur(12px);
-        -webkit-backdrop-filter:blur(12px);
-    `;
-
-
-    const card =
-        document.createElement(
-            "div"
-        );
-
-
-    card.style.cssText = `
-        width:min(100%, 480px);
-        padding:26px 20px 20px;
-        border-radius:26px;
-        border:1px solid rgba(255,255,255,.10);
-        background:#151a25;
-        text-align:center;
-        box-shadow:0 25px 80px rgba(0,0,0,.45);
-    `;
-
-
-    card.innerHTML = `
-
-        <div style="
-            width:60px;
-            height:60px;
-            margin:0 auto 16px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            border-radius:20px;
-            background:rgba(139,108,255,.14);
-            font-size:28px;
-        ">
-            🎓
-        </div>
-
-
-        <h2 style="
-            margin:0 0 10px;
-            font-size:23px;
-            line-height:1.2;
-        ">
-            ${escapeHTML(
-                tr("certificate")
-            )}
-        </h2>
-
-
-        <p style="
-            margin:0 0 20px;
-            color:#aeb5c5;
-            line-height:1.5;
-            font-size:14px;
-        ">
-            ${escapeHTML(
-                tr(
-                    "certificateRequired"
-                )
-            )}
-        </p>
-
-
-        <button
-            id="inviteModalBtn"
-            class="primary-btn"
-            type="button"
-        >
-
-            👥
-
-            <span>
-                ${escapeHTML(
-                    tr("invite")
-                )}
-            </span>
-
-            <span class="arrow">
-                →
-            </span>
-
-        </button>
-
-
-        <button
-            id="closeInviteBtn"
-            class="secondary-btn"
-            type="button"
-        >
-            ${escapeHTML(
-                tr("back")
-            )}
-        </button>
-    `;
-
-
-    overlay.appendChild(
-        card
+    loadPaymentInfo().catch(
+      e => console.error("PAYMENT:", e)
     );
+  }
 
+  function closePaymentModal() {
+    const modal =
+      document.getElementById("paymentModal");
 
-    document.body.appendChild(
-        overlay
-    );
+    modal?.classList.add("hidden");
+  }
 
-
-    document
-        .getElementById(
-            "inviteModalBtn"
-        )
-        ?.addEventListener(
-            "click",
-            () => {
-
-                overlay.remove();
-
-                shareInvite();
-            }
-        );
-
-
-    document
-        .getElementById(
-            "closeInviteBtn"
-        )
-        ?.addEventListener(
-            "click",
-            () => {
-
-                overlay.remove();
-            }
-        );
-}
-
-
-/* ============================================================
-   SHARE
-============================================================ */
-
-function webAppPublicURL() {
-
-    return (
-        window.location.origin +
-        "/app"
-    );
-}
-
-
-function openTelegramShare(
-    url,
-    text
-) {
-
-    const shareURL =
-        "https://t.me/share/url" +
-        "?url=" +
-        encodeURIComponent(
-            url
-        ) +
-        "&text=" +
-        encodeURIComponent(
-            text
-        );
-
-
+  async function loadPaymentInfo() {
     try {
+      const data =
+        await api("/api/payment/create", {
+          method: "POST",
+          body: JSON.stringify({})
+        });
 
-        if (
-            tg &&
-            typeof tg.openTelegramLink ===
-                "function"
-        ) {
+      const amount =
+        data.amount ??
+        data.price ??
+        data.price_uzs;
 
-            tg.openTelegramLink(
-                shareURL
-            );
+      const amountEl =
+        document.getElementById("paymentAmount");
 
-            return true;
+      if (amountEl && amount != null) {
+        amountEl.textContent =
+          `${Number(amount).toLocaleString("uz-UZ")} so‘m`;
+      }
+
+      const cards =
+        document.getElementById("paymentCards");
+
+      if (cards && Array.isArray(data.cards)) {
+        cards.innerHTML = data.cards
+          .map(card => `
+            <div class="payment-card">
+              <div class="payment-card-title">
+                ${esc(card.bank || "Karta")}
+              </div>
+
+              <div class="payment-card-number">
+                ${esc(card.number || card.card_number || "")}
+              </div>
+
+              <div class="payment-card-title">
+                ${esc(card.holder || "")}
+              </div>
+            </div>
+          `)
+          .join("");
+      }
+
+      if (data.payment_id) {
+        const openBot =
+          document.getElementById(
+            "paymentOpenBotBtn"
+          );
+
+        if (openBot) {
+          openBot.dataset.paymentId =
+            String(data.payment_id);
         }
-
-
-        window.open(
-            shareURL,
-            "_blank",
-            "noopener,noreferrer"
-        );
-
-
-        return true;
-
-    } catch (error) {
-
-        console.error(
-            "Telegram share:",
-            error
-        );
-
-        return false;
+      }
+    } catch (e) {
+      /*
+       * Payment creation is intentionally not retried
+       * infinitely. payment.js can handle the provider-specific flow.
+       */
+      console.warn("Payment info unavailable:", e);
     }
-}
+  }
 
+  function openBotPayment() {
+    const button =
+      document.getElementById(
+        "paymentOpenBotBtn"
+      );
 
-async function shareResult() {
+    const paymentId =
+      button?.dataset?.paymentId;
 
-    if (!state.result) {
-        return;
+    if (!paymentId) {
+      toast(t("error"));
+      return;
     }
-
-
-    const text =
-        `🧠 IQ TEST\n\n` +
-        `IQ SCORE: ${state.result.iq}\n` +
-        `${state.result.correct}/${QUESTIONS_COUNT} • ${formatTime(
-            state.result.elapsed
-        )}\n\n` +
-        `${tr("shareText")}`;
-
-
-    const opened =
-        openTelegramShare(
-            webAppPublicURL(),
-            text
-        );
-
-
-    if (!opened) {
-
-        await copyText(
-            text
-        );
-    }
-}
-
-
-/* ============================================================
-   INVITE
-============================================================ */
-
-function getBotUsername() {
-
-    return (
-        state.config.bot_username ||
-        ""
-    )
-        .replace(
-            /^@/,
-            ""
-        )
-        .trim();
-}
-
-
-function shareInvite() {
-
-    const user =
-        telegramUser();
-
-
-    const userId =
-        user?.id;
-
-
-    const botUsername =
-        getBotUsername();
-
-
-    if (
-        !botUsername ||
-        !userId
-    ) {
-
-        showToast(
-            tr("cannotOpen")
-        );
-
-        return;
-    }
-
-
-    const inviteURL =
-        `https://t.me/${botUsername}` +
-        `?start=ref_${userId}`;
-
-
-    openTelegramShare(
-        inviteURL,
-        tr("inviteText")
-    );
-}
-
-
-/* ============================================================
-   COPY
-============================================================ */
-
-async function copyText(text) {
-
-    try {
-
-        if (
-            navigator.clipboard &&
-            typeof navigator.clipboard.writeText ===
-                "function"
-        ) {
-
-            await navigator.clipboard.writeText(
-                text
-            );
-
-            showToast(
-                tr("copied")
-            );
-
-            return true;
-        }
-
-    } catch (error) {
-
-        console.warn(
-            "Clipboard:",
-            error
-        );
-    }
-
-
-    showToast(
-        tr("cannotOpen")
-    );
-
-    return false;
-}
-
-
-/* ============================================================
-   ZAKO
-============================================================ */
-
-function openZako() {
 
     const url =
-        state.config.zako_url ||
-        "https://t.me/zako_tbot";
-
+      `https://t.me/${encodeURIComponent(
+        window.IQ_BOT_USERNAME || "iq_test_bot"
+      )}?start=pay_${encodeURIComponent(paymentId)}`;
 
     try {
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(url);
+      } else {
+        window.location.href = url;
+      }
+    } catch {
+      window.location.href = url;
+    }
+  }
 
-        if (
-            tg &&
-            typeof tg.openTelegramLink ===
-                "function"
-        ) {
+  function shareResult() {
+    const result = state.result;
 
-            tg.openTelegramLink(
-                url
+    if (!result) return;
+
+    const text =
+      `🧠 IQ TEST\n` +
+      `IQ: ${result.iq ?? "—"}\n` +
+      `${result.correct ?? 0}/${QUESTION_COUNT}`;
+
+    const url =
+      `${location.origin}${location.pathname}`;
+
+    const shareUrl =
+      `https://t.me/share/url?url=${encodeURIComponent(
+        url
+      )}&text=${encodeURIComponent(text)}`;
+
+    try {
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(shareUrl);
+      } else if (navigator.share) {
+        navigator.share({
+          title: "IQ TEST",
+          text,
+          url
+        }).catch(() => {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard
+          .writeText(`${text}\n${url}`)
+          .then(() => toast("Natija nusxalandi"))
+          .catch(() => {});
+      }
+    } catch (e) {
+      console.error("SHARE:", e);
+    }
+  }
+
+  function showCertificate() {
+    /*
+     * Certificate endpoint belongs to the server.
+     * Keep it separate from test scoring.
+     */
+    window.open(
+      `${API}/api/certificate`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function openZako() {
+    const url =
+      "https://t.me/zako_tbot";
+
+    try {
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(url);
+      } else {
+        window.location.href = url;
+      }
+    } catch {
+      window.location.href = url;
+    }
+  }
+
+  function setupQuitModal() {
+    const quitBtn =
+      document.getElementById("quitBtn");
+
+    const modal =
+      document.getElementById("quitModal");
+
+    const stay =
+      document.getElementById("quitStayBtn");
+
+    const confirm =
+      document.getElementById("quitConfirmBtn");
+
+    quitBtn?.addEventListener("click", () => {
+      modal?.classList.remove("hidden");
+    });
+
+    stay?.addEventListener("click", () => {
+      modal?.classList.add("hidden");
+    });
+
+    confirm?.addEventListener("click", () => {
+      modal?.classList.add("hidden");
+
+      saveActiveSession();
+      stopClock();
+
+      renderHome();
+    });
+  }
+
+  function setupErrorModal() {
+    const modal =
+      document.getElementById("errorModal");
+
+    const close =
+      document.getElementById("errorCloseBtn");
+
+    close?.addEventListener("click", () => {
+      modal?.classList.add("hidden");
+    });
+  }
+
+  function setupButtons() {
+    document
+      .getElementById("startBtn")
+      ?.addEventListener(
+        "click",
+        startTest
+      );
+
+    document
+      .getElementById("rankingBtn")
+      ?.addEventListener(
+        "click",
+        openRanking
+      );
+
+    document
+      .getElementById("retestBtn")
+      ?.addEventListener(
+        "click",
+        openPaymentModal
+      );
+
+    document
+      .getElementById("resultRankingBtn")
+      ?.addEventListener(
+        "click",
+        openRanking
+      );
+
+    document
+      .getElementById("homeBtn")
+      ?.addEventListener(
+        "click",
+        renderHome
+      );
+
+    document
+      .getElementById("shareBtn")
+      ?.addEventListener(
+        "click",
+        shareResult
+      );
+
+    document
+      .getElementById("certificateBtn")
+      ?.addEventListener(
+        "click",
+        showCertificate
+      );
+
+    document
+      .getElementById("zakoBtn")
+      ?.addEventListener(
+        "click",
+        openZako
+      );
+
+    document
+      .getElementById("paymentCloseBtn")
+      ?.addEventListener(
+        "click",
+        closePaymentModal
+      );
+
+    document
+      .getElementById("paymentOpenBotBtn")
+      ?.addEventListener(
+        "click",
+        openBotPayment
+      );
+
+    document
+      .getElementById("rankingRetryBtn")
+      ?.addEventListener(
+        "click",
+        openRanking
+      );
+  }
+
+  function setupOnlineSync() {
+    window.addEventListener(
+      "online",
+      async () => {
+        updateOfflineUI();
+
+        await syncQueue();
+
+        if (getQueue().length === 0) {
+          const status =
+            document.getElementById(
+              "syncStatus"
             );
 
-            return;
+          if (
+            status &&
+            state.result?.pending
+          ) {
+            status.textContent = t("synced");
+            status.className =
+              "sync-status success";
+          }
         }
-
-
-        window.open(
-            url,
-            "_blank",
-            "noopener,noreferrer"
-        );
-
-    } catch (error) {
-
-        console.error(
-            "openZako:",
-            error
-        );
-
-
-        showToast(
-            tr("cannotOpen")
-        );
-    }
-}
-
-
-/* ============================================================
-   RANKING
-============================================================ */
-
-async function loadRanking() {
-
-    if (
-        state.busy ||
-        state.answerSubmitting
-    ) {
-
-        return;
-    }
-
-
-    activateScreen(
-        "rankingScreen"
+      },
+      { passive: true }
     );
 
+    window.addEventListener(
+      "offline",
+      updateOfflineUI,
+      { passive: true }
+    );
+  }
 
-    const screen =
-        document.getElementById(
-            "rankingScreen"
-        );
+  function setupAutosave() {
+    clearInterval(state.saveTimer);
 
+    state.saveTimer = setInterval(() => {
+      if (state.session) {
+        saveActiveSession();
+      }
+    }, 2000);
+  }
 
-    if (!screen) {
-        return;
-    }
-
-
-    screen.innerHTML = `
-
-        <div class="page-title">
-
-            <div class="page-icon">
-                🏆
-            </div>
-
-
-            <h1>
-                ${escapeHTML(
-                    tr("ranking")
-                )}
-            </h1>
-
-
-            <p>
-                ${escapeHTML(
-                    tr("rankingDesc")
-                )}
-            </p>
-
-        </div>
-
-
-        <div
-            id="rankingList"
-            class="ranking-list"
-        >
-
-            <div class="empty-state">
-                ${escapeHTML(
-                    tr("loading")
-                )}
-            </div>
-
-        </div>
-    `;
-
-
-    try {
-
-        const data =
-            await api(
-                "/api/ranking"
-            );
-
-
-        const list =
-            document.getElementById(
-                "rankingList"
-            );
-
-
-        if (!list) {
-            return;
+  function setupVisibilityProtection() {
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "hidden") {
+          saveActiveSession();
         }
-
-
-        if (
-            !data ||
-            !Array.isArray(
-                data.items
-            ) ||
-            data.items.length === 0
-        ) {
-
-            list.innerHTML = `
-
-                <div class="empty-state">
-                    ${escapeHTML(
-                        tr("noRanking")
-                    )}
-                </div>
-
-            `;
-
-            return;
-        }
-
-
-        list.innerHTML =
-            data.items
-                .map(
-                    (
-                        item,
-                        index
-                    ) => {
-
-                        const name =
-                            item.first_name ||
-                            item.username ||
-                            tr("user");
-
-
-                        const score =
-                            item.best_score ??
-                            "—";
-
-
-                        return `
-
-                            <div
-                                class="ranking-row"
-                            >
-
-                                <div
-                                    class="ranking-position"
-                                >
-                                    ${index + 1}
-                                </div>
-
-
-                                <div
-                                    class="ranking-user"
-                                >
-
-                                    <strong>
-                                        ${escapeHTML(
-                                            name
-                                        )}
-                                    </strong>
-
-
-                                    ${
-                                        item.username
-                                            ? `
-                                                <small>
-                                                    @${escapeHTML(
-                                                        item.username
-                                                    )}
-                                                </small>
-                                              `
-                                            : ""
-                                    }
-
-                                </div>
-
-
-                                <div
-                                    class="ranking-score"
-                                >
-                                    IQ ${escapeHTML(
-                                        score
-                                    )}
-                                </div>
-
-                            </div>
-                        `;
-                    }
-                )
-                .join("");
-
-    } catch (error) {
-
-        console.error(
-            "ranking:",
-            error
-        );
-
-
-        const list =
-            document.getElementById(
-                "rankingList"
-            );
-
-
-        if (list) {
-
-            list.innerHTML = `
-
-                <div class="empty-state">
-                    ${escapeHTML(
-                        error.message ===
-                        "NETWORK_ERROR"
-                            ? tr("network")
-                            : tr("error")
-                    )}
-                </div>
-
-            `;
-        }
-    }
-}
-
-
-/* ============================================================
-   PROFILE
-============================================================ */
-
-async function loadProfile() {
-
-    if (
-        state.busy ||
-        state.answerSubmitting
-    ) {
-
-        return;
-    }
-
-
-    activateScreen(
-        "profileScreen"
+      },
+      { passive: true }
     );
 
+    window.addEventListener(
+      "pagehide",
+      () => {
+        saveActiveSession();
+      },
+      { passive: true }
+    );
+  }
 
-    const screen =
-        document.getElementById(
-            "profileScreen"
+  function setupBackButton() {
+    if (!tg?.BackButton) return;
+
+    tg.BackButton.onClick(() => {
+      const active =
+        document.querySelector(
+          ".screen.active"
         );
 
-
-    if (!screen) {
-        return;
-    }
-
-
-    screen.innerHTML = `
-
-        <div class="page-title">
-
-            <div
-                class="profile-avatar"
-                id="profileAvatar"
-            >
-                …
-            </div>
-
-
-            <h1 id="profileName">
-                ${escapeHTML(
-                    tr("loading")
-                )}
-            </h1>
-
-
-            <p>
-                ${escapeHTML(
-                    tr("profileDesc")
-                )}
-            </p>
-
-        </div>
-
-
-        <div
-            class="profile-score"
-        >
-
-            <span>
-                ${escapeHTML(
-                    tr("bestIq")
-                )}
-            </span>
-
-
-            <strong id="bestIq">
-                —
-            </strong>
-
-        </div>
-
-
-        <div class="profile-grid">
-
-
-            <div class="stat-card">
-
-                <strong id="profileRank">
-                    —
-                </strong>
-
-                <span>
-                    ${escapeHTML(
-                        tr("rank")
-                    )}
-                </span>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <strong id="profileAttempts">
-                    0
-                </strong>
-
-                <span>
-                    ${escapeHTML(
-                        tr("tests")
-                    )}
-                </span>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <strong id="profileReferrals">
-                    0
-                </strong>
-
-                <span>
-                    ${escapeHTML(
-                        tr("referrals")
-                    )}
-                </span>
-
-            </div>
-
-
-        </div>
-
-
-        <button
-            id="inviteBtn"
-            class="primary-btn"
-            type="button"
-        >
-
-            👥
-
-            <span>
-                ${escapeHTML(
-                    tr("invite")
-                )}
-            </span>
-
-            <span class="arrow">
-                →
-            </span>
-
-        </button>
-    `;
-
-
-    document
-        .getElementById(
-            "inviteBtn"
-        )
-        ?.addEventListener(
-            "click",
-            shareInvite
-        );
-
-
-    try {
-
-        const profile =
-            await api(
-                "/api/profile"
-            );
-
-
-        if (
-            !profile ||
-            typeof profile !== "object"
-        ) {
-
-            throw new Error(
-                "INVALID_PROFILE"
-            );
-        }
-
-
-        state.profile =
-            profile;
-
-
-        const name =
-            profile.first_name ||
-            profile.username ||
-            tr("user");
-
-
-        const avatar =
-            document.getElementById(
-                "profileAvatar"
-            );
-
-
-        if (avatar) {
-
-            avatar.textContent =
-                String(
-                    name
-                )
-                    .trim()
-                    .charAt(0)
-                    .toUpperCase() ||
-                "?";
-        }
-
-
-        const title =
-            document.getElementById(
-                "profileName"
-            );
-
-
-        if (title) {
-
-            title.textContent =
-                name;
-        }
-
-
-        const score =
-            document.getElementById(
-                "bestIq"
-            );
-
-
-        if (score) {
-
-            score.textContent =
-                profile.best_score ??
-                "—";
-        }
-
-
-        const rank =
-            document.getElementById(
-                "profileRank"
-            );
-
-
-        if (rank) {
-
-            rank.textContent =
-                profile.rank
-                    ? `#${profile.rank}`
-                    : "—";
-        }
-
-
-        const attempts =
-            document.getElementById(
-                "profileAttempts"
-            );
-
-
-        if (attempts) {
-
-            attempts.textContent =
-                profile.attempts ??
-                0;
-        }
-
-
-        const referrals =
-            document.getElementById(
-                "profileReferrals"
-            );
-
-
-        if (referrals) {
-
-            referrals.textContent =
-                profile.referrals ??
-                0;
-        }
-
-    } catch (error) {
-
-        console.error(
-            "profile:",
-            error
-        );
-
-
-        showToast(
-            error.message ===
-            "NETWORK_ERROR"
-                ? tr("network")
-                : tr("noData")
-        );
-    }
-}
-
-
-/* ============================================================
-   NAVIGATION
-============================================================ */
-
-function goHome() {
-
-    stopTimer();
-
-
-    state.session =
-        null;
-
-
-    state.answerSubmitting =
-        false;
-
-
-    renderHome();
-}
-
-
-function handleBack() {
-
-    if (
-        state.screen ===
-        "home"
-    ) {
+      if (
+        active?.id === "testScreen"
+      ) {
+        document
+          .getElementById("quitModal")
+          ?.classList.remove("hidden");
 
         return;
-    }
+      }
 
+      renderHome();
+    });
+  }
 
-    if (
-        state.screen ===
-        "test"
-    ) {
+  function restoreSession() {
+    const saved =
+      loadActiveSession();
 
-        const leave =
-            window.confirm(
-                tr("leaveTest")
-            );
-
-
-        if (!leave) {
-            return;
-        }
-
-
-        stopTimer();
-
-
-        state.session =
-            null;
-
-
-        state.answerSubmitting =
-            false;
-
-
-        goHome();
-
-        return;
-    }
-
-
-    goHome();
-}
-
-
-/* ============================================================
-   GLOBAL EVENTS
-============================================================ */
-
-function bindGlobalEvents() {
-
-    document
-        .getElementById(
-            "startBtn"
-        )
-        ?.addEventListener(
-            "click",
-            startTest
-        );
-
-
-    document
-        .getElementById(
-            "rankingBtn"
-        )
-        ?.addEventListener(
-            "click",
-            loadRanking
-        );
-
-
-    document
-        .getElementById(
-            "profileBtn"
-        )
-        ?.addEventListener(
-            "click",
-            loadProfile
-        );
-
-
-    document
-        .getElementById(
-            "langBtn"
-        )
-        ?.addEventListener(
-            "click",
-            openLanguageModal
-        );
-
-
-    document
-        .getElementById(
-            "backBtn"
-        )
-        ?.addEventListener(
-            "click",
-            handleBack
-        );
-
-
-    document
-        .querySelector(
-            ".modal-backdrop"
-        )
-        ?.addEventListener(
-            "click",
-            closeLanguageModal
-        );
-
-
-    document
-        .querySelectorAll(
-            ".language-option"
-        )
-        .forEach(
-            (button) => {
-
-                button.addEventListener(
-                    "click",
-                    () => {
-
-                        setLanguage(
-                            button.dataset.lang
-                        );
-                    }
-                );
-            }
-        );
-}
-
-
-/* ============================================================
-   INIT
-============================================================ */
-
-async function init() {
-
-    /*
-     * Normalize language.
-     */
+    if (!saved) return false;
 
     if (
-        !SUPPORTED_LANGUAGES.includes(
-            state.lang
-        )
+      saved.deadline <= now()
     ) {
+      /*
+       * Expired session:
+       * finish locally and queue it if necessary.
+       */
+      state.session = saved;
 
-        state.lang =
-            "uz";
+      finishTest("timeout");
 
-
-        localStorage.setItem(
-            "iq_lang",
-            "uz"
-        );
+      return true;
     }
 
+    state.session = saved;
 
-    /*
-     * Telegram must be initialized
-     * before authenticated API calls.
-     */
+    return true;
+  }
 
-    setupTelegram();
+  function boot() {
+    telegramReady();
+    updateOfflineUI();
 
-    applyTheme();
+    setupButtons();
+    setupQuitModal();
+    setupErrorModal();
+    setupOnlineSync();
+    setupAutosave();
+    setupVisibilityProtection();
+    setupBackButton();
 
+    const restored =
+      restoreSession();
 
-    /*
-     * Bind buttons BEFORE loading config.
-     *
-     * Therefore a slow /api/config request
-     * cannot make the home screen feel dead.
-     */
+    if (restored) {
+      if (
+        state.session &&
+        state.session.index < QUESTION_COUNT
+      ) {
+        renderQuestion();
+      }
 
-    bindGlobalEvents();
-
-
-    renderHome();
-
-    updateLanguageButton();
-
-
-    /*
-     * Config is only needed for referral
-     * and ZAKO link.
-     */
-
-    await loadConfig();
-
-
-    /*
-     * Telegram theme changes.
-     */
-
-    if (
-        tg &&
-        typeof tg.onEvent ===
-            "function"
-    ) {
-
-        tg.onEvent(
-            "themeChanged",
-            applyTheme
-        );
+      return;
     }
 
+    showScreen("homeScreen");
+  }
 
-    state.initialized =
-        true;
-}
+  /*
+   * Sync previously completed offline attempts.
+   * It is deliberately fire-and-forget so it never blocks startup.
+   */
+  syncQueue().catch(
+    e => console.warn("Initial queue sync:", e)
+  );
 
+  boot();
 
-/* ============================================================
-   START
-============================================================ */
+  /*
+   * Expose only a tiny controlled surface for payment.js
+   * and debugging/integration.
+   */
+  window.IQTestApp = Object.freeze({
+    startTest,
+    finishTest,
+    openPaymentModal,
+    closePaymentModal,
+    syncQueue,
+    getState: () => ({
+      index: state.session?.index ?? null,
+      hasSession: Boolean(state.session),
+      online: isOnline()
+    })
+  });
 
-init().catch(
-    (error) => {
-
-        console.error(
-            "App initialization:",
-            error
-        );
-
-
-        showToast(
-            tr("error")
-        );
-    }
-);
+})();
