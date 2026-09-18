@@ -611,9 +611,14 @@
 
             currentPayment = data;
 
-            showPaymentContent(data);
+if (data.status === "approved" || data.already_approved === true) {
+    paymentApproved();
+    return;
+}
 
-            startPolling();
+showPaymentContent(data);
+
+startPolling();
 
         } catch (error) {
 
