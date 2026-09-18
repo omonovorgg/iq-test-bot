@@ -11,17 +11,18 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import asyncpg
 import uvicorn
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     MenuButtonWebApp,
     Message,
     Update,
+    CallbackQuery,
     WebAppInfo,
 )
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageDraw, ImageFont
 
@@ -79,6 +80,19 @@ def webhook_url() -> str:
 
 
 WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
+
+# Admin: username-based fallback plus optional numeric ID env.
+# Set ADMIN_USER_ID later if you want an ID-only lock; no env change is required now.
+ADMIN_USERNAME = "omono_v"
+ADMIN_USER_ID = int(os.environ.get("ADMIN_USER_ID", "0") or 0)
+
+PAYMENT_MODE_RETEST = "first_free_retest_paid"
+PAYMENT_MODE_RESULT = "result_paid"
+PAYMENT_MODE_FREE = "all_free"
+VALID_PAYMENT_MODES = {PAYMENT_MODE_RETEST, PAYMENT_MODE_RESULT, PAYMENT_MODE_FREE}
+
+admin_state: dict[int, str] = {}
+admin_temp: dict[int, dict] = {}
 
 
 async def init_db() -> None:
@@ -169,6 +183,48 @@ async def init_db() -> None:
             ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_elapsed INTEGER;
             ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
         """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS payment_cards (
+                id BIGSERIAL PRIMARY KEY,
+                card_number TEXT NOT NULL,
+                holder TEXT NOT NULL DEFAULT '',
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS payments (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                amount INTEGER NOT NULL,
+                purpose TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                proof_file_id TEXT,
+                proof_message_id BIGINT,
+                reviewer_id BIGINT,
+                consumed BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                reviewed_at TIMESTAMPTZ
+            );
+
+            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_unlocked BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_counted BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS payment_id BIGINT;
+        """)
+
+        await conn.execute("""
+            INSERT INTO app_settings (key, value)
+            VALUES
+                ('price_uzs', '3000'),
+                ('payment_mode', 'first_free_retest_paid')
+            ON CONFLICT (key) DO NOTHING;
+        """)
+
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_users_best_score
             ON users(best_score DESC NULLS LAST);
@@ -293,6 +349,174 @@ async def repair_session(conn, row):
     return row
 
 
+async def get_setting(key: str, default: str = "") -> str:
+    assert pool is not None
+    async with pool.acquire() as conn:
+        value = await conn.fetchval("SELECT value FROM app_settings WHERE key=$1", key)
+        return str(value) if value is not None else default
+
+
+async def set_setting(key: str, value: str) -> None:
+    assert pool is not None
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO app_settings(key, value, updated_at)
+            VALUES($1, $2, NOW())
+            ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()
+        """, key, str(value))
+
+
+async def get_price() -> int:
+    raw = await get_setting("price_uzs", "3000")
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 3000
+    return max(0, value)
+
+
+async def get_payment_mode() -> str:
+    mode = await get_setting("payment_mode", PAYMENT_MODE_RETEST)
+    return mode if mode in VALID_PAYMENT_MODES else PAYMENT_MODE_RETEST
+
+
+async def active_cards() -> list[dict]:
+    assert pool is not None
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, card_number, holder
+            FROM payment_cards
+            WHERE active=TRUE
+            ORDER BY id
+        """)
+    return [dict(r) for r in rows]
+
+
+def is_admin_user(user) -> bool:
+    if not user:
+        return False
+    if ADMIN_USER_ID and int(user.id) == ADMIN_USER_ID:
+        return True
+    return (user.username or "").lower() == ADMIN_USERNAME.lower()
+
+
+async def remember_admin_chat(user_id: int) -> None:
+    await set_setting("admin_chat_id", str(user_id))
+
+
+async def get_admin_chat_id() -> int | None:
+    raw = await get_setting("admin_chat_id", "0")
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value or None
+
+
+def payment_mode_label(mode: str) -> str:
+    return {
+        PAYMENT_MODE_RETEST: "1️⃣ Birinchi test bepul → keyingi testlar pullik",
+        PAYMENT_MODE_RESULT: "2️⃣ Test bepul → natijani ko‘rish pullik",
+        PAYMENT_MODE_FREE: "3️⃣ Hammasi bepul",
+    }.get(mode, mode)
+
+
+async def create_payment(uid: int, purpose: str) -> dict:
+    if purpose not in {"retest", "result"}:
+        raise HTTPException(status_code=400, detail="INVALID_PAYMENT_PURPOSE")
+    assert pool is not None
+    price = await get_price()
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="PAYMENTS_DISABLED")
+    cards = await active_cards()
+    if not cards:
+        raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            existing = await conn.fetchrow("""
+                SELECT id, amount, purpose, status
+                FROM payments
+                WHERE user_id=$1 AND purpose=$2 AND status='pending' AND consumed=FALSE
+                ORDER BY id DESC LIMIT 1
+                FOR UPDATE
+            """, uid, purpose)
+            if existing:
+                payment_id = int(existing["id"])
+                amount = int(existing["amount"])
+            else:
+                row = await conn.fetchrow("""
+                    INSERT INTO payments(user_id, amount, purpose)
+                    VALUES($1,$2,$3) RETURNING id, amount
+                """, uid, price, purpose)
+                payment_id = int(row["id"])
+                amount = int(row["amount"])
+    return {"payment_id": payment_id, "amount": amount, "cards": cards}
+
+
+async def payment_status(uid: int, payment_id: int) -> dict:
+    assert pool is not None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id, amount, purpose, status, consumed
+            FROM payments WHERE id=$1 AND user_id=$2
+        """, payment_id, uid)
+    if not row:
+        raise HTTPException(status_code=404, detail="PAYMENT_NOT_FOUND")
+    return {"payment_id": int(row["id"]), "amount": int(row["amount"]),
+            "purpose": row["purpose"], "status": row["status"],
+            "consumed": bool(row["consumed"])}
+
+
+async def consume_approved_retest_payment(conn, uid: int) -> int | None:
+    row = await conn.fetchrow("""
+        SELECT id, amount FROM payments
+        WHERE user_id=$1 AND purpose='retest' AND status='approved' AND consumed=FALSE
+        ORDER BY id ASC LIMIT 1 FOR UPDATE
+    """, uid)
+    if not row:
+        return None
+    await conn.execute("UPDATE payments SET consumed=TRUE WHERE id=$1", row["id"])
+    return int(row["id"])
+
+
+async def unlock_result_payment(conn, uid: int, payment_id: int) -> None:
+    payment = await conn.fetchrow("""
+        SELECT * FROM payments WHERE id=$1 AND user_id=$2 FOR UPDATE
+    """, payment_id, uid)
+    if not payment or payment["status"] != "approved":
+        raise HTTPException(status_code=409, detail="PAYMENT_NOT_APPROVED")
+    session = await conn.fetchrow("""
+        SELECT * FROM test_sessions
+        WHERE user_id=$1 AND completed=TRUE AND result_counted=FALSE
+        ORDER BY finished_at DESC NULLS LAST LIMIT 1 FOR UPDATE
+    """, uid)
+    if not session:
+        raise HTTPException(status_code=409, detail="RESULT_NOT_FOUND")
+    if payment["consumed"]:
+        return
+    iq = int(session["result_iq"])
+    raw = int(session["result_raw"])
+    correct = int(session["result_correct"])
+    elapsed = int(session["result_elapsed"])
+    await conn.execute("""
+        INSERT INTO attempts(user_id, raw_score, iq_score, correct, elapsed)
+        VALUES($1,$2,$3,$4,$5)
+    """, uid, raw, iq, correct, elapsed)
+    await conn.execute("""
+        UPDATE users SET
+            attempts=attempts+1,
+            best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
+            best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
+            best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
+            updated_at=NOW() WHERE user_id=$1
+    """, uid, iq, raw, elapsed)
+    await conn.execute("""
+        UPDATE test_sessions SET result_unlocked=TRUE, result_counted=TRUE, payment_id=$2, last_activity=NOW()
+        WHERE user_id=$1 AND completed=TRUE AND result_counted=FALSE
+    """, uid, payment_id)
+    await conn.execute("UPDATE payments SET consumed=TRUE WHERE id=$1", payment_id)
+
+
 async def create_or_get_session(uid: int, language: str):
     assert pool is not None
     async with pool.acquire() as conn:
@@ -311,21 +535,84 @@ async def create_or_get_session(uid: int, language: str):
 
             if active:
                 active = await repair_session(conn, active)
-                age = (now_utc() - active["last_activity"]).total_seconds()
-                if age <= 7200:
-                    return active, False
-                await conn.execute(
-                    "DELETE FROM test_sessions WHERE user_id=$1", uid
-                )
+                answer_count = len(sanitize_answers(active["answers"]))
 
-            if int(user["attempts"]) >= 1:
-                raise HTTPException(status_code=402, detail="PAID_RETEST")
+                # A session with all 16 answers is NOT an active quiz anymore.
+                # Older versions could leave completed=FALSE with 16 answers,
+                # which made /api/session/start return index=16 forever.
+                if answer_count >= QUESTIONS_COUNT:
+                    raw, correct = score_answers(sanitize_answers(active["answers"]))
+                    iq = calculate_iq(raw)
+                    elapsed = max(0, round((now_utc() - active["started_at"]).total_seconds()))
+                    mode = await get_payment_mode()
+
+                    if mode == PAYMENT_MODE_RESULT:
+                        # Preserve the completed result until the result payment
+                        # is approved. finish_session() / the frontend can then
+                        # trigger the payment flow normally.
+                        active = await conn.fetchrow("""
+                            UPDATE test_sessions
+                            SET completed=TRUE, current_index=$2, raw_score=$3,
+                                correct=$4, result_iq=$5, result_raw=$3,
+                                result_correct=$4, result_elapsed=$6,
+                                result_unlocked=FALSE, result_counted=FALSE,
+                                finished_at=COALESCE(finished_at, NOW()),
+                                last_activity=NOW()
+                            WHERE user_id=$1
+                            RETURNING *
+                        """, uid, QUESTIONS_COUNT, raw, correct, iq, elapsed)
+                        print(f"Session finalized for result payment: user={uid}")
+                        return active, False
+
+                    # For free-result mode and the normal first-free/retest-paid
+                    # mode, a fully answered legacy session is finalized exactly
+                    # once, then removed so the next /start can create a new quiz.
+                    if not bool(active["result_counted"]):
+                        await conn.execute("""
+                            INSERT INTO attempts(user_id, raw_score, iq_score, correct, elapsed)
+                            VALUES($1,$2,$3,$4,$5)
+                        """, uid, raw, iq, correct, elapsed)
+                        await conn.execute("""
+                            UPDATE users SET
+                                attempts=attempts+1,
+                                best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
+                                best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
+                                best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
+                                updated_at=NOW()
+                            WHERE user_id=$1
+                        """, uid, iq, raw, elapsed)
+
+                    await conn.execute("DELETE FROM test_sessions WHERE user_id=$1", uid)
+                    # Refresh the locked user row because attempts may have just
+                    # changed and the payment decision below depends on it.
+                    user = await conn.fetchrow(
+                        "SELECT attempts FROM users WHERE user_id=$1 FOR UPDATE", uid
+                    )
+                else:
+                    age = (now_utc() - active["last_activity"]).total_seconds()
+                    if age <= 7200:
+                        return active, False
+                    await conn.execute(
+                        "DELETE FROM test_sessions WHERE user_id=$1", uid
+                    )
+
+            mode = await get_payment_mode()
+            payment_id = None
+            if mode == PAYMENT_MODE_RETEST and int(user["attempts"]) >= 1:
+                payment_id = await consume_approved_retest_payment(conn, uid)
+                if payment_id is None:
+                    price = await get_price()
+                    raise HTTPException(
+                        status_code=402,
+                        detail="PAID_RETEST",
+                        headers={"X-Payment-Price": str(price)},
+                    )
 
             row = await conn.fetchrow("""
-                INSERT INTO test_sessions (user_id, language, started_at, last_activity)
-                VALUES ($1, $2, NOW(), NOW())
+                INSERT INTO test_sessions (user_id, language, started_at, last_activity, payment_id)
+                VALUES ($1, $2, NOW(), NOW(), $3)
                 RETURNING *
-            """, uid, language)
+            """, uid, language, payment_id)
             return row, True
 
 
@@ -381,13 +668,30 @@ async def finish_session(uid: int):
             )
             if not row:
                 raise HTTPException(status_code=409, detail="SESSION_EXPIRED")
+
             if row["completed"]:
-                return (
-                    int(row["result_iq"]),
-                    int(row["result_raw"]),
-                    int(row["result_correct"]),
-                    int(row["result_elapsed"]),
-                )
+                if not bool(row["result_counted"]):
+                    mode = await get_payment_mode()
+                    if mode == PAYMENT_MODE_RESULT:
+                        payment_id = row["payment_id"]
+                        if payment_id:
+                            payment = await conn.fetchrow("SELECT status, consumed FROM payments WHERE id=$1 AND user_id=$2", payment_id, uid)
+                            if payment and payment["status"] == "approved" and not payment["consumed"]:
+                                await unlock_result_payment(conn, uid, int(payment_id))
+                            else:
+                                raise HTTPException(status_code=402, detail="PAYMENT_REQUIRED")
+                        else:
+                            price = await get_price()
+                            cards = await active_cards()
+                            if not cards:
+                                raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
+                            payment = await conn.fetchrow("""
+                                INSERT INTO payments(user_id, amount, purpose) VALUES($1,$2,'result') RETURNING id
+                            """, uid, price)
+                            payment_id = int(payment["id"])
+                            await conn.execute("UPDATE test_sessions SET payment_id=$2 WHERE user_id=$1", uid, payment_id)
+                            raise HTTPException(status_code=402, detail="PAYMENT_REQUIRED")
+                return (int(row["result_iq"]), int(row["result_raw"]), int(row["result_correct"]), int(row["result_elapsed"]))
 
             row = await repair_session(conn, row)
             answers = sanitize_answers(row["answers"])
@@ -397,6 +701,22 @@ async def finish_session(uid: int):
             raw, correct = score_answers(answers)
             iq = calculate_iq(raw)
             elapsed = max(0, round((now_utc() - row["started_at"]).total_seconds()))
+            mode = await get_payment_mode()
+
+            if mode == PAYMENT_MODE_RESULT:
+                price = await get_price()
+                cards = await active_cards()
+                if not cards:
+                    raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
+                payment = await conn.fetchrow("""
+                    INSERT INTO payments(user_id, amount, purpose) VALUES($1,$2,'result') RETURNING id
+                """, uid, price)
+                payment_id = int(payment["id"])
+                await conn.execute("""
+                    UPDATE test_sessions SET completed=TRUE, result_iq=$2, result_raw=$3, result_correct=$4, result_elapsed=$5, payment_id=$6, result_unlocked=FALSE, result_counted=FALSE, finished_at=NOW(), last_activity=NOW()
+                    WHERE user_id=$1
+                """, uid, iq, raw, correct, elapsed, payment_id)
+                raise HTTPException(status_code=402, detail="PAYMENT_REQUIRED")
 
             await conn.execute("""
                 INSERT INTO attempts (user_id, raw_score, iq_score, correct, elapsed)
@@ -406,25 +726,16 @@ async def finish_session(uid: int):
             await conn.execute("""
                 UPDATE users SET
                     attempts=attempts+1,
-                    best_score=CASE WHEN best_score IS NULL OR $2 > best_score THEN $2 ELSE best_score END,
-                    best_raw=CASE WHEN best_score IS NULL OR $2 > best_score THEN $3 ELSE best_raw END,
-                    best_time=CASE
-                        WHEN best_score IS NULL OR $2 > best_score
-                             OR ($2=best_score AND (best_time IS NULL OR $4<best_time))
-                        THEN $4 ELSE best_time END,
-                    updated_at=NOW()
-                WHERE user_id=$1
+                    best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
+                    best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
+                    best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
+                    updated_at=NOW() WHERE user_id=$1
             """, uid, iq, raw, elapsed)
 
             await conn.execute("""
-                UPDATE test_sessions SET
-                    completed=TRUE,
-                    result_iq=$2, result_raw=$3,
-                    result_correct=$4, result_elapsed=$5,
-                    finished_at=NOW(), last_activity=NOW()
+                UPDATE test_sessions SET completed=TRUE, result_iq=$2, result_raw=$3, result_correct=$4, result_elapsed=$5, result_unlocked=TRUE, result_counted=TRUE, finished_at=NOW(), last_activity=NOW()
                 WHERE user_id=$1
             """, uid, iq, raw, correct, elapsed)
-
             return iq, raw, correct, elapsed
 
 
@@ -490,7 +801,7 @@ async def api_user(request: Request) -> dict:
     )
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"status": "ok", "service": "IQ TEST BOT"}
 
@@ -506,12 +817,25 @@ async def health():
 
 @app.get("/app")
 async def app_page():
-    return FileResponse(WEBAPP_DIR / "index.html")
+    index_path = WEBAPP_DIR / "index.html"
+    html = index_path.read_text(encoding="utf-8")
+    payment_script = '<script src="/static/payment.js?v=20260918-1"></script>'
+    if "/static/payment.js" not in html:
+        if "</body>" in html:
+            html = html.replace("</body>", payment_script + "</body>")
+        else:
+            html += payment_script
+    return HTMLResponse(content=html)
 
 
 @app.get("/api/config")
 async def api_config():
-    return {"bot_username": BOT_USERNAME, "zako_url": ZAKO_URL}
+    return {
+        "bot_username": BOT_USERNAME,
+        "zako_url": ZAKO_URL,
+        "price_uzs": await get_price(),
+        "payment_mode": await get_payment_mode(),
+    }
 
 
 @app.post("/api/session/start")
@@ -538,6 +862,8 @@ async def api_start(request: Request):
         "answers": list(row["answers"] or []),
         "elapsed": elapsed,
         "attempts": int(user["attempts"]),
+        "price_uzs": await get_price(),
+        "payment_mode": await get_payment_mode(),
     }
 
 
@@ -564,6 +890,42 @@ async def api_finish(request: Request):
         "iq": iq, "raw": raw, "correct": correct,
         "elapsed": elapsed, "rank": await get_rank(uid)
     }
+
+
+@app.post("/api/payment/create")
+async def api_payment_create(request: Request):
+    tg_user = await api_user(request)
+    uid = int(tg_user["id"])
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    purpose = body.get("purpose", "retest")
+    result = await create_payment(uid, purpose)
+    return result
+
+
+@app.get("/api/payment/{payment_id}")
+async def api_payment_get(payment_id: int, request: Request):
+    tg_user = await api_user(request)
+    return await payment_status(int(tg_user["id"]), payment_id)
+
+
+@app.post("/api/payment/result/unlock")
+async def api_payment_result_unlock(request: Request):
+    tg_user = await api_user(request)
+    uid = int(tg_user["id"])
+    try:
+        body = await request.json()
+        payment_id = int(body.get("payment_id"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="INVALID_PAYMENT") from exc
+    assert pool is not None
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await unlock_result_payment(conn, uid, payment_id)
+            row = await conn.fetchrow("SELECT result_iq,result_raw,result_correct,result_elapsed FROM test_sessions WHERE user_id=$1 AND completed=TRUE ORDER BY finished_at DESC NULLS LAST LIMIT 1", uid)
+    return {"ok": True, "iq": int(row["result_iq"]), "raw": int(row["result_raw"]), "correct": int(row["result_correct"]), "elapsed": int(row["result_elapsed"]), "rank": await get_rank(uid)}
 
 
 @app.get("/api/profile")
@@ -673,13 +1035,118 @@ async def api_certificate(request: Request):
     )
 
 
-def bot_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[[
+def admin_panel_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Kartalar", callback_data="adm_cards")],
+        [InlineKeyboardButton(text="💰 Narxni o‘zgartirish", callback_data="adm_price")],
+        [InlineKeyboardButton(text="⚙️ To‘lov rejimi", callback_data="adm_mode")],
+        [InlineKeyboardButton(text="📋 To‘lovlar", callback_data="adm_payments")],
+        [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
+    ])
+
+
+def admin_cards_keyboard(cards):
+    rows = [[InlineKeyboardButton(text="➕ Karta qo‘shish", callback_data="adm_card_add")]]
+    for card in cards:
+        rows.append([InlineKeyboardButton(text=f"🗑 {card['card_number']} — {card['holder'] or 'Ism yo‘q'}", callback_data=f"adm_card_del:{card['id']}")])
+    rows.append([InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_mode_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1️⃣ Birinchi bepul / keyingi pullik", callback_data="adm_mode:first_free_retest_paid")],
+        [InlineKeyboardButton(text="2️⃣ Test bepul / natija pullik", callback_data="adm_mode:result_paid")],
+        [InlineKeyboardButton(text="3️⃣ Hammasi bepul", callback_data="adm_mode:all_free")],
+        [InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")],
+    ])
+
+
+async def admin_text() -> str:
+    price = await get_price()
+    mode = await get_payment_mode()
+    cards = await active_cards()
+    return (
+        "👑 <b>IQ TEST ADMIN PANEL</b>\n\n"
+        f"💰 Narx: <b>{price:,} so‘m</b>\n"
+        f"⚙️ Rejim: <b>{payment_mode_label(mode)}</b>\n"
+        f"💳 Faol kartalar: <b>{len(cards)}</b>\n\n"
+        "Kerakli bo‘limni tanlang."
+    )
+
+
+async def send_payment_instructions(message: Message, payment_id: int):
+    assert pool is not None
+    async with pool.acquire() as conn:
+        payment = await conn.fetchrow("""
+            SELECT id, amount, purpose, status, user_id
+            FROM payments WHERE id=$1 AND user_id=$2
+        """, payment_id, message.from_user.id)
+    if not payment or payment["status"] != "pending":
+        await message.answer("❌ Bu to‘lov topilmadi yoki allaqachon yopilgan.")
+        return
+    cards = await active_cards()
+    if not cards:
+        await message.answer("❌ Hozircha to‘lov kartasi sozlanmagan. Admin bilan bog‘laning.")
+        return
+    lines = [
+        f"💳 <b>To‘lov #{payment_id}</b>",
+        f"💰 Summa: <b>{int(payment['amount']):,} so‘m</b>",
+        "",
+        "<b>Kartalar:</b>",
+    ]
+    for card in cards:
+        lines.append(f"• <code>{card['card_number']}</code> — {card['holder'] or ''}")
+    lines += [
+        "",
+        "To‘lovni amalga oshirgach, <b>chek/skrinshotni shu chatga yuboring</b>.",
+        "Admin tekshiradi va tasdiqlagach test/natija ochiladi.",
+    ]
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+async def notify_admins_payment(payment_id: int, user_id: int, proof_file_id: str):
+    if bot is None:
+        return
+    admin_chat_id = await get_admin_chat_id()
+    if not admin_chat_id:
+        print("Payment proof received but admin_chat_id is not configured. Open /admin first.")
+        return
+    user = await get_user(user_id)
+    name = ((user["first_name"] or "") + " " + (user["last_name"] or "")).strip() if user else "User"
+    username = user["username"] if user else ""
+    assert pool is not None
+    async with pool.acquire() as conn:
+        payment = await conn.fetchrow("SELECT amount,purpose FROM payments WHERE id=$1", payment_id)
+    amount = int(payment["amount"]) if payment else await get_price()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"pay_ok:{payment_id}"),
+         InlineKeyboardButton(text="❌ Rad etish", callback_data=f"pay_no:{payment_id}")]
+    ])
+    caption = (
+        f"💳 <b>Yangi to‘lov</b>\n\n"
+        f"ID: <code>{payment_id}</code>\n"
+        f"User: <b>{name}</b>\n"
+        f"Username: @{username or '-'}\n"
+        f"User ID: <code>{user_id}</code>\n"
+        f"Summa: <b>{amount:,} so‘m</b>"
+    )
+    try:
+        await bot.send_photo(admin_chat_id, proof_file_id, caption=caption, parse_mode="HTML", reply_markup=kb)
+    except Exception as exc:
+        print(f"Admin payment notification failed: {exc}")
+
+
+def bot_keyboard(is_admin: bool = False):
+    rows = [[
         InlineKeyboardButton(
             text="🧠 IQ TESTNI BOSHLASH",
             web_app=WebAppInfo(url=WEBAPP_URL),
         )
-    ]])
+    ]]
+    if is_admin:
+        rows.append([InlineKeyboardButton(text="👑 ADMIN PANEL", callback_data="adm_home")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 @dp.message(CommandStart())
@@ -688,9 +1155,24 @@ async def start(message: Message):
         return
     referral_id = None
     parts = (message.text or "").split(maxsplit=1)
-    if len(parts) == 2 and parts[1].startswith("ref_"):
+    payload = parts[1] if len(parts) == 2 else ""
+    if payload.startswith("pay_"):
         try:
-            referral_id = int(parts[1][4:])
+            payment_id = int(payload[4:])
+            await upsert_user({
+                "id": message.from_user.id,
+                "first_name": message.from_user.first_name or "",
+                "last_name": message.from_user.last_name or "",
+                "username": message.from_user.username or "",
+            })
+            await send_payment_instructions(message, payment_id)
+            return
+        except ValueError:
+            pass
+
+    if payload.startswith("ref_"):
+        try:
+            referral_id = int(payload[4:])
         except ValueError:
             referral_id = None
 
@@ -709,9 +1191,238 @@ async def start(message: Message):
         "• Sertifikat\n"
         "• UZ / RU / EN\n\n"
         "Test Mini App ichida ishlaydi.",
-        reply_markup=bot_keyboard(),
+        reply_markup=bot_keyboard(is_admin_user(message.from_user)),
         parse_mode="HTML",
     )
+
+
+@dp.message(Command("admin"))
+async def admin_command(message: Message):
+    if not is_admin_user(message.from_user):
+        await message.answer("⛔ Sizda admin huquqi yo‘q.")
+        return
+    await remember_admin_chat(message.from_user.id)
+    await message.answer(await admin_text(), parse_mode="HTML", reply_markup=admin_panel_keyboard())
+
+
+@dp.callback_query(lambda c: c.data == "adm_home")
+async def admin_home_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True)
+        return
+    await remember_admin_chat(callback.from_user.id)
+    await callback.message.edit_text(await admin_text(), parse_mode="HTML", reply_markup=admin_panel_keyboard())
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data == "adm_cards")
+async def admin_cards_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    cards = await active_cards()
+    text = "💳 <b>Kartalar</b>\n\n" + ("\n".join(f"#{c['id']}  <code>{c['card_number']}</code> — {c['holder'] or '-'}" for c in cards) if cards else "Hali karta qo‘shilmagan.")
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=admin_cards_keyboard(cards))
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data == "adm_card_add")
+async def admin_card_add_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    admin_state[callback.from_user.id] = "card_add"
+    await callback.message.answer("💳 Karta ma’lumotini shu formatda yuboring:\n\n<code>8600123456789012 | ISM FAMILIYA</code>", parse_mode="HTML")
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("adm_card_del:"))
+async def admin_card_delete_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    card_id = int(callback.data.split(":",1)[1])
+    assert pool is not None
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE payment_cards SET active=FALSE WHERE id=$1", card_id)
+    await callback.answer("Karta o‘chirildi")
+    cards = await active_cards()
+    await callback.message.edit_text("💳 <b>Kartalar</b>", parse_mode="HTML", reply_markup=admin_cards_keyboard(cards))
+
+
+@dp.callback_query(lambda c: c.data == "adm_price")
+async def admin_price_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    admin_state[callback.from_user.id] = "price"
+    await callback.message.answer(f"💰 Yangi narxni faqat son bilan yuboring. Hozirgi: <b>{await get_price():,} so‘m</b>", parse_mode="HTML")
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data == "adm_mode")
+async def admin_mode_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    await callback.message.edit_text("⚙️ <b>To‘lov rejimi</b>\n\nQaysi modelni ishlatamiz?", parse_mode="HTML", reply_markup=admin_mode_keyboard())
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("adm_mode:"))
+async def admin_mode_set_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    mode = callback.data.split(":",1)[1]
+    if mode not in VALID_PAYMENT_MODES:
+        await callback.answer("Noto‘g‘ri rejim", show_alert=True); return
+    await set_setting("payment_mode", mode)
+    await callback.answer("Rejim saqlandi")
+    await callback.message.edit_text(await admin_text(), parse_mode="HTML", reply_markup=admin_panel_keyboard())
+
+
+@dp.callback_query(lambda c: c.data == "adm_payments")
+async def admin_payments_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    assert pool is not None
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT p.id,p.user_id,p.amount,p.purpose,p.status,p.created_at,u.first_name,u.username
+            FROM payments p JOIN users u ON u.user_id=p.user_id
+            WHERE p.status='pending' ORDER BY p.id DESC LIMIT 20
+        """)
+    if not rows:
+        text = "📋 <b>Kutilayotgan to‘lovlar</b>\n\nHozircha yo‘q."
+    else:
+        text = "📋 <b>Kutilayotgan to‘lovlar</b>\n\n" + "\n".join(f"#{r['id']} • {r['amount']:,} so‘m • {r['first_name'] or '-'} • @{r['username'] or '-'}" for r in rows)
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")]]))
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data == "adm_stats")
+async def admin_stats_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    assert pool is not None
+    async with pool.acquire() as conn:
+        users = await conn.fetchval("SELECT COUNT(*) FROM users")
+        attempts = await conn.fetchval("SELECT COUNT(*) FROM attempts")
+        pending = await conn.fetchval("SELECT COUNT(*) FROM payments WHERE status='pending'")
+        approved = await conn.fetchval("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='approved'")
+    text = f"📊 <b>Statistika</b>\n\n👥 Users: <b>{users}</b>\n🧠 Yakunlangan testlar: <b>{attempts}</b>\n⏳ Kutilayotgan to‘lovlar: <b>{pending}</b>\n💰 Tasdiqlangan to‘lovlar: <b>{approved:,} so‘m</b>"
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")]]))
+    await callback.answer()
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("pay_ok:"))
+async def payment_approve_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    payment_id = int(callback.data.split(":",1)[1])
+    assert pool is not None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM payments WHERE id=$1 FOR UPDATE", payment_id)
+        if not row:
+            await callback.answer("To‘lov topilmadi", show_alert=True); return
+        await conn.execute("UPDATE payments SET status='approved', reviewer_id=$2, reviewed_at=NOW() WHERE id=$1", payment_id, callback.from_user.id)
+        user_id = int(row["user_id"])
+    try:
+        if bot is not None:
+            await bot.send_message(user_id, "✅ <b>To‘lov tasdiqlandi.</b> Mini App'ga qaytib davom eting.", parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer("To‘lov tasdiqlandi")
+    await callback.message.edit_caption((callback.message.caption or "") + "\n\n✅ <b>TASDIQLANDI</b>", parse_mode="HTML")
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("pay_no:"))
+async def payment_reject_callback(callback: CallbackQuery):
+    if not is_admin_user(callback.from_user):
+        await callback.answer("Ruxsat yo‘q", show_alert=True); return
+    await remember_admin_chat(callback.from_user.id)
+    payment_id = int(callback.data.split(":",1)[1])
+    assert pool is not None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT user_id FROM payments WHERE id=$1", payment_id)
+        if not row:
+            await callback.answer("To‘lov topilmadi", show_alert=True); return
+        await conn.execute("UPDATE payments SET status='rejected', reviewer_id=$2, reviewed_at=NOW() WHERE id=$1", payment_id, callback.from_user.id)
+        user_id = int(row["user_id"])
+    try:
+        if bot is not None:
+            await bot.send_message(user_id, "❌ <b>To‘lov rad etildi.</b> Chekni tekshirib, qayta yuboring.", parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer("To‘lov rad etildi")
+    await callback.message.edit_caption((callback.message.caption or "") + "\n\n❌ <b>RAD ETILDI</b>", parse_mode="HTML")
+
+
+@dp.message(lambda m: m.from_user is not None and is_admin_user(m.from_user) and m.from_user.id in admin_state)
+async def admin_text_input(message: Message):
+    uid = message.from_user.id
+    state_name = admin_state.get(uid)
+    text = (message.text or "").strip()
+    if state_name == "price":
+        try:
+            price = int(text.replace(" ", ""))
+            if price < 0 or price > 100000000:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Narx noto‘g‘ri. Masalan: <code>5000</code>", parse_mode="HTML")
+            return
+        await set_setting("price_uzs", str(price))
+        admin_state.pop(uid, None)
+        await message.answer(f"✅ Narx saqlandi: <b>{price:,} so‘m</b>", parse_mode="HTML", reply_markup=admin_panel_keyboard())
+        return
+    if state_name == "card_add":
+        parts = [x.strip() for x in text.split("|", 1)]
+        card_number = parts[0].replace(" ", "") if parts else ""
+        holder = parts[1].strip() if len(parts) == 2 else ""
+        if (
+            len(parts) != 2
+            or not card_number.isdigit()
+            or len(card_number) < 8
+            or len(card_number) > 32
+            or not holder
+        ):
+            await message.answer("❌ Format noto‘g‘ri. Masalan: <code>8600123456789012 | ISM FAMILIYA</code>", parse_mode="HTML")
+            return
+        assert pool is not None
+        async with pool.acquire() as conn:
+            exists = await conn.fetchval("SELECT 1 FROM payment_cards WHERE card_number=$1 AND active=TRUE", card_number)
+            if exists:
+                await message.answer("❌ Bu karta allaqachon qo‘shilgan.")
+                return
+            await conn.execute("INSERT INTO payment_cards(card_number, holder) VALUES($1,$2)", card_number, holder)
+        admin_state.pop(uid, None)
+        await message.answer("✅ Karta qo‘shildi.", reply_markup=admin_panel_keyboard())
+
+
+@dp.message(lambda m: m.from_user is not None and m.photo is not None)
+async def payment_proof_photo(message: Message):
+    if not message.from_user:
+        return
+    assert pool is not None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id, amount, purpose FROM payments
+            WHERE user_id=$1 AND status='pending' AND consumed=FALSE
+            ORDER BY id DESC LIMIT 1
+        """, message.from_user.id)
+        if not row:
+            return
+        file_id = message.photo[-1].file_id
+        await conn.execute(
+            "UPDATE payments SET proof_file_id=$2, proof_message_id=$3 WHERE id=$1",
+            row["id"], file_id, message.message_id
+        )
+    await message.answer("✅ Chek qabul qilindi. Admin tekshiradi.")
+    await notify_admins_payment(int(row["id"]), message.from_user.id, file_id)
 
 
 async def configure_bot():
