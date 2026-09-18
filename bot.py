@@ -905,11 +905,7 @@ async def finish_session(uid: int):
             raw = 0
 
             for index, answer in enumerate(answers):
-
-                if (
-                    answer
-                    == CORRECT_ANSWERS[index]
-                ):
+                if answer == CORRECT_ANSWERS[index]:
                     correct += 1
                     raw += WEIGHTS[index]
 
@@ -925,7 +921,7 @@ async def finish_session(uid: int):
                 ),
             )
 
-            # Attemptni yozamiz.
+            # Natijani saqlash
             await conn.execute(
                 """
                 INSERT INTO attempts (
@@ -950,7 +946,8 @@ async def finish_session(uid: int):
                 elapsed,
             )
 
-            # User statistikasi.
+            # User statistikasi
+            # MUHIM: bu yerda endi ortiqcha $4 argument yo'q.
             await conn.execute(
                 """
                 UPDATE users
@@ -995,11 +992,10 @@ async def finish_session(uid: int):
                 uid,
                 iq,
                 raw,
-                correct,
                 elapsed,
             )
 
-            # Test session tugadi.
+            # Test session tugadi
             await conn.execute(
                 """
                 DELETE FROM test_sessions
