@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="uz">
-
 <head>
-
     <meta charset="UTF-8">
 
     <meta
@@ -27,34 +25,23 @@
 
     <title>ZAKO IQ</title>
 
-
-    <!-- =====================================================
-         TELEGRAM MINI APP SDK
-    ====================================================== -->
-
+    <!-- Telegram Mini App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-
-    <!-- =====================================================
-         MAIN STYLESHEET
-    ====================================================== -->
-
+    <!-- Main stylesheet -->
     <link
         rel="stylesheet"
-        href="/static/style.css?v=20260918-2"
+        href="/static/style.css"
     >
-
 </head>
-
 
 <body>
 
     <div id="app">
 
-
-        <!-- =================================================
+        <!-- =========================
              TOP BAR
-        ================================================== -->
+        ========================== -->
 
         <header class="topbar">
 
@@ -68,13 +55,11 @@
                 ‹
             </button>
 
-
             <div class="brand">
 
                 <div class="brand-mark">
                     IQ
                 </div>
-
 
                 <div class="brand-text">
 
@@ -90,7 +75,6 @@
 
             </div>
 
-
             <button
                 id="langBtn"
                 class="lang-btn"
@@ -102,17 +86,16 @@
         </header>
 
 
-
-        <!-- =================================================
+        <!-- =========================
              MAIN
-        ================================================== -->
+        ========================== -->
 
         <main id="screen">
 
 
-            <!-- =================================================
+            <!-- =========================
                  HOME
-            ================================================== -->
+            ========================== -->
 
             <section
                 id="homeScreen"
@@ -120,7 +103,6 @@
             >
 
                 <div class="hero">
-
 
                     <div class="brain-orb">
 
@@ -139,14 +121,18 @@
                     </div>
 
 
-                    <h1 data-i18n="title">
+                    <h1
+                        data-i18n="title"
+                    >
                         IQ darajangizni
                         <br>
                         sinab ko‘ring
                     </h1>
 
 
-                    <p data-i18n="subtitle">
+                    <p
+                        data-i18n="subtitle"
+                    >
                         16 ta mantiqiy puzzle orqali
                         fikrlash qobiliyatingizni sinang.
                     </p>
@@ -162,11 +148,9 @@
                             🧠
                         </span>
 
-
                         <span data-i18n="start">
                             TESTNI BOSHLASH
                         </span>
-
 
                         <span class="arrow">
                             →
@@ -177,9 +161,7 @@
                 </div>
 
 
-
                 <div class="home-cards">
-
 
                     <button
                         id="rankingBtn"
@@ -191,13 +173,11 @@
                             🏆
                         </span>
 
-
                         <span>
 
                             <strong data-i18n="ranking">
                                 Reyting
                             </strong>
-
 
                             <small data-i18n="rankingSub">
                                 Eng yuqori natijalar
@@ -205,13 +185,11 @@
 
                         </span>
 
-
                         <b>
                             ›
                         </b>
 
                     </button>
-
 
 
                     <button
@@ -224,13 +202,11 @@
                             👤
                         </span>
 
-
                         <span>
 
                             <strong data-i18n="profile">
                                 Profil
                             </strong>
-
 
                             <small data-i18n="profileSub">
                                 Natijalaringiz
@@ -238,23 +214,20 @@
 
                         </span>
 
-
                         <b>
                             ›
                         </b>
 
                     </button>
 
-
                 </div>
 
             </section>
 
 
-
-            <!-- =================================================
+            <!-- =========================
                  TEST
-            ================================================== -->
+            ========================== -->
 
             <section
                 id="testScreen"
@@ -263,13 +236,11 @@
 
                 <div class="test-head">
 
-
                     <div>
 
                         <span id="questionNumber">
                             01 / 16
                         </span>
-
 
                         <div class="progress">
 
@@ -289,7 +260,6 @@
                             ◷
                         </span>
 
-
                         <span id="timer">
                             00:00
                         </span>
@@ -299,9 +269,7 @@
                 </div>
 
 
-
                 <div class="question-card">
-
 
                     <div
                         id="questionCategory"
@@ -311,24 +279,24 @@
                     </div>
 
 
-                    <h2 id="questionText"></h2>
+                    <h2 id="questionText">
+                    </h2>
 
 
                     <div
                         id="puzzle"
                         class="puzzle"
-                    ></div>
-
+                    >
+                    </div>
 
                 </div>
-
 
 
                 <div
                     id="answers"
                     class="answers"
-                ></div>
-
+                >
+                </div>
 
 
                 <button
@@ -342,7 +310,6 @@
                         DAVOM ETISH
                     </span>
 
-
                     <span>
                         →
                     </span>
@@ -352,10 +319,9 @@
             </section>
 
 
-
-            <!-- =================================================
+            <!-- =========================
                  RESULT
-            ================================================== -->
+            ========================== -->
 
             <section
                 id="resultScreen"
@@ -363,7 +329,6 @@
             >
 
                 <div class="result-header">
-
 
                     <div class="success-icon">
                         ✓
@@ -382,13 +347,10 @@
                         Sizning natijangiz
                     </h1>
 
-
                 </div>
 
 
-
                 <div class="score-card">
-
 
                     <span data-i18n="iqScore">
                         IQ SCORE
@@ -400,22 +362,19 @@
                     </strong>
 
 
-                    <small id="scoreDescription"></small>
-
+                    <small id="scoreDescription">
+                    </small>
 
                 </div>
 
 
-
                 <div class="result-stats">
-
 
                     <div>
 
                         <strong id="correctCount">
                             —
                         </strong>
-
 
                         <span data-i18n="correct">
                             To‘g‘ri javob
@@ -424,13 +383,11 @@
                     </div>
 
 
-
                     <div>
 
                         <strong id="resultTime">
                             —
                         </strong>
-
 
                         <span data-i18n="time">
                             Vaqt
@@ -439,13 +396,11 @@
                     </div>
 
 
-
                     <div>
 
                         <strong id="resultRank">
                             —
                         </strong>
-
 
                         <span data-i18n="rank">
                             Reyting
@@ -453,9 +408,7 @@
 
                     </div>
 
-
                 </div>
-
 
 
                 <button
@@ -468,18 +421,15 @@
                         🎓
                     </span>
 
-
                     <span data-i18n="certificate">
                         SERTIFIKAT OLISH
                     </span>
-
 
                     <span class="arrow">
                         →
                     </span>
 
                 </button>
-
 
 
                 <button
@@ -492,32 +442,11 @@
                         ↗
                     </span>
 
-
                     <span data-i18n="share">
                         NATIJANI ULASHISH
                     </span>
 
                 </button>
-
-
-
-                <button
-                    id="retestBtn"
-                    class="secondary-btn"
-                    type="button"
-                >
-
-                    <span>
-                        🔄
-                    </span>
-
-
-                    <span>
-                        QAYTA TEST
-                    </span>
-
-                </button>
-
 
 
                 <button
@@ -530,7 +459,6 @@
                         🚀
                     </span>
 
-
                     <span data-i18n="improve">
                         IQ'IMNI RIVOJLANTIRISH
                     </span>
@@ -540,10 +468,9 @@
             </section>
 
 
-
-            <!-- =================================================
+            <!-- =========================
                  RANKING
-            ================================================== -->
+            ========================== -->
 
             <section
                 id="rankingScreen"
@@ -551,7 +478,6 @@
             >
 
                 <div class="page-title">
-
 
                     <div class="page-icon">
                         🏆
@@ -567,23 +493,21 @@
                         Eng yaxshi natijalar
                     </p>
 
-
                 </div>
 
 
                 <div
                     id="rankingList"
                     class="ranking-list"
-                ></div>
-
+                >
+                </div>
 
             </section>
 
 
-
-            <!-- =================================================
+            <!-- =========================
                  PROFILE
-            ================================================== -->
+            ========================== -->
 
             <section
                 id="profileScreen"
@@ -591,7 +515,6 @@
             >
 
                 <div class="page-title">
-
 
                     <div
                         class="profile-avatar"
@@ -610,13 +533,10 @@
                         Sizning IQ statistikangiz
                     </p>
 
-
                 </div>
 
 
-
                 <div class="profile-score">
-
 
                     <span data-i18n="bestIq">
                         ENG YAXSHI IQ
@@ -627,66 +547,50 @@
                         —
                     </strong>
 
-
                 </div>
-
 
 
                 <div class="profile-grid">
 
-
                     <div class="stat-card">
-
 
                         <strong id="profileRank">
                             —
                         </strong>
 
-
                         <span data-i18n="rank">
                             Reyting
                         </span>
 
-
                     </div>
 
 
-
                     <div class="stat-card">
-
 
                         <strong id="profileAttempts">
                             0
                         </strong>
 
-
                         <span data-i18n="tests">
                             Testlar
                         </span>
 
-
                     </div>
 
 
-
                     <div class="stat-card">
-
 
                         <strong id="profileReferrals">
                             0
                         </strong>
 
-
                         <span data-i18n="referrals">
                             Takliflar
                         </span>
 
-
                     </div>
 
-
                 </div>
-
 
 
                 <button
@@ -699,11 +603,9 @@
                         👥
                     </span>
 
-
                     <span data-i18n="invite">
                         DO‘STLARNI TAKLIF QILISH
                     </span>
-
 
                     <span class="arrow">
                         →
@@ -711,29 +613,26 @@
 
                 </button>
 
-
             </section>
-
 
         </main>
 
 
-
-        <!-- =================================================
+        <!-- =========================
              TOAST
-        ================================================== -->
+        ========================== -->
 
         <div
             id="toast"
             class="toast"
             aria-live="polite"
-        ></div>
+        >
+        </div>
 
 
-
-        <!-- =================================================
+        <!-- =========================
              LANGUAGE MODAL
-        ================================================== -->
+        ========================== -->
 
         <div
             id="languageModal"
@@ -745,14 +644,12 @@
 
             <div class="language-sheet">
 
-
                 <div class="sheet-handle"></div>
 
 
                 <h3 data-i18n="chooseLanguage">
                     Tilni tanlang
                 </h3>
-
 
 
                 <button
@@ -765,16 +662,14 @@
                         🇺🇿
                     </span>
 
-
                     <strong>
                         O‘zbekcha
                     </strong>
 
-
-                    <b></b>
+                    <b>
+                    </b>
 
                 </button>
-
 
 
                 <button
@@ -787,16 +682,14 @@
                         🇷🇺
                     </span>
 
-
                     <strong>
                         Русский
                     </strong>
 
-
-                    <b></b>
+                    <b>
+                    </b>
 
                 </button>
-
 
 
                 <button
@@ -809,37 +702,24 @@
                         🇬🇧
                     </span>
 
-
                     <strong>
                         English
                     </strong>
 
-
-                    <b></b>
+                    <b>
+                    </b>
 
                 </button>
-
 
             </div>
 
         </div>
 
-
     </div>
 
 
-
-    <!-- =====================================================
-         MAIN JAVASCRIPT
-         
-         IMPORTANT:
-         app.js faqat BIR MARTA yuklanadi.
-         Version query cache muammosini ham yopadi.
-    ====================================================== -->
-
+    <!-- Main JavaScript — ONLY ONCE -->
     <script src="/static/app.js?v=20260918-3"></script>
 
-
 </body>
-
 </html>
