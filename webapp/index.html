@@ -31,695 +31,665 @@
     <!-- Main stylesheet -->
     <link
         rel="stylesheet"
-        href="/static/style.css"
+        href="/static/style.css?v=20260918-4"
     >
 </head>
 
 <body>
 
-    <div id="app">
+<div id="app">
 
-        <!-- =========================
-             TOP BAR
-        ========================== -->
+    <!-- =========================
+         TOP BAR
+    ========================== -->
 
-        <header class="topbar">
+    <header class="topbar">
 
-            <button
-                id="backBtn"
-                class="icon-btn"
-                type="button"
-                aria-label="Back"
-                style="visibility:hidden;"
-            >
-                ‹
-            </button>
+        <button
+            id="backBtn"
+            class="icon-btn"
+            type="button"
+            aria-label="Back"
+            style="visibility:hidden;"
+        >
+            ‹
+        </button>
 
-            <div class="brand">
+        <div class="brand">
 
-                <div class="brand-mark">
-                    IQ
-                </div>
+            <div class="brand-mark">
+                IQ
+            </div>
 
-                <div class="brand-text">
+            <div class="brand-text">
 
-                    <strong>
-                        ZAKO IQ
-                    </strong>
+                <strong>
+                    ZAKO IQ
+                </strong>
 
-                    <span>
-                        IQ TEST
-                    </span>
-
-                </div>
+                <span>
+                    IQ TEST
+                </span>
 
             </div>
 
-            <button
-                id="langBtn"
-                class="lang-btn"
-                type="button"
-            >
-                UZ
-            </button>
-
-        </header>
-
-
-        <!-- =========================
-             MAIN
-        ========================== -->
-
-        <main id="screen">
-
-
-            <!-- =========================
-                 HOME
-            ========================== -->
-
-            <section
-                id="homeScreen"
-                class="screen active"
-            >
-
-                <div class="hero">
-
-                    <div class="brain-orb">
-
-                        <div class="brain-icon">
-                            🧠
-                        </div>
-
-                    </div>
-
-
-                    <div
-                        class="eyebrow"
-                        data-i18n="eyebrow"
-                    >
-                        16 TA MANTIQIY PUZZLE
-                    </div>
-
-
-                    <h1
-                        data-i18n="title"
-                    >
-                        IQ darajangizni
-                        <br>
-                        sinab ko‘ring
-                    </h1>
-
-
-                    <p
-                        data-i18n="subtitle"
-                    >
-                        16 ta mantiqiy puzzle orqali
-                        fikrlash qobiliyatingizni sinang.
-                    </p>
-
-
-                    <button
-                        id="startBtn"
-                        class="primary-btn"
-                        type="button"
-                    >
-
-                        <span>
-                            🧠
-                        </span>
-
-                        <span data-i18n="start">
-                            TESTNI BOSHLASH
-                        </span>
-
-                        <span class="arrow">
-                            →
-                        </span>
-
-                    </button>
-
-                </div>
-
-
-                <div class="home-cards">
-
-                    <button
-                        id="rankingBtn"
-                        class="feature-card"
-                        type="button"
-                    >
-
-                        <span class="feature-icon">
-                            🏆
-                        </span>
-
-                        <span>
-
-                            <strong data-i18n="ranking">
-                                Reyting
-                            </strong>
-
-                            <small data-i18n="rankingSub">
-                                Eng yuqori natijalar
-                            </small>
-
-                        </span>
-
-                        <b>
-                            ›
-                        </b>
-
-                    </button>
-
-
-                    <button
-                        id="profileBtn"
-                        class="feature-card"
-                        type="button"
-                    >
-
-                        <span class="feature-icon">
-                            👤
-                        </span>
-
-                        <span>
-
-                            <strong data-i18n="profile">
-                                Profil
-                            </strong>
-
-                            <small data-i18n="profileSub">
-                                Natijalaringiz
-                            </small>
-
-                        </span>
-
-                        <b>
-                            ›
-                        </b>
-
-                    </button>
-
-                </div>
-
-            </section>
-
-
-            <!-- =========================
-                 TEST
-            ========================== -->
-
-            <section
-                id="testScreen"
-                class="screen"
-            >
-
-                <div class="test-head">
-
-                    <div>
-
-                        <span id="questionNumber">
-                            01 / 16
-                        </span>
-
-                        <div class="progress">
-
-                            <div
-                                id="progressFill"
-                                style="width:0%;"
-                            ></div>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="timer">
-
-                        <span>
-                            ◷
-                        </span>
-
-                        <span id="timer">
-                            00:00
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <div class="question-card">
-
-                    <div
-                        id="questionCategory"
-                        class="question-category"
-                    >
-                        LOGIC
-                    </div>
-
-
-                    <h2 id="questionText">
-                    </h2>
-
-
-                    <div
-                        id="puzzle"
-                        class="puzzle"
-                    >
-                    </div>
-
-                </div>
-
-
-                <div
-                    id="answers"
-                    class="answers"
-                >
-                </div>
-
-
-                <button
-                    id="nextBtn"
-                    class="next-btn"
-                    type="button"
-                    disabled
-                >
-
-                    <span data-i18n="next">
-                        DAVOM ETISH
-                    </span>
-
-                    <span>
-                        →
-                    </span>
-
-                </button>
-
-            </section>
-
-
-            <!-- =========================
-                 RESULT
-            ========================== -->
-
-            <section
-                id="resultScreen"
-                class="screen"
-            >
-
-                <div class="result-header">
-
-                    <div class="success-icon">
-                        ✓
-                    </div>
-
-
-                    <div
-                        class="eyebrow"
-                        data-i18n="finished"
-                    >
-                        TEST YAKUNLANDI
-                    </div>
-
-
-                    <h1 data-i18n="yourResult">
-                        Sizning natijangiz
-                    </h1>
-
-                </div>
-
-
-                <div class="score-card">
-
-                    <span data-i18n="iqScore">
-                        IQ SCORE
-                    </span>
-
-
-                    <strong id="iqScore">
-                        —
-                    </strong>
-
-
-                    <small id="scoreDescription">
-                    </small>
-
-                </div>
-
-
-                <div class="result-stats">
-
-                    <div>
-
-                        <strong id="correctCount">
-                            —
-                        </strong>
-
-                        <span data-i18n="correct">
-                            To‘g‘ri javob
-                        </span>
-
-                    </div>
-
-
-                    <div>
-
-                        <strong id="resultTime">
-                            —
-                        </strong>
-
-                        <span data-i18n="time">
-                            Vaqt
-                        </span>
-
-                    </div>
-
-
-                    <div>
-
-                        <strong id="resultRank">
-                            —
-                        </strong>
-
-                        <span data-i18n="rank">
-                            Reyting
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <button
-                    id="certificateBtn"
-                    class="primary-btn"
-                    type="button"
-                >
-
-                    <span>
-                        🎓
-                    </span>
-
-                    <span data-i18n="certificate">
-                        SERTIFIKAT OLISH
-                    </span>
-
-                    <span class="arrow">
-                        →
-                    </span>
-
-                </button>
-
-
-                <button
-                    id="shareBtn"
-                    class="secondary-btn"
-                    type="button"
-                >
-
-                    <span>
-                        ↗
-                    </span>
-
-                    <span data-i18n="share">
-                        NATIJANI ULASHISH
-                    </span>
-
-                </button>
-
-
-                <button
-                    id="zakoBtn"
-                    class="secondary-btn"
-                    type="button"
-                >
-
-                    <span>
-                        🚀
-                    </span>
-
-                    <span data-i18n="improve">
-                        IQ'IMNI RIVOJLANTIRISH
-                    </span>
-
-                </button>
-
-            </section>
-
-
-            <!-- =========================
-                 RANKING
-            ========================== -->
-
-            <section
-                id="rankingScreen"
-                class="screen"
-            >
-
-                <div class="page-title">
-
-                    <div class="page-icon">
-                        🏆
-                    </div>
-
-
-                    <h1 data-i18n="ranking">
-                        Reyting
-                    </h1>
-
-
-                    <p data-i18n="rankingDesc">
-                        Eng yaxshi natijalar
-                    </p>
-
-                </div>
-
-
-                <div
-                    id="rankingList"
-                    class="ranking-list"
-                >
-                </div>
-
-            </section>
-
-
-            <!-- =========================
-                 PROFILE
-            ========================== -->
-
-            <section
-                id="profileScreen"
-                class="screen"
-            >
-
-                <div class="page-title">
-
-                    <div
-                        class="profile-avatar"
-                        id="profileAvatar"
-                    >
-                        ?
-                    </div>
-
-
-                    <h1 id="profileName">
-                        —
-                    </h1>
-
-
-                    <p data-i18n="profileDesc">
-                        Sizning IQ statistikangiz
-                    </p>
-
-                </div>
-
-
-                <div class="profile-score">
-
-                    <span data-i18n="bestIq">
-                        ENG YAXSHI IQ
-                    </span>
-
-
-                    <strong id="bestIq">
-                        —
-                    </strong>
-
-                </div>
-
-
-                <div class="profile-grid">
-
-                    <div class="stat-card">
-
-                        <strong id="profileRank">
-                            —
-                        </strong>
-
-                        <span data-i18n="rank">
-                            Reyting
-                        </span>
-
-                    </div>
-
-
-                    <div class="stat-card">
-
-                        <strong id="profileAttempts">
-                            0
-                        </strong>
-
-                        <span data-i18n="tests">
-                            Testlar
-                        </span>
-
-                    </div>
-
-
-                    <div class="stat-card">
-
-                        <strong id="profileReferrals">
-                            0
-                        </strong>
-
-                        <span data-i18n="referrals">
-                            Takliflar
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <button
-                    id="inviteBtn"
-                    class="primary-btn"
-                    type="button"
-                >
-
-                    <span>
-                        👥
-                    </span>
-
-                    <span data-i18n="invite">
-                        DO‘STLARNI TAKLIF QILISH
-                    </span>
-
-                    <span class="arrow">
-                        →
-                    </span>
-
-                </button>
-
-            </section>
-
-        </main>
-
-
-        <!-- =========================
-             TOAST
-        ========================== -->
-
-        <div
-            id="toast"
-            class="toast"
-            aria-live="polite"
-        >
         </div>
 
+        <button
+            id="langBtn"
+            class="lang-btn"
+            type="button"
+        >
+            UZ
+        </button>
 
-        <!-- =========================
-             LANGUAGE MODAL
-        ========================== -->
+    </header>
 
-        <div
-            id="languageModal"
-            class="modal hidden"
+
+    <!-- =========================
+         MAIN
+    ========================== -->
+
+    <main id="screen">
+
+        <!-- HOME -->
+
+        <section
+            id="homeScreen"
+            class="screen active"
         >
 
-            <div class="modal-backdrop"></div>
+            <div class="hero">
 
+                <div class="brain-orb">
 
-            <div class="language-sheet">
+                    <div class="brain-icon">
+                        🧠
+                    </div>
 
-                <div class="sheet-handle"></div>
+                </div>
 
+                <div
+                    class="eyebrow"
+                    data-i18n="eyebrow"
+                >
+                    16 TA MANTIQIY PUZZLE
+                </div>
 
-                <h3 data-i18n="chooseLanguage">
-                    Tilni tanlang
-                </h3>
+                <h1 data-i18n="title">
+                    IQ darajangizni
+                    <br>
+                    sinab ko‘ring
+                </h1>
 
+                <p data-i18n="subtitle">
+                    16 ta mantiqiy puzzle orqali
+                    fikrlash qobiliyatingizni sinang.
+                </p>
 
                 <button
-                    class="language-option"
+                    id="startBtn"
+                    class="primary-btn"
                     type="button"
-                    data-lang="uz"
                 >
 
                     <span>
-                        🇺🇿
+                        🧠
                     </span>
 
-                    <strong>
-                        O‘zbekcha
-                    </strong>
+                    <span data-i18n="start">
+                        TESTNI BOSHLASH
+                    </span>
+
+                    <span class="arrow">
+                        →
+                    </span>
+
+                </button>
+
+            </div>
+
+
+            <div class="home-cards">
+
+                <button
+                    id="rankingBtn"
+                    class="feature-card"
+                    type="button"
+                >
+
+                    <span class="feature-icon">
+                        🏆
+                    </span>
+
+                    <span>
+
+                        <strong data-i18n="ranking">
+                            Reyting
+                        </strong>
+
+                        <small data-i18n="rankingSub">
+                            Eng yuqori natijalar
+                        </small>
+
+                    </span>
 
                     <b>
+                        ›
                     </b>
 
                 </button>
 
 
                 <button
-                    class="language-option"
+                    id="profileBtn"
+                    class="feature-card"
                     type="button"
-                    data-lang="ru"
                 >
 
-                    <span>
-                        🇷🇺
+                    <span class="feature-icon">
+                        👤
                     </span>
 
-                    <strong>
-                        Русский
-                    </strong>
-
-                    <b>
-                    </b>
-
-                </button>
-
-
-                <button
-                    class="language-option"
-                    type="button"
-                    data-lang="en"
-                >
-
                     <span>
-                        🇬🇧
+
+                        <strong data-i18n="profile">
+                            Profil
+                        </strong>
+
+                        <small data-i18n="profileSub">
+                            Natijalaringiz
+                        </small>
+
                     </span>
 
-                    <strong>
-                        English
-                    </strong>
-
                     <b>
+                        ›
                     </b>
 
                 </button>
 
             </div>
+
+        </section>
+
+
+        <!-- TEST -->
+
+        <section
+            id="testScreen"
+            class="screen"
+        >
+
+            <div class="test-head">
+
+                <div>
+
+                    <span id="questionNumber">
+                        01 / 16
+                    </span>
+
+                    <div class="progress">
+
+                        <div
+                            id="progressFill"
+                            style="width:0%;"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="timer">
+
+                    <span>
+                        ◷
+                    </span>
+
+                    <span id="timer">
+                        00:00
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="question-card">
+
+                <div
+                    id="questionCategory"
+                    class="question-category"
+                >
+                    LOGIC
+                </div>
+
+
+                <h2 id="questionText">
+                </h2>
+
+
+                <div
+                    id="puzzle"
+                    class="puzzle"
+                >
+                </div>
+
+            </div>
+
+
+            <div
+                id="answers"
+                class="answers"
+            >
+            </div>
+
+
+            <button
+                id="nextBtn"
+                class="next-btn"
+                type="button"
+                disabled
+            >
+
+                <span data-i18n="next">
+                    DAVOM ETISH
+                </span>
+
+                <span>
+                    →
+                </span>
+
+            </button>
+
+        </section>
+
+
+        <!-- RESULT -->
+
+        <section
+            id="resultScreen"
+            class="screen"
+        >
+
+            <div class="result-header">
+
+                <div class="success-icon">
+                    ✓
+                </div>
+
+                <div
+                    class="eyebrow"
+                    data-i18n="finished"
+                >
+                    TEST YAKUNLANDI
+                </div>
+
+                <h1 data-i18n="yourResult">
+                    Sizning natijangiz
+                </h1>
+
+            </div>
+
+
+            <div class="score-card">
+
+                <span data-i18n="iqScore">
+                    IQ SCORE
+                </span>
+
+                <strong id="iqScore">
+                    —
+                </strong>
+
+                <small id="scoreDescription">
+                </small>
+
+            </div>
+
+
+            <div class="result-stats">
+
+                <div>
+
+                    <strong id="correctCount">
+                        —
+                    </strong>
+
+                    <span data-i18n="correct">
+                        To‘g‘ri javob
+                    </span>
+
+                </div>
+
+
+                <div>
+
+                    <strong id="resultTime">
+                        —
+                    </strong>
+
+                    <span data-i18n="time">
+                        Vaqt
+                    </span>
+
+                </div>
+
+
+                <div>
+
+                    <strong id="resultRank">
+                        —
+                    </strong>
+
+                    <span data-i18n="rank">
+                        Reyting
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="certificateBtn"
+                class="primary-btn"
+                type="button"
+            >
+
+                <span>
+                    🎓
+                </span>
+
+                <span data-i18n="certificate">
+                    SERTIFIKAT OLISH
+                </span>
+
+                <span class="arrow">
+                    →
+                </span>
+
+            </button>
+
+
+            <button
+                id="shareBtn"
+                class="secondary-btn"
+                type="button"
+            >
+
+                <span>
+                    ↗
+                </span>
+
+                <span data-i18n="share">
+                    NATIJANI ULASHISH
+                </span>
+
+            </button>
+
+
+            <button
+                id="zakoBtn"
+                class="secondary-btn"
+                type="button"
+            >
+
+                <span>
+                    🚀
+                </span>
+
+                <span data-i18n="improve">
+                    IQ'IMNI RIVOJLANTIRISH
+                </span>
+
+            </button>
+
+        </section>
+
+
+        <!-- RANKING -->
+
+        <section
+            id="rankingScreen"
+            class="screen"
+        >
+
+            <div class="page-title">
+
+                <div class="page-icon">
+                    🏆
+                </div>
+
+                <h1 data-i18n="ranking">
+                    Reyting
+                </h1>
+
+                <p data-i18n="rankingDesc">
+                    Eng yaxshi natijalar
+                </p>
+
+            </div>
+
+
+            <div
+                id="rankingList"
+                class="ranking-list"
+            >
+            </div>
+
+        </section>
+
+
+        <!-- PROFILE -->
+
+        <section
+            id="profileScreen"
+            class="screen"
+        >
+
+            <div class="page-title">
+
+                <div
+                    class="profile-avatar"
+                    id="profileAvatar"
+                >
+                    ?
+                </div>
+
+                <h1 id="profileName">
+                    —
+                </h1>
+
+                <p data-i18n="profileDesc">
+                    Sizning IQ statistikangiz
+                </p>
+
+            </div>
+
+
+            <div class="profile-score">
+
+                <span data-i18n="bestIq">
+                    ENG YAXSHI IQ
+                </span>
+
+                <strong id="bestIq">
+                    —
+                </strong>
+
+            </div>
+
+
+            <div class="profile-grid">
+
+                <div class="stat-card">
+
+                    <strong id="profileRank">
+                        —
+                    </strong>
+
+                    <span data-i18n="rank">
+                        Reyting
+                    </span>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <strong id="profileAttempts">
+                        0
+                    </strong>
+
+                    <span data-i18n="tests">
+                        Testlar
+                    </span>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <strong id="profileReferrals">
+                        0
+                    </strong>
+
+                    <span data-i18n="referrals">
+                        Takliflar
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="inviteBtn"
+                class="primary-btn"
+                type="button"
+            >
+
+                <span>
+                    👥
+                </span>
+
+                <span data-i18n="invite">
+                    DO‘STLARNI TAKLIF QILISH
+                </span>
+
+                <span class="arrow">
+                    →
+                </span>
+
+            </button>
+
+        </section>
+
+    </main>
+
+
+    <!-- TOAST -->
+
+    <div
+        id="toast"
+        class="toast"
+        aria-live="polite"
+    >
+    </div>
+
+
+    <!-- LANGUAGE MODAL -->
+
+    <div
+        id="languageModal"
+        class="modal hidden"
+    >
+
+        <div class="modal-backdrop"></div>
+
+        <div class="language-sheet">
+
+            <div class="sheet-handle"></div>
+
+            <h3 data-i18n="chooseLanguage">
+                Tilni tanlang
+            </h3>
+
+
+            <button
+                class="language-option"
+                type="button"
+                data-lang="uz"
+            >
+
+                <span>
+                    🇺🇿
+                </span>
+
+                <strong>
+                    O‘zbekcha
+                </strong>
+
+                <b>
+                </b>
+
+            </button>
+
+
+            <button
+                class="language-option"
+                type="button"
+                data-lang="ru"
+            >
+
+                <span>
+                    🇷🇺
+                </span>
+
+                <strong>
+                    Русский
+                </strong>
+
+                <b>
+                </b>
+
+            </button>
+
+
+            <button
+                class="language-option"
+                type="button"
+                data-lang="en"
+            >
+
+                <span>
+                    🇬🇧
+                </span>
+
+                <strong>
+                    English
+                </strong>
+
+                <b>
+                </b>
+
+            </button>
 
         </div>
 
     </div>
 
+</div>
 
-    <!-- Main JavaScript — ONLY ONCE -->
-    <script src="/static/app.js?v=20260918-3"></script>
+
+<!-- =========================================================
+     MUHIM:
+     app.js FAQAT BIR MARTA yuklanadi.
+========================================================= -->
+
+<script src="/static/app.js?v=20260918-4"></script>
 
 </body>
 </html>
