@@ -2065,154 +2065,257 @@ function buildSession(data) {
 ============================================================ */
 
 async function startTest() {
+    const startBtn = document.getElementById("startBtn");
 
+    /*
+     * HARD LOCK
+     *
+     * Bir vaqtning o'zida faqat bitta start request.
+     * Telegram WebView'da double-tap yoki duplicate event
+     * bo'lsa ham ikkinchi request ketmaydi.
+     */
     if (
         state.busy ||
         state.answerSubmitting ||
         state.busyFinish
     ) {
-
         return;
     }
 
+    state.busy = true;
 
-    setBusy(true);
-
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.setAttribute(
+            "aria-busy",
+            "true"
+        );
+    }
 
     try {
+        console.log(
+            "[ZAKO IQ] START: request"
+        );
 
-        const data =
-            await api(
-                "/api/session/start",
-                {
-                    method: "POST",
+        const data = await api(
+            "/api/session/start",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    language: state.lang
+                })
+            }
+        );
 
-                    body:
-                        JSON.stringify({
-                            language:
-                                state.lang
-                        })
-                }
-            );
+        console.log(
+            "[ZAKO IQ] START: response",
+            data
+        );
 
-
+        /*
+         * Backend response must be an object.
+         */
         if (
             !data ||
             typeof data !== "object"
         ) {
-
             throw new Error(
-                "INVALID_SESSION"
+                "INVALID_SESSION_RESPONSE"
             );
         }
 
-
-        state.session =
-            buildSession(data);
-
-
-        const answerCount =
-            state.session.answers.length;
-
+        /*
+         * Validate answers.
+         */
+        if (
+            data.answers !== undefined &&
+            !Array.isArray(data.answers)
+        ) {
+            throw new Error(
+                "INVALID_SESSION_ANSWERS"
+            );
+        }
 
         /*
-         * NEVER finish solely because index == 16.
-         *
-         * Finish is allowed only when there
-         * are exactly 16 server-supplied answers.
+         * Build local session.
          */
+        const session =
+            buildSession(data);
 
+        if (!session) {
+            throw new Error(
+                "SESSION_BUILD_FAILED"
+            );
+        }
+
+        state.session =
+            session;
+
+        console.log(
+            "[ZAKO IQ] SESSION:",
+            state.session
+        );
+
+        const answerCount =
+            Array.isArray(
+                state.session.answers
+            )
+                ? state.session.answers.filter(
+                    (value) =>
+                        Number.isInteger(value) &&
+                        value >= 0 &&
+                        value <= 3
+                ).length
+                : 0;
+
+        /*
+         * IMPORTANT:
+         *
+         * Do not use answers.length here.
+         * We need the number of REAL answers.
+         */
         if (
             answerCount ===
             QUESTIONS_COUNT
         ) {
-
             state.session.index =
                 QUESTIONS_COUNT;
+
+            console.log(
+                "[ZAKO IQ] Session already complete."
+            );
 
             await finishTest();
 
             return;
         }
 
-
         /*
-         * If backend says index 16 but there
-         * are fewer than 16 answers, this is
-         * an inconsistent old session.
-         *
-         * Do NOT call /finish.
-         *
-         * Backend fix will repair such a session.
+         * An incomplete session can never be
+         * sent to /finish.
          */
-
         if (
             state.session.index >=
-            QUESTIONS_COUNT &&
+                QUESTIONS_COUNT &&
             answerCount <
-            QUESTIONS_COUNT
+                QUESTIONS_COUNT
         ) {
-
             console.error(
-                "Inconsistent session:",
+                "[ZAKO IQ] INVALID SESSION STATE",
                 {
                     index:
                         state.session.index,
-
+                    answerCount,
                     answers:
-                        answerCount
+                        state.session.answers
                 }
             );
 
-
-            showToast(
-                tr("error")
-            );
+            /*
+             * Try server-side recovery.
+             */
+            await recoverSession();
 
             return;
         }
 
-
         /*
-         * Healthy session must point to
-         * the next unanswered question.
+         * Backend should point at the next
+         * unanswered question.
          */
-
         if (
             state.session.index !==
             answerCount
         ) {
-
             console.warn(
-                "Session index mismatch:",
+                "[ZAKO IQ] SESSION INDEX MISMATCH",
                 {
                     index:
                         state.session.index,
-
-                    answers:
-                        answerCount
+                    answerCount
                 }
             );
+
+            /*
+             * Do not blindly continue with a
+             * corrupted state.
+             */
+            await recoverSession();
+
+            return;
         }
 
+        /*
+         * Render test.
+         */
+        console.log(
+            "[ZAKO IQ] Rendering test..."
+        );
 
         renderTest();
 
-    } catch (error) {
+        /*
+         * HARD CHECK:
+         * renderTest() must activate testScreen.
+         */
+        const testScreen =
+            document.getElementById(
+                "testScreen"
+            );
 
-        console.error(
-            "startTest:",
-            error
+        if (
+            !testScreen ||
+            !testScreen.classList.contains(
+                "active"
+            )
+        ) {
+            console.error(
+                "[ZAKO IQ] TEST SCREEN DID NOT ACTIVATE",
+                {
+                    testScreenExists:
+                        Boolean(testScreen),
+                    active:
+                        testScreen
+                            ? testScreen.classList.contains(
+                                "active"
+                            )
+                            : false,
+                    session:
+                        state.session
+                }
+            );
+
+            throw new Error(
+                "TEST_SCREEN_NOT_ACTIVATED"
+            );
+        }
+
+        console.log(
+            "[ZAKO IQ] TEST STARTED SUCCESSFULLY"
         );
 
+    } catch (error) {
+        console.error(
+            "[ZAKO IQ] startTest ERROR:",
+            error
+        );
 
         handleStartError(
             error
         );
 
     } finally {
+        state.busy =
+            false;
 
-        setBusy(false);
+        if (startBtn) {
+            startBtn.disabled =
+                false;
+
+            startBtn.removeAttribute(
+                "aria-busy"
+            );
+        }
     }
 }
 
