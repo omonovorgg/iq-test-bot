@@ -1,6 +1,230 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#090a10">
+<title>IQ TEST</title>
+<link rel="stylesheet" href="/app/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
 
+<body>
+<div id="app">
 
+  <header class="topbar">
+    <button id="backBtn" class="icon-btn" aria-label="Back">‹</button>
 
+    <div class="brand">
+      <div class="brand-mark">IQ</div>
+      <div class="brand-text">
+        <strong>ZAKO IQ</strong>
+        <span>IQ TEST</span>
+      </div>
+    </div>
 
+    <button id="langBtn" class="lang-btn">UZ</button>
+  </header>
 
+  <main id="screen">
 
+    <section id="homeScreen" class="screen active">
+      <div class="hero">
+        <div class="brain-orb">
+          <div class="brain-icon">🧠</div>
+        </div>
+
+        <div class="eyebrow" data-i18n="eyebrow">16 TA MANTIQIY PUZZLE</div>
+
+        <h1 data-i18n="title">IQ darajangizni<br>sinab ko‘ring</h1>
+
+        <p data-i18n="subtitle">
+          16 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.
+        </p>
+
+        <button id="startBtn" class="primary-btn">
+          <span>🧠</span>
+          <span data-i18n="start">TESTNI BOSHLASH</span>
+          <span class="arrow">→</span>
+        </button>
+      </div>
+
+      <div class="home-cards">
+        <button class="feature-card" id="rankingBtn">
+          <span class="feature-icon">🏆</span>
+          <span>
+            <strong data-i18n="ranking">Reyting</strong>
+            <small data-i18n="rankingSub">Eng yuqori natijalar</small>
+          </span>
+          <b>›</b>
+        </button>
+
+        <button class="feature-card" id="profileBtn">
+          <span class="feature-icon">👤</span>
+          <span>
+            <strong data-i18n="profile">Profil</strong>
+            <small data-i18n="profileSub">Natijalaringiz</small>
+          </span>
+          <b>›</b>
+        </button>
+      </div>
+    </section>
+
+    <section id="testScreen" class="screen">
+      <div class="test-head">
+        <div>
+          <span id="questionNumber">01 / 16</span>
+          <div class="progress">
+            <div id="progressFill"></div>
+          </div>
+        </div>
+
+        <div class="timer">
+          <span>◷</span>
+          <span id="timer">00:00</span>
+        </div>
+      </div>
+
+      <div class="question-card">
+        <div id="questionCategory" class="question-category">
+          LOGIC
+        </div>
+
+        <h2 id="questionText"></h2>
+
+        <div id="puzzle" class="puzzle"></div>
+      </div>
+
+      <div id="answers" class="answers"></div>
+
+      <button id="nextBtn" class="next-btn" disabled>
+        <span data-i18n="next">DAVOM ETISH</span>
+        <span>→</span>
+      </button>
+    </section>
+
+    <section id="resultScreen" class="screen">
+      <div class="result-header">
+        <div class="success-icon">✓</div>
+        <div class="eyebrow" data-i18n="finished">TEST YAKUNLANDI</div>
+        <h1 data-i18n="yourResult">Sizning natijangiz</h1>
+      </div>
+
+      <div class="score-card">
+        <span data-i18n="iqScore">IQ SCORE</span>
+        <strong id="iqScore">—</strong>
+        <small id="scoreDescription"></small>
+      </div>
+
+      <div class="result-stats">
+        <div>
+          <strong id="correctCount">—</strong>
+          <span data-i18n="correct">To‘g‘ri javob</span>
+        </div>
+
+        <div>
+          <strong id="resultTime">—</strong>
+          <span data-i18n="time">Vaqt</span>
+        </div>
+
+        <div>
+          <strong id="resultRank">—</strong>
+          <span data-i18n="rank">Reyting</span>
+        </div>
+      </div>
+
+      <button id="certificateBtn" class="primary-btn">
+        🎓 <span data-i18n="certificate">SERTIFIKAT OLISH</span>
+        <span class="arrow">→</span>
+      </button>
+
+      <button id="shareBtn" class="secondary-btn">
+        ↗ <span data-i18n="share">NATIJANI ULASHISH</span>
+      </button>
+
+      <button id="zakoBtn" class="secondary-btn">
+        🚀 <span data-i18n="improve">IQ'IMNI RIVOJLANTIRISH</span>
+      </button>
+    </section>
+
+    <section id="rankingScreen" class="screen">
+      <div class="page-title">
+        <div class="page-icon">🏆</div>
+        <h1 data-i18n="ranking">Reyting</h1>
+        <p data-i18n="rankingDesc">Eng yaxshi natijalar</p>
+      </div>
+
+      <div id="rankingList" class="ranking-list"></div>
+    </section>
+
+    <section id="profileScreen" class="screen">
+      <div class="page-title">
+        <div class="profile-avatar" id="profileAvatar">?</div>
+        <h1 id="profileName">—</h1>
+        <p data-i18n="profileDesc">Sizning IQ statistikangiz</p>
+      </div>
+
+      <div class="profile-score">
+        <span data-i18n="bestIq">ENG YAXSHI IQ</span>
+        <strong id="bestIq">—</strong>
+      </div>
+
+      <div class="profile-grid">
+        <div class="stat-card">
+          <strong id="profileRank">—</strong>
+          <span data-i18n="rank">Reyting</span>
+        </div>
+
+        <div class="stat-card">
+          <strong id="profileAttempts">0</strong>
+          <span data-i18n="tests">Testlar</span>
+        </div>
+
+        <div class="stat-card">
+          <strong id="profileReferrals">0</strong>
+          <span data-i18n="referrals">Takliflar</span>
+        </div>
+      </div>
+
+      <button id="inviteBtn" class="primary-btn">
+        👥 <span data-i18n="invite">DO‘STLARNI TAKLIF QILISH</span>
+        <span class="arrow">→</span>
+      </button>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="languageModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+
+    <div class="language-sheet">
+      <div class="sheet-handle"></div>
+      <h3 data-i18n="chooseLanguage">Tilni tanlang</h3>
+
+      <button class="language-option" data-lang="uz">
+        <span>🇺🇿</span>
+        <strong>O‘zbekcha</strong>
+        <b>✓</b>
+      </button>
+
+      <button class="language-option" data-lang="ru">
+        <span>🇷🇺</span>
+        <strong>Русский</strong>
+        <b></b>
+      </button>
+
+      <button class="language-option" data-lang="en">
+        <span>🇬🇧</span>
+        <strong>English</strong>
+        <b></b>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script src="/app/app.js"></script>
+</body>
+</html>
