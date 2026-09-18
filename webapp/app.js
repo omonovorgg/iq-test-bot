@@ -4,252 +4,649 @@
  * ============================================================
  * ZAKO IQ — Telegram Mini App
  * app.js
+ *
+ * VERSION:
+ * 2026-09-18
+ *
+ * IMPORTANT:
+ * Backend is the source of truth.
+ *
+ * Flow:
+ * START
+ *   ↓
+ * ANSWER #1
+ *   ↓
+ * ANSWER #2
+ *   ↓
+ * ...
+ * ANSWER #16
+ *   ↓
+ * FINISH
+ *
+ * NEVER call /finish before /answer #16 succeeds.
  * ============================================================
  */
 
+
+/* ============================================================
+   TELEGRAM
+============================================================ */
+
 const tg = window.Telegram?.WebApp || null;
+
+
+/* ============================================================
+   CONSTANTS
+============================================================ */
 
 const QUESTIONS_COUNT = 16;
 
-const LETTERS = ["A", "B", "C", "D"];
+const LETTERS = [
+    "A",
+    "B",
+    "C",
+    "D"
+];
 
-const SUPPORTED_LANGUAGES = ["uz", "ru", "en"];
+const SUPPORTED_LANGUAGES = [
+    "uz",
+    "ru",
+    "en"
+];
 
 
 /* ============================================================
    STATE
-   ============================================================ */
+============================================================ */
 
 const state = {
-    lang: localStorage.getItem("iq_lang") || "uz",
 
-    screen: "home",
+    lang:
+        localStorage.getItem("iq_lang") || "uz",
 
-    session: null,
+    screen:
+        "home",
 
-    result: null,
+    session:
+        null,
 
-    profile: null,
+    result:
+        null,
+
+    profile:
+        null,
 
     config: {
-        bot_username: "",
-        zako_url: "https://t.me/zako_tbot"
+
+        bot_username:
+            "",
+
+        zako_url:
+            "https://t.me/zako_tbot"
     },
 
-    busy: false,
+    busy:
+        false,
 
-    submittingAnswer: false,
+    busyFinish:
+        false,
 
-    finishing: false,
+    answerSubmitting:
+        false,
 
-    recovering: false,
+    recovering:
+        false,
 
-    timer: null,
+    timer:
+        null,
 
-    timerBaseElapsed: 0,
+    timerBaseElapsed:
+        0,
 
-    timerClientStarted: 0,
+    timerClientStarted:
+        0,
 
-    initialized: false
+    initialized:
+        false
 };
 
 
 /* ============================================================
    TEXT
-   ============================================================ */
+============================================================ */
 
 const TEXT = {
+
     uz: {
-        eyebrow: "16 TA MANTIQIY PUZZLE",
-        title: "IQ darajangizni\nsinab ko‘ring",
-        subtitle: "16 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.",
-        start: "TESTNI BOSHLASH",
-        ranking: "Reyting",
-        rankingSub: "Eng yuqori natijalar",
-        profile: "Profil",
-        profileSub: "Natijalaringiz",
-        next: "DAVOM ETISH",
-        finished: "TEST YAKUNLANDI",
-        yourResult: "Sizning natijangiz",
-        iqScore: "IQ SCORE",
-        correct: "To‘g‘ri javob",
-        time: "Vaqt",
-        rank: "Reyting",
-        certificate: "SERTIFIKAT OLISH",
-        share: "NATIJANI ULASHISH",
-        improve: "IQ'IMNI RIVOJLANTIRISH",
-        rankingDesc: "Eng yaxshi natijalar",
-        profileDesc: "Sizning IQ statistikangiz",
-        bestIq: "ENG YAXSHI IQ",
-        tests: "Testlar",
-        referrals: "Takliflar",
-        invite: "DO‘STLARNI TAKLIF QILISH",
-        chooseLanguage: "Tilni tanlang",
-        logic: "MANTIQIY PUZZLE",
-        number: "SONLI PUZZLE",
-        letters: "HARFLAR PUZZLE",
-        visual: "VIZUAL PUZZLE",
-        memory: "XOTIRA PUZZLE",
-        loading: "Yuklanmoqda…",
-        paid: "Birinchi testingiz bepul. Keyingi test narxi 3 000 so‘m.",
-        retest: "QAYTA TEST — 3 000 SO‘M",
-        session: "Sizda davom etayotgan test mavjud.",
-        sessionContinue: "TESTNI DAVOM ETTIRISH",
-        error: "Xatolik yuz berdi. Qaytadan urinib ko‘ring.",
-        network: "Internet bilan aloqa uzildi. Qayta urinib ko‘ring.",
-        noData: "Ma’lumot topilmadi.",
-        certificateRequired: "Sertifikat uchun 2 ta real taklif kerak.",
-        certificateNoResult: "Avval IQ testini topshiring.",
-        certificateError: "Sertifikatni olishda xatolik yuz berdi.",
-        resultNote: "Bu ZAKO IQ testining taxminiy mahsulot skoridir, klinik IQ baholashi emas.",
-        inviteText: "Do‘stingizni IQ testga taklif qiling!",
-        copied: "Natija nusxalandi.",
-        shareText: "Natijamni ko‘ring!",
-        noRanking: "Hali reytingda natijalar yo‘q.",
-        cannotOpen: "Havolani ochib bo‘lmadi.",
-        back: "ORQAGA",
-        home: "BOSH SAHIFA",
-        leaveTest: "Testdan chiqmoqchimisiz? Hozirgi javob saqlanmasligi mumkin.",
-        cancel: "BEKOR QILISH",
-        leave: "CHIQISH",
-        user: "Foydalanuvchi",
-        answerAccepted: "Javob qabul qilindi."
+
+        eyebrow:
+            "16 TA MANTIQIY PUZZLE",
+
+        title:
+            "IQ darajangizni\nsinab ko‘ring",
+
+        subtitle:
+            "16 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.",
+
+        start:
+            "TESTNI BOSHLASH",
+
+        ranking:
+            "Reyting",
+
+        rankingSub:
+            "Eng yuqori natijalar",
+
+        profile:
+            "Profil",
+
+        profileSub:
+            "Natijalaringiz",
+
+        next:
+            "DAVOM ETISH",
+
+        finished:
+            "TEST YAKUNLANDI",
+
+        yourResult:
+            "Sizning natijangiz",
+
+        iqScore:
+            "IQ SCORE",
+
+        correct:
+            "To‘g‘ri javob",
+
+        time:
+            "Vaqt",
+
+        rank:
+            "Reyting",
+
+        certificate:
+            "SERTIFIKAT OLISH",
+
+        share:
+            "NATIJANI ULASHISH",
+
+        improve:
+            "IQ'IMNI RIVOJLANTIRISH",
+
+        rankingDesc:
+            "Eng yaxshi natijalar",
+
+        profileDesc:
+            "Sizning IQ statistikangiz",
+
+        bestIq:
+            "ENG YAXSHI IQ",
+
+        tests:
+            "Testlar",
+
+        referrals:
+            "Takliflar",
+
+        invite:
+            "DO‘STLARNI TAKLIF QILISH",
+
+        chooseLanguage:
+            "Tilni tanlang",
+
+        logic:
+            "MANTIQIY PUZZLE",
+
+        number:
+            "SONLI PUZZLE",
+
+        letters:
+            "HARFLAR PUZZLE",
+
+        visual:
+            "VIZUAL PUZZLE",
+
+        memory:
+            "XOTIRA PUZZLE",
+
+        loading:
+            "Yuklanmoqda…",
+
+        paid:
+            "Birinchi testingiz bepul. Keyingi test narxi 3 000 so‘m.",
+
+        retest:
+            "QAYTA TEST — 3 000 SO‘M",
+
+        session:
+            "Sizda davom etayotgan test mavjud.",
+
+        sessionContinue:
+            "TESTNI DAVOM ETTIRISH",
+
+        error:
+            "Xatolik yuz berdi. Qaytadan urinib ko‘ring.",
+
+        network:
+            "Internet bilan aloqa uzildi. Qayta urinib ko‘ring.",
+
+        noData:
+            "Ma’lumot topilmadi.",
+
+        certificateRequired:
+            "Sertifikat uchun 2 ta real taklif kerak.",
+
+        certificateNoResult:
+            "Avval IQ testini topshiring.",
+
+        certificateError:
+            "Sertifikatni olishda xatolik yuz berdi.",
+
+        resultNote:
+            "Bu ZAKO IQ testining taxminiy mahsulot skoridir, klinik IQ baholashi emas.",
+
+        inviteText:
+            "Do‘stingizni IQ testga taklif qiling!",
+
+        copied:
+            "Natija nusxalandi.",
+
+        shareText:
+            "Natijamni ko‘ring!",
+
+        noRanking:
+            "Hali reytingda natijalar yo‘q.",
+
+        cannotOpen:
+            "Havolani ochib bo‘lmadi.",
+
+        back:
+            "ORQAGA",
+
+        home:
+            "BOSH SAHIFA",
+
+        leaveTest:
+            "Testdan chiqmoqchimisiz? Hozirgi javob saqlanmasligi mumkin.",
+
+        cancel:
+            "BEKOR QILISH",
+
+        leave:
+            "CHIQISH",
+
+        user:
+            "Foydalanuvchi",
+
+        answerAccepted:
+            "Javob qabul qilindi."
     },
+
 
     ru: {
-        eyebrow: "16 ЛОГИЧЕСКИХ ЗАДАЧ",
-        title: "Проверьте\nсвой IQ",
-        subtitle: "16 логических задач для проверки вашего мышления.",
-        start: "НАЧАТЬ ТЕСТ",
-        ranking: "Рейтинг",
-        rankingSub: "Лучшие результаты",
-        profile: "Профиль",
-        profileSub: "Ваша статистика",
-        next: "ПРОДОЛЖИТЬ",
-        finished: "ТЕСТ ЗАВЕРШЁН",
-        yourResult: "Ваш результат",
-        iqScore: "IQ SCORE",
-        correct: "Правильных ответов",
-        time: "Время",
-        rank: "Рейтинг",
-        certificate: "ПОЛУЧИТЬ СЕРТИФИКАТ",
-        share: "ПОДЕЛИТЬСЯ РЕЗУЛЬТАТОМ",
-        improve: "РАЗВИВАТЬ IQ",
-        rankingDesc: "Лучшие результаты",
-        profileDesc: "Ваша статистика IQ",
-        bestIq: "ЛУЧШИЙ IQ",
-        tests: "Тесты",
-        referrals: "Приглашения",
-        invite: "ПРИГЛАСИТЬ ДРУЗЕЙ",
-        chooseLanguage: "Выберите язык",
-        logic: "ЛОГИЧЕСКАЯ ЗАДАЧА",
-        number: "ЧИСЛОВАЯ ЗАДАЧА",
-        letters: "БУКВЕННАЯ ЗАДАЧА",
-        visual: "ВИЗУАЛЬНАЯ ЗАДАЧА",
-        memory: "ЗАДАЧА НА ПАМЯТЬ",
-        loading: "Загрузка…",
-        paid: "Первая попытка бесплатна. Следующий тест — 3 000 сум.",
-        retest: "ПОВТОРНЫЙ ТЕСТ — 3 000 СУМ",
-        session: "У вас уже есть незавершённый тест.",
-        sessionContinue: "ПРОДОЛЖИТЬ ТЕСТ",
-        error: "Произошла ошибка. Попробуйте ещё раз.",
-        network: "Соединение с интернетом потеряно. Попробуйте снова.",
-        noData: "Данные не найдены.",
-        certificateRequired: "Для сертификата нужны 2 реальных приглашения.",
-        certificateNoResult: "Сначала пройдите IQ-тест.",
-        certificateError: "Не удалось получить сертификат.",
-        resultNote: "Это приблизительный продуктовый балл ZAKO IQ, а не клиническая оценка IQ.",
-        inviteText: "Приглашаю тебя пройти IQ-тест!",
-        copied: "Результат скопирован.",
-        shareText: "Посмотри мой результат!",
-        noRanking: "В рейтинге пока нет результатов.",
-        cannotOpen: "Не удалось открыть ссылку.",
-        back: "НАЗАД",
-        home: "ГЛАВНАЯ",
-        leaveTest: "Выйти из теста? Текущий ответ может не сохраниться.",
-        cancel: "ОТМЕНА",
-        leave: "ВЫЙТИ",
-        user: "Пользователь",
-        answerAccepted: "Ответ принят."
+
+        eyebrow:
+            "16 ЛОГИЧЕСКИХ ЗАДАЧ",
+
+        title:
+            "Проверьте\nсвой IQ",
+
+        subtitle:
+            "16 логических задач для проверки вашего мышления.",
+
+        start:
+            "НАЧАТЬ ТЕСТ",
+
+        ranking:
+            "Рейтинг",
+
+        rankingSub:
+            "Лучшие результаты",
+
+        profile:
+            "Профиль",
+
+        profileSub:
+            "Ваша статистика",
+
+        next:
+            "ПРОДОЛЖИТЬ",
+
+        finished:
+            "ТЕСТ ЗАВЕРШЁН",
+
+        yourResult:
+            "Ваш результат",
+
+        iqScore:
+            "IQ SCORE",
+
+        correct:
+            "Правильных ответов",
+
+        time:
+            "Время",
+
+        rank:
+            "Рейтинг",
+
+        certificate:
+            "ПОЛУЧИТЬ СЕРТИФИКАТ",
+
+        share:
+            "ПОДЕЛИТЬСЯ РЕЗУЛЬТАТОМ",
+
+        improve:
+            "РАЗВИВАТЬ IQ",
+
+        rankingDesc:
+            "Лучшие результаты",
+
+        profileDesc:
+            "Ваша статистика IQ",
+
+        bestIq:
+            "ЛУЧШИЙ IQ",
+
+        tests:
+            "Тесты",
+
+        referrals:
+            "Приглашения",
+
+        invite:
+            "ПРИГЛАСИТЬ ДРУЗЕЙ",
+
+        chooseLanguage:
+            "Выберите язык",
+
+        logic:
+            "ЛОГИЧЕСКАЯ ЗАДАЧА",
+
+        number:
+            "ЧИСЛОВАЯ ЗАДАЧА",
+
+        letters:
+            "БУКВЕННАЯ ЗАДАЧА",
+
+        visual:
+            "ВИЗУАЛЬНАЯ ЗАДАЧА",
+
+        memory:
+            "ЗАДАЧА НА ПАМЯТЬ",
+
+        loading:
+            "Загрузка…",
+
+        paid:
+            "Первая попытка бесплатна. Следующий тест — 3 000 сум.",
+
+        retest:
+            "ПОВТОРНЫЙ ТЕСТ — 3 000 СУМ",
+
+        session:
+            "У вас уже есть незавершённый тест.",
+
+        sessionContinue:
+            "ПРОДОЛЖИТЬ ТЕСТ",
+
+        error:
+            "Произошла ошибка. Попробуйте ещё раз.",
+
+        network:
+            "Соединение с интернетом потеряно. Попробуйте снова.",
+
+        noData:
+            "Данные не найдены.",
+
+        certificateRequired:
+            "Для сертификата нужны 2 реальных приглашения.",
+
+        certificateNoResult:
+            "Сначала пройдите IQ-тест.",
+
+        certificateError:
+            "Не удалось получить сертификат.",
+
+        resultNote:
+            "Это приблизительный продуктовый балл ZAKO IQ, а не клиническая оценка IQ.",
+
+        inviteText:
+            "Приглашаю тебя пройти IQ-тест!",
+
+        copied:
+            "Результат скопирован.",
+
+        shareText:
+            "Посмотри мой результат!",
+
+        noRanking:
+            "В рейтинге пока нет результатов.",
+
+        cannotOpen:
+            "Не удалось открыть ссылку.",
+
+        back:
+            "НАЗАД",
+
+        home:
+            "ГЛАВНАЯ",
+
+        leaveTest:
+            "Выйти из теста? Текущий ответ может не сохраниться.",
+
+        cancel:
+            "ОТМЕНА",
+
+        leave:
+            "ВЫЙТИ",
+
+        user:
+            "Пользователь",
+
+        answerAccepted:
+            "Ответ принят."
     },
 
+
     en: {
-        eyebrow: "16 LOGIC PUZZLES",
-        title: "Test\nyour IQ",
-        subtitle: "Challenge your reasoning with 16 logic puzzles.",
-        start: "START TEST",
-        ranking: "Ranking",
-        rankingSub: "Top results",
-        profile: "Profile",
-        profileSub: "Your statistics",
-        next: "CONTINUE",
-        finished: "TEST COMPLETE",
-        yourResult: "Your result",
-        iqScore: "IQ SCORE",
-        correct: "Correct answers",
-        time: "Time",
-        rank: "Ranking",
-        certificate: "GET CERTIFICATE",
-        share: "SHARE RESULT",
-        improve: "DEVELOP MY IQ",
-        rankingDesc: "Top results",
-        profileDesc: "Your IQ statistics",
-        bestIq: "BEST IQ",
-        tests: "Tests",
-        referrals: "Invites",
-        invite: "INVITE FRIENDS",
-        chooseLanguage: "Choose language",
-        logic: "LOGIC PUZZLE",
-        number: "NUMBER PUZZLE",
-        letters: "LETTER PUZZLE",
-        visual: "VISUAL PUZZLE",
-        memory: "MEMORY PUZZLE",
-        loading: "Loading…",
-        paid: "Your first attempt is free. The next test costs 3,000 UZS.",
-        retest: "RETAKE TEST — 3,000 UZS",
-        session: "You already have an unfinished test.",
-        sessionContinue: "CONTINUE TEST",
-        error: "Something went wrong. Please try again.",
-        network: "Internet connection lost. Please try again.",
-        noData: "No data found.",
-        certificateRequired: "2 real invites are required for the certificate.",
-        certificateNoResult: "Take the IQ test first.",
-        certificateError: "Could not get the certificate.",
-        resultNote: "This is an approximate ZAKO IQ product score, not a clinical IQ assessment.",
-        inviteText: "Try this IQ test!",
-        copied: "Result copied.",
-        shareText: "Check out my result!",
-        noRanking: "There are no ranking results yet.",
-        cannotOpen: "Could not open the link.",
-        back: "BACK",
-        home: "HOME",
-        leaveTest: "Leave the test? Your current answer may not be saved.",
-        cancel: "CANCEL",
-        leave: "LEAVE",
-        user: "User",
-        answerAccepted: "Answer accepted."
+
+        eyebrow:
+            "16 LOGIC PUZZLES",
+
+        title:
+            "Test\nyour IQ",
+
+        subtitle:
+            "Challenge your reasoning with 16 logic puzzles.",
+
+        start:
+            "START TEST",
+
+        ranking:
+            "Ranking",
+
+        rankingSub:
+            "Top results",
+
+        profile:
+            "Profile",
+
+        profileSub:
+            "Your statistics",
+
+        next:
+            "CONTINUE",
+
+        finished:
+            "TEST COMPLETE",
+
+        yourResult:
+            "Your result",
+
+        iqScore:
+            "IQ SCORE",
+
+        correct:
+            "Correct answers",
+
+        time:
+            "Time",
+
+        rank:
+            "Ranking",
+
+        certificate:
+            "GET CERTIFICATE",
+
+        share:
+            "SHARE RESULT",
+
+        improve:
+            "DEVELOP MY IQ",
+
+        rankingDesc:
+            "Top results",
+
+        profileDesc:
+            "Your IQ statistics",
+
+        bestIq:
+            "BEST IQ",
+
+        tests:
+            "Tests",
+
+        referrals:
+            "Invites",
+
+        invite:
+            "INVITE FRIENDS",
+
+        chooseLanguage:
+            "Choose language",
+
+        logic:
+            "LOGIC PUZZLE",
+
+        number:
+            "NUMBER PUZZLE",
+
+        letters:
+            "LETTER PUZZLE",
+
+        visual:
+            "VISUAL PUZZLE",
+
+        memory:
+            "MEMORY PUZZLE",
+
+        loading:
+            "Loading…",
+
+        paid:
+            "Your first attempt is free. The next test costs 3,000 UZS.",
+
+        retest:
+            "RETAKE TEST — 3,000 UZS",
+
+        session:
+            "You already have an unfinished test.",
+
+        sessionContinue:
+            "CONTINUE TEST",
+
+        error:
+            "Something went wrong. Please try again.",
+
+        network:
+            "Internet connection lost. Please try again.",
+
+        noData:
+            "No data found.",
+
+        certificateRequired:
+            "2 real invites are required for the certificate.",
+
+        certificateNoResult:
+            "Take the IQ test first.",
+
+        certificateError:
+            "Could not get the certificate.",
+
+        resultNote:
+            "This is an approximate ZAKO IQ product score, not a clinical IQ assessment.",
+
+        inviteText:
+            "Try this IQ test!",
+
+        copied:
+            "Result copied.",
+
+        shareText:
+            "Check out my result!",
+
+        noRanking:
+            "There are no ranking results yet.",
+
+        cannotOpen:
+            "Could not open the link.",
+
+        back:
+            "BACK",
+
+        home:
+            "HOME",
+
+        leaveTest:
+            "Leave the test? Your current answer may not be saved.",
+
+        cancel:
+            "CANCEL",
+
+        leave:
+            "LEAVE",
+
+        user:
+            "User",
+
+        answerAccepted:
+            "Answer accepted."
     }
 };
 
 
 /* ============================================================
    QUESTIONS
-   ============================================================ */
+============================================================ */
 
 const QUESTIONS = [
+
     {
         category: "logic",
 
         text: {
-            uz: "Qaysi belgi ketma-ketlikni davom ettiradi?",
-            ru: "Какой символ продолжает последовательность?",
-            en: "Which symbol continues the sequence?"
+            uz:
+                "Qaysi belgi ketma-ketlikni davom ettiradi?",
+
+            ru:
+                "Какой символ продолжает последовательность?",
+
+            en:
+                "Which symbol continues the sequence?"
         },
 
         puzzle: `
-            <svg viewBox="0 0 360 220" role="img" aria-label="Pattern puzzle">
-                <g fill="none" stroke="currentColor" stroke-width="4"
-                   stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 360 220"
+                 role="img"
+                 aria-label="Pattern puzzle">
+
+                <g fill="none"
+                   stroke="currentColor"
+                   stroke-width="4"
+                   stroke-linecap="round"
+                   stroke-linejoin="round">
+
                     <circle cx="65" cy="55" r="18"/>
                     <path d="M120 37 L138 73 L102 73 Z"/>
                     <circle cx="190" cy="55" r="18"/>
@@ -262,10 +659,15 @@ const QUESTIONS = [
 
                     <circle cx="190" cy="182" r="18"/>
                     <path d="M245 164 L263 200 L227 200 Z"/>
+
                 </g>
 
-                <text x="292" y="195" font-size="44"
-                      font-weight="800" fill="currentColor">?</text>
+                <text x="292"
+                      y="195"
+                      font-size="44"
+                      font-weight="800"
+                      fill="currentColor">?</text>
+
             </svg>
         `,
 
@@ -276,13 +678,19 @@ const QUESTIONS = [
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Qaysi son yetishmayapti?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?",
-            ru: "Какого числа не хватает?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?",
-            en: "Which number is missing?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?"
+            uz:
+                "Qaysi son yetishmayapti?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?",
+
+            ru:
+                "Какого числа не хватает?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?",
+
+            en:
+                "Which number is missing?\n\n4 → 9\n6 → 15\n8 → 21\n11 → ?"
         },
 
         options: {
@@ -292,13 +700,19 @@ const QUESTIONS = [
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Sonlar ketma-ketligini davom ettiring:\n\n2, 6, 12, 20, 30, ?",
-            ru: "Продолжите последовательность:\n\n2, 6, 12, 20, 30, ?",
-            en: "Continue the sequence:\n\n2, 6, 12, 20, 30, ?"
+            uz:
+                "Sonlar ketma-ketligini davom ettiring:\n\n2, 6, 12, 20, 30, ?",
+
+            ru:
+                "Продолжите последовательность:\n\n2, 6, 12, 20, 30, ?",
+
+            en:
+                "Continue the sequence:\n\n2, 6, 12, 20, 30, ?"
         },
 
         options: {
@@ -308,36 +722,80 @@ const QUESTIONS = [
         }
     },
 
+
     {
         category: "visual",
 
         text: {
-            uz: "Naqshdagi yetishmayotgan juftlikni toping.",
-            ru: "Найдите недостающую пару в узоре.",
-            en: "Find the missing pair in the pattern."
+            uz:
+                "Naqshdagi yetishmayotgan juftlikni toping.",
+
+            ru:
+                "Найдите недостающую пару в узоре.",
+
+            en:
+                "Find the missing pair in the pattern."
         },
 
         puzzle: `
-            <svg viewBox="0 0 360 230" role="img" aria-label="Matrix puzzle">
-                <g fill="none" stroke="currentColor" stroke-width="4">
-                    <rect x="20" y="20" width="85" height="75" rx="12"/>
-                    <circle cx="62" cy="57" r="17"/>
+            <svg viewBox="0 0 360 230"
+                 role="img"
+                 aria-label="Matrix puzzle">
 
-                    <rect x="137" y="20" width="85" height="75" rx="12"/>
+                <g fill="none"
+                   stroke="currentColor"
+                   stroke-width="4">
+
+                    <rect x="20" y="20"
+                          width="85"
+                          height="75"
+                          rx="12"/>
+
+                    <circle cx="62"
+                            cy="57"
+                            r="17"/>
+
+                    <rect x="137" y="20"
+                          width="85"
+                          height="75"
+                          rx="12"/>
+
                     <path d="M179 38 L196 72 L162 72 Z"/>
 
-                    <rect x="254" y="20" width="85" height="75" rx="12"/>
-                    <circle cx="296" cy="57" r="17"/>
+                    <rect x="254" y="20"
+                          width="85"
+                          height="75"
+                          rx="12"/>
 
-                    <rect x="20" y="125" width="85" height="75" rx="12"/>
+                    <circle cx="296"
+                            cy="57"
+                            r="17"/>
+
+                    <rect x="20" y="125"
+                          width="85"
+                          height="75"
+                          rx="12"/>
+
                     <path d="M62 143 L79 177 L45 177 Z"/>
 
-                    <rect x="137" y="125" width="85" height="75" rx="12"/>
-                    <rect x="254" y="125" width="85" height="75" rx="12"/>
+                    <rect x="137" y="125"
+                          width="85"
+                          height="75"
+                          rx="12"/>
+
+                    <rect x="254" y="125"
+                          width="85"
+                          height="75"
+                          rx="12"/>
+
                 </g>
 
-                <text x="294" y="180" font-size="42"
-                      font-weight="800" fill="currentColor">?</text>
+                <text x="294"
+                      y="180"
+                      font-size="42"
+                      font-weight="800"
+                      fill="currentColor">?</text>
+
             </svg>
         `,
 
@@ -348,13 +806,19 @@ const QUESTIONS = [
         }
     },
 
+
     {
         category: "letters",
 
         text: {
-            uz: "Harflar ketma-ketligini davom ettiring:\n\nB, E, I, N, T, ?",
-            ru: "Продолжите последовательность букв:\n\nB, E, I, N, T, ?",
-            en: "Continue the letter sequence:\n\nB, E, I, N, T, ?"
+            uz:
+                "Harflar ketma-ketligini davom ettiring:\n\nB, E, I, N, T, ?",
+
+            ru:
+                "Продолжите последовательность букв:\n\nB, E, I, N, T, ?",
+
+            en:
+                "Continue the letter sequence:\n\nB, E, I, N, T, ?"
         },
 
         options: {
@@ -364,13 +828,19 @@ const QUESTIONS = [
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Sonlar ketma-ketligini davom ettiring:\n\n3, 7, 15, 31, 63, ?",
-            ru: "Продолжите последовательность:\n\n3, 7, 15, 31, 63, ?",
-            en: "Continue the sequence:\n\n3, 7, 15, 31, 63, ?"
+            uz:
+                "Sonlar ketma-ketligini davom ettiring:\n\n3, 7, 15, 31, 63, ?",
+
+            ru:
+                "Продолжите последовательность:\n\n3, 7, 15, 31, 63, ?",
+
+            en:
+                "Continue the sequence:\n\n3, 7, 15, 31, 63, ?"
         },
 
         options: {
@@ -380,99 +850,179 @@ const QUESTIONS = [
         }
     },
 
+
     {
         category: "logic",
 
         text: {
-            uz: `Faqat bitta yozuv rost.
+            uz:
+                "Faqat bitta yozuv rost.\n\nQizil: “Kalit ko‘k qutida.”\nKo‘k: “Kalit ko‘k qutida emas.”\nYashil: “Kalit qizil qutida emas.”\n\nKalit qaysi qutida?",
 
-Qizil: “Kalit ko‘k qutida.”
-Ko‘k: “Kalit ko‘k qutida emas.”
-Yashil: “Kalit qizil qutida emas.”
+            ru:
+                "Только одно утверждение истинно.\n\nКрасная: «Ключ в синей коробке».\nСиняя: «Ключ не в синей коробке».\nЗелёная: «Ключ не в красной коробке».\n\nВ какой коробке ключ?",
 
-Kalit qaysi qutida?`,
-
-            ru: `Только одно утверждение истинно.
-
-Красная: «Ключ в синей коробке».
-Синяя: «Ключ не в синей коробке».
-Зелёная: «Ключ не в красной коробке».
-
-В какой коробке ключ?`,
-
-            en: `Only one statement is true.
-
-Red: “The key is in the blue box.”
-Blue: “The key is not in the blue box.”
-Green: “The key is not in the red box.”
-
-Which box contains the key?`
+            en:
+                "Only one statement is true.\n\nRed: “The key is in the blue box.”\nBlue: “The key is not in the blue box.”\nGreen: “The key is not in the red box.”\n\nWhich box contains the key?"
         },
 
         puzzle: `
-            <svg viewBox="0 0 360 180" role="img" aria-label="Three boxes">
-                <g fill="none" stroke="currentColor" stroke-width="4">
-                    <rect x="18" y="42" width="98" height="92" rx="16"/>
-                    <rect x="131" y="42" width="98" height="92" rx="16"/>
-                    <rect x="244" y="42" width="98" height="92" rx="16"/>
+            <svg viewBox="0 0 360 180"
+                 role="img"
+                 aria-label="Three boxes">
+
+                <g fill="none"
+                   stroke="currentColor"
+                   stroke-width="4">
+
+                    <rect x="18"
+                          y="42"
+                          width="98"
+                          height="92"
+                          rx="16"/>
+
+                    <rect x="131"
+                          y="42"
+                          width="98"
+                          height="92"
+                          rx="16"/>
+
+                    <rect x="244"
+                          y="42"
+                          width="98"
+                          height="92"
+                          rx="16"/>
+
                 </g>
 
-                <text x="42" y="96" font-size="15"
-                      font-weight="800" fill="currentColor">QIZIL</text>
+                <text x="42"
+                      y="96"
+                      font-size="15"
+                      font-weight="800"
+                      fill="currentColor">
+                    QIZIL
+                </text>
 
-                <text x="158" y="96" font-size="15"
-                      font-weight="800" fill="currentColor">KO‘K</text>
+                <text x="158"
+                      y="96"
+                      font-size="15"
+                      font-weight="800"
+                      fill="currentColor">
+                    KO‘K
+                </text>
 
-                <text x="262" y="96" font-size="15"
-                      font-weight="800" fill="currentColor">YASHIL</text>
+                <text x="262"
+                      y="96"
+                      font-size="15"
+                      font-weight="800"
+                      fill="currentColor">
+                    YASHIL
+                </text>
+
             </svg>
         `,
 
         options: {
-            uz: ["Qizil", "Ko‘k", "Yashil", "Aniqlab bo‘lmaydi"],
-            ru: ["Красная", "Синяя", "Зелёная", "Нельзя определить"],
-            en: ["Red", "Blue", "Green", "Cannot determine"]
+            uz: [
+                "Qizil",
+                "Ko‘k",
+                "Yashil",
+                "Aniqlab bo‘lmaydi"
+            ],
+
+            ru: [
+                "Красная",
+                "Синяя",
+                "Зелёная",
+                "Нельзя определить"
+            ],
+
+            en: [
+                "Red",
+                "Blue",
+                "Green",
+                "Cannot determine"
+            ]
         }
     },
+
 
     {
         category: "visual",
 
         text: {
-            uz: "Belgi 90° buriladi va rang navbat bilan o‘zgaradi. Keyingi belgi qaysi?",
-            ru: "Символ поворачивается на 90°, а цвет чередуется. Какой следующий?",
-            en: "The symbol rotates 90° and the color alternates. What comes next?"
+            uz:
+                "Belgi 90° buriladi va rang navbat bilan o‘zgaradi. Keyingi belgi qaysi?",
+
+            ru:
+                "Символ поворачивается на 90°, а цвет чередуется. Какой следующий?",
+
+            en:
+                "The symbol rotates 90° and the color alternates. What comes next?"
         },
 
         puzzle: `
-            <svg viewBox="0 0 360 170" role="img" aria-label="Rotation sequence">
-                <text x="20" y="105" font-size="39" fill="currentColor">○↑</text>
-                <text x="92" y="105" font-size="28" fill="currentColor">→</text>
-                <text x="132" y="105" font-size="39" fill="currentColor">●→</text>
-                <text x="212" y="105" font-size="28" fill="currentColor">→</text>
-                <text x="252" y="105" font-size="39" fill="currentColor">○↓</text>
+            <svg viewBox="0 0 360 170"
+                 role="img"
+                 aria-label="Rotation sequence">
+
+                <text x="20"
+                      y="105"
+                      font-size="39"
+                      fill="currentColor">
+                    ○↑
+                </text>
+
+                <text x="92"
+                      y="105"
+                      font-size="28"
+                      fill="currentColor">
+                    →
+                </text>
+
+                <text x="132"
+                      y="105"
+                      font-size="39"
+                      fill="currentColor">
+                    ●→
+                </text>
+
+                <text x="212"
+                      y="105"
+                      font-size="28"
+                      fill="currentColor">
+                    →
+                </text>
+
+                <text x="252"
+                      y="105"
+                      font-size="39"
+                      fill="currentColor">
+                    ○↓
+                </text>
+
             </svg>
         `,
 
-        /*
-         * IMPORTANT:
-         * Correct answer remains index 0.
-         * Backend CORRECT_ANSWERS[7] = 0.
-         */
         options: {
-            uz: ["●←", "○→", "●↑", "●↓"],
-            ru: ["●←", "○→", "●↑", "●↓"],
-            en: ["●←", "○→", "●↑", "●↓"]
+            uz: ["○↑", "○→", "●↑", "●↓"],
+            ru: ["○↑", "○→", "●↑", "●↓"],
+            en: ["○↑", "○→", "●↑", "●↓"]
         }
     },
+
 
     {
         category: "logic",
 
         text: {
-            uz: "A B dan oldin.\nB D dan oldin.\nD E dan oldin.\nC A dan keyin.\n\nQaysi tartib mumkin?",
-            ru: "A перед B.\nB перед D.\nD перед E.\nC после A.\n\nКакой порядок возможен?",
-            en: "A is before B.\nB is before D.\nD is before E.\nC is after A.\n\nWhich order is possible?"
+            uz:
+                "A B dan oldin.\nB D dan oldin.\nD E dan oldin.\nC A dan keyin.\n\nQaysi tartib mumkin?",
+
+            ru:
+                "A перед B.\nB перед D.\nD перед E.\nC после A.\n\nКакой порядок возможен?",
+
+            en:
+                "A is before B.\nB is before D.\nD is before E.\nC is after A.\n\nWhich order is possible?"
         },
 
         options: {
@@ -482,12 +1032,14 @@ Which box contains the key?`
                 "D-A-B-C-E",
                 "E-D-B-A-C"
             ],
+
             ru: [
                 "B-A-D-E-C",
                 "A-C-B-D-E",
                 "D-A-B-C-E",
                 "E-D-B-A-C"
             ],
+
             en: [
                 "B-A-D-E-C",
                 "A-C-B-D-E",
@@ -497,13 +1049,19 @@ Which box contains the key?`
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Qoidani toping:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?",
-            ru: "Найдите правило:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?",
-            en: "Find the rule:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?"
+            uz:
+                "Qoidani toping:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?",
+
+            ru:
+                "Найдите правило:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?",
+
+            en:
+                "Find the rule:\n\n2 × 3 + 2 = 8\n3 × 4 + 3 = 15\n4 × 5 + 4 = 24\n5 × 6 + 5 = ?"
         },
 
         options: {
@@ -513,13 +1071,19 @@ Which box contains the key?`
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Qaysi son yetishmayapti?\n\n1, 4, 10, 22, 46, ?",
-            ru: "Какого числа не хватает?\n\n1, 4, 10, 22, 46, ?",
-            en: "Which number is missing?\n\n1, 4, 10, 22, 46, ?"
+            uz:
+                "Qaysi son yetishmayapti?\n\n1, 4, 10, 22, 46, ?",
+
+            ru:
+                "Какого числа не хватает?\n\n1, 4, 10, 22, 46, ?",
+
+            en:
+                "Which number is missing?\n\n1, 4, 10, 22, 46, ?"
         },
 
         options: {
@@ -529,69 +1093,128 @@ Which box contains the key?`
         }
     },
 
+
     {
         category: "logic",
 
         text: {
-            uz: `Qoida:
+            uz:
+                "Qoida:\nAgar kartaning old tomonida unli harf bo‘lsa, orqasida juft son bo‘lishi kerak.\n\nQaysi kartalarni albatta tekshirish kerak?",
 
-Agar kartaning old tomonida unli harf bo‘lsa,
-orqasida juft son bo‘lishi kerak.
+            ru:
+                "Правило:\nЕсли на одной стороне карты гласная, на другой должно быть чётное число.\n\nКакие карты нужно проверить?",
 
-Qaysi kartalarni albatta tekshirish kerak?`,
-
-            ru: `Правило:
-
-Если на одной стороне карты гласная,
-на другой должно быть чётное число.
-
-Какие карты нужно проверить?`,
-
-            en: `Rule:
-
-If a card has a vowel on one side,
-it must have an even number on the other side.
-
-Which cards must be checked?`
+            en:
+                "Rule:\nIf a card has a vowel on one side, it must have an even number on the other side.\n\nWhich cards must be checked?"
         },
 
         puzzle: `
-            <svg viewBox="0 0 360 155" role="img" aria-label="Cards">
-                <g fill="none" stroke="currentColor" stroke-width="4">
-                    <rect x="15" y="18" width="72" height="115" rx="13"/>
-                    <rect x="101" y="18" width="72" height="115" rx="13"/>
-                    <rect x="187" y="18" width="72" height="115" rx="13"/>
-                    <rect x="273" y="18" width="72" height="115" rx="13"/>
+            <svg viewBox="0 0 360 155"
+                 role="img"
+                 aria-label="Cards">
+
+                <g fill="none"
+                   stroke="currentColor"
+                   stroke-width="4">
+
+                    <rect x="15"
+                          y="18"
+                          width="72"
+                          height="115"
+                          rx="13"/>
+
+                    <rect x="101"
+                          y="18"
+                          width="72"
+                          height="115"
+                          rx="13"/>
+
+                    <rect x="187"
+                          y="18"
+                          width="72"
+                          height="115"
+                          rx="13"/>
+
+                    <rect x="273"
+                          y="18"
+                          width="72"
+                          height="115"
+                          rx="13"/>
+
                 </g>
 
-                <text x="38" y="91" font-size="42"
-                      font-weight="800" fill="currentColor">A</text>
+                <text x="38"
+                      y="91"
+                      font-size="42"
+                      font-weight="800"
+                      fill="currentColor">
+                    A
+                </text>
 
-                <text x="124" y="91" font-size="42"
-                      font-weight="800" fill="currentColor">D</text>
+                <text x="124"
+                      y="91"
+                      font-size="42"
+                      font-weight="800"
+                      fill="currentColor">
+                    D
+                </text>
 
-                <text x="208" y="91" font-size="42"
-                      font-weight="800" fill="currentColor">4</text>
+                <text x="208"
+                      y="91"
+                      font-size="42"
+                      font-weight="800"
+                      fill="currentColor">
+                    4
+                </text>
 
-                <text x="296" y="91" font-size="42"
-                      font-weight="800" fill="currentColor">7</text>
+                <text x="296"
+                      y="91"
+                      font-size="42"
+                      font-weight="800"
+                      fill="currentColor">
+                    7
+                </text>
+
             </svg>
         `,
 
         options: {
-            uz: ["Faqat A", "A va 7", "D va 4", "4 va 7"],
-            ru: ["Только A", "A и 7", "D и 4", "4 и 7"],
-            en: ["Only A", "A and 7", "D and 4", "4 and 7"]
+            uz: [
+                "Faqat A",
+                "A va 7",
+                "D va 4",
+                "4 va 7"
+            ],
+
+            ru: [
+                "Только A",
+                "A и 7",
+                "D и 4",
+                "4 и 7"
+            ],
+
+            en: [
+                "Only A",
+                "A and 7",
+                "D and 4",
+                "4 and 7"
+            ]
         }
     },
+
 
     {
         category: "memory",
 
         text: {
-            uz: "K — 7 — ▲ — M — 3 — ● — R — 9\n\n▲ belgisidan 3 ta o‘rin keyin nima turibdi?",
-            ru: "K — 7 — ▲ — M — 3 — ● — R — 9\n\nЧто находится через 3 позиции после ▲?",
-            en: "K — 7 — ▲ — M — 3 — ● — R — 9\n\nWhat is 3 positions after ▲?"
+            uz:
+                "K — 7 — ▲ — M — 3 — ● — R — 9\n\n▲ belgisidan 3 ta o‘rin keyin nima turibdi?",
+
+            ru:
+                "K — 7 — ▲ — M — 3 — ● — R — 9\n\nЧто находится через 3 позиции после ▲?",
+
+            en:
+                "K — 7 — ▲ — M — 3 — ● — R — 9\n\nWhat is 3 positions after ▲?"
         },
 
         options: {
@@ -601,13 +1224,19 @@ Which cards must be checked?`
         }
     },
 
+
     {
         category: "logic",
 
         text: {
-            uz: "Barcha A lar B.\nBa’zi B lar C.\n\nQaysi xulosa majburiy ravishda to‘g‘ri?",
-            ru: "Все A являются B.\nНекоторые B являются C.\n\nКакой вывод обязательно верен?",
-            en: "All A are B.\nSome B are C.\n\nWhich conclusion is necessarily true?"
+            uz:
+                "Barcha A lar B.\nBa’zi B lar C.\n\nQaysi xulosa majburiy ravishda to‘g‘ri?",
+
+            ru:
+                "Все A являются B.\nНекоторые B являются C.\n\nКакой вывод обязательно верен?",
+
+            en:
+                "All A are B.\nSome B are C.\n\nWhich conclusion is necessarily true?"
         },
 
         options: {
@@ -617,12 +1246,14 @@ Which cards must be checked?`
                 "Barcha C lar A",
                 "Barcha B lar A"
             ],
+
             ru: [
                 "Некоторые A — C",
                 "Нельзя определить, есть ли A среди C",
                 "Все C — A",
                 "Все B — A"
             ],
+
             en: [
                 "Some A are C",
                 "Cannot determine whether any A are C",
@@ -632,13 +1263,19 @@ Which cards must be checked?`
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Ketma-ketlikni davom ettiring:\n\n4, 9, 19, 39, 79, ?",
-            ru: "Продолжите последовательность:\n\n4, 9, 19, 39, 79, ?",
-            en: "Continue the sequence:\n\n4, 9, 19, 39, 79, ?"
+            uz:
+                "Ketma-ketlikni davom ettiring:\n\n4, 9, 19, 39, 79, ?",
+
+            ru:
+                "Продолжите последовательность:\n\n4, 9, 19, 39, 79, ?",
+
+            en:
+                "Continue the sequence:\n\n4, 9, 19, 39, 79, ?"
         },
 
         options: {
@@ -648,13 +1285,19 @@ Which cards must be checked?`
         }
     },
 
+
     {
         category: "number",
 
         text: {
-            uz: "Yakuniy ketma-ketlik:\n\n3, 7, 15, 31, 63, 127, ?",
-            ru: "Финальная последовательность:\n\n3, 7, 15, 31, 63, 127, ?",
-            en: "Final sequence:\n\n3, 7, 15, 31, 63, 127, ?"
+            uz:
+                "Yakuniy ketma-ketlik:\n\n3, 7, 15, 31, 63, 127, ?",
+
+            ru:
+                "Финальная последовательность:\n\n3, 7, 15, 31, 63, 127, ?",
+
+            en:
+                "Final sequence:\n\n3, 7, 15, 31, 63, 127, ?"
         },
 
         options: {
@@ -663,20 +1306,27 @@ Which cards must be checked?`
             en: ["191", "223", "255", "257"]
         }
     }
+
 ];
 
 
 /* ============================================================
    HELPERS
-   ============================================================ */
+============================================================ */
 
 function tr(key) {
-    return TEXT[state.lang]?.[key] ?? TEXT.uz?.[key] ?? key;
+
+    return (
+        TEXT[state.lang]?.[key] ??
+        TEXT.uz?.[key] ??
+        key
+    );
 }
 
 
 function escapeHTML(value) {
-    return String(value)
+
+    return String(value ?? "")
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
@@ -686,10 +1336,22 @@ function escapeHTML(value) {
 
 
 function formatTime(seconds) {
-    const total = Math.max(0, Math.floor(Number(seconds) || 0));
 
-    const minutes = Math.floor(total / 60);
-    const secs = total % 60;
+    const total =
+        Math.max(
+            0,
+            Math.floor(
+                Number(seconds) || 0
+            )
+        );
+
+    const minutes =
+        Math.floor(
+            total / 60
+        );
+
+    const secs =
+        total % 60;
 
     return (
         String(minutes).padStart(2, "0") +
@@ -700,112 +1362,224 @@ function formatTime(seconds) {
 
 
 function telegramInitData() {
+
     return tg?.initData || "";
 }
 
 
 function telegramUser() {
+
     return tg?.initDataUnsafe?.user || null;
 }
 
 
 function showToast(message) {
-    const toast = document.getElementById("toast");
 
-    if (!toast) return;
+    const toast =
+        document.getElementById("toast");
 
-    toast.textContent = String(message);
+    if (!toast) {
+        return;
+    }
+
+    toast.textContent =
+        String(message);
+
     toast.classList.add("show");
 
-    clearTimeout(showToast.timeout);
+    clearTimeout(
+        showToast.timeout
+    );
 
-    showToast.timeout = setTimeout(() => {
-        toast.classList.remove("show");
-    }, 2600);
+    showToast.timeout =
+        setTimeout(
+            () => {
+                toast.classList.remove("show");
+            },
+            2600
+        );
 }
 
 
 function setBusy(value) {
-    state.busy = Boolean(value);
+
+    state.busy =
+        Boolean(value);
 }
 
 
 function categoryText(category) {
-    return tr(category || "logic");
+
+    return tr(
+        category || "logic"
+    );
 }
 
 
-function isTelegramAuthenticated() {
-    return Boolean(tg && telegramInitData());
+function clampQuestionIndex(index) {
+
+    const value =
+        Number(index);
+
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+
+    return Math.max(
+        0,
+        Math.min(
+            QUESTIONS_COUNT,
+            Math.floor(value)
+        )
+    );
+}
+
+
+function normalizeAnswers(answers) {
+
+    if (!Array.isArray(answers)) {
+        return [];
+    }
+
+    return answers
+        .slice(0, QUESTIONS_COUNT)
+        .map((value) => {
+
+            const number =
+                Number(value);
+
+            return (
+                Number.isInteger(number) &&
+                number >= 0 &&
+                number <= 3
+            )
+                ? number
+                : null;
+        });
 }
 
 
 /* ============================================================
    API
-   ============================================================ */
+============================================================ */
 
-async function api(path, options = {}) {
+async function api(
+    path,
+    options = {}
+) {
+
     const headers = {
-        "Content-Type": "application/json",
 
-        "X-Telegram-Init-Data": telegramInitData(),
+        "Content-Type":
+            "application/json",
+
+        "X-Telegram-Init-Data":
+            telegramInitData(),
 
         ...(options.headers || {})
     };
 
+
     let response;
 
     try {
-        response = await fetch(path, {
-            ...options,
-            headers,
-            cache: "no-store"
-        });
-    } catch (error) {
-        console.error("Network error:", error);
 
-        const networkError = new Error("NETWORK_ERROR");
-        networkError.code = "NETWORK_ERROR";
+        response =
+            await fetch(
+                path,
+                {
+                    ...options,
+                    headers,
+                    cache: "no-store"
+                }
+            );
+
+    } catch (error) {
+
+        console.error(
+            "Network error:",
+            error
+        );
+
+        const networkError =
+            new Error(
+                "NETWORK_ERROR"
+            );
+
+        networkError.cause =
+            error;
 
         throw networkError;
     }
 
+
     let data = null;
 
-    const contentType =
-        response.headers.get("content-type") || "";
 
-    if (contentType.includes("application/json")) {
+    const contentType =
+        response.headers.get(
+            "content-type"
+        ) || "";
+
+
+    if (
+        contentType.includes(
+            "application/json"
+        )
+    ) {
+
         try {
-            data = await response.json();
+
+            data =
+                await response.json();
+
         } catch {
+
             data = null;
         }
+
     } else {
+
         try {
-            const text = await response.text();
+
+            const text =
+                await response.text();
 
             data = {
-                message: text
+                message:
+                    text
             };
+
         } catch {
+
             data = null;
         }
     }
 
+
     if (!response.ok) {
-        const detail =
+
+        const error =
+            new Error(
+                data?.detail ||
+                data?.message ||
+                `HTTP_${response.status}`
+            );
+
+        error.status =
+            response.status;
+
+        error.detail =
             data?.detail ||
             data?.message ||
-            `HTTP_${response.status}`;
+            "";
 
-        const error = new Error(detail);
-
-        error.status = response.status;
-        error.detail = detail;
+        error.data =
+            data;
 
         throw error;
     }
+
 
     return data;
 }
@@ -813,22 +1587,42 @@ async function api(path, options = {}) {
 
 /* ============================================================
    SCREEN
-   ============================================================ */
+============================================================ */
 
 function activateScreen(screenId) {
+
     document
         .querySelectorAll(".screen")
-        .forEach((screen) => {
-            screen.classList.remove("active");
-        });
+        .forEach(
+            (screen) => {
 
-    const target = document.getElementById(screenId);
+                screen.classList.remove(
+                    "active"
+                );
+            }
+        );
+
+
+    const target =
+        document.getElementById(
+            screenId
+        );
+
 
     if (target) {
-        target.classList.add("active");
+
+        target.classList.add(
+            "active"
+        );
     }
 
-    state.screen = screenId.replace("Screen", "");
+
+    state.screen =
+        screenId.replace(
+            "Screen",
+            ""
+        );
+
 
     window.scrollTo({
         top: 0,
@@ -836,14 +1630,22 @@ function activateScreen(screenId) {
         behavior: "instant"
     });
 
+
     updateBackButton();
 }
 
 
 function updateBackButton() {
-    const button = document.getElementById("backBtn");
 
-    if (!button) return;
+    const button =
+        document.getElementById(
+            "backBtn"
+        );
+
+    if (!button) {
+        return;
+    }
+
 
     button.style.visibility =
         state.screen === "home"
@@ -853,37 +1655,78 @@ function updateBackButton() {
 
 
 /* ============================================================
-   TELEGRAM
-   ============================================================ */
+   TELEGRAM SETUP
+============================================================ */
 
 function setupTelegram() {
-    if (!tg) return;
+
+    if (!tg) {
+
+        console.warn(
+            "Telegram WebApp SDK unavailable."
+        );
+
+        return;
+    }
+
 
     try {
+
         tg.ready();
+
         tg.expand();
 
-        if (typeof tg.disableVerticalSwipes === "function") {
+
+        if (
+            typeof tg.disableVerticalSwipes ===
+            "function"
+        ) {
+
             tg.disableVerticalSwipes();
         }
 
-        if (typeof tg.setHeaderColor === "function") {
-            tg.setHeaderColor("#080a10");
+
+        if (
+            typeof tg.setHeaderColor ===
+            "function"
+        ) {
+
+            tg.setHeaderColor(
+                "#080a10"
+            );
         }
 
-        if (typeof tg.setBackgroundColor === "function") {
-            tg.setBackgroundColor("#080a10");
+
+        if (
+            typeof tg.setBackgroundColor ===
+            "function"
+        ) {
+
+            tg.setBackgroundColor(
+                "#080a10"
+            );
         }
+
     } catch (error) {
-        console.warn("Telegram setup:", error);
+
+        console.warn(
+            "Telegram setup:",
+            error
+        );
     }
 }
 
 
 function applyTheme() {
-    if (!tg) return;
 
-    const theme = tg.colorScheme || "dark";
+    if (!tg) {
+        return;
+    }
+
+
+    const theme =
+        tg.colorScheme || "dark";
+
 
     document.body.classList.toggle(
         "light",
@@ -894,118 +1737,213 @@ function applyTheme() {
 
 /* ============================================================
    CONFIG
-   ============================================================ */
+============================================================ */
 
 async function loadConfig() {
-    try {
-        const config = await api("/api/config");
 
-        if (!config || typeof config !== "object") {
+    try {
+
+        const config =
+            await api(
+                "/api/config"
+            );
+
+
+        if (
+            !config ||
+            typeof config !== "object"
+        ) {
+
             return;
         }
 
-        if (typeof config.bot_username === "string") {
-            state.config.bot_username =
-                config.bot_username.trim();
-        }
 
         if (
-            typeof config.zako_url === "string" &&
-            config.zako_url.startsWith("https://")
+            typeof config.bot_username ===
+            "string"
         ) {
+
+            state.config.bot_username =
+                config.bot_username;
+        }
+
+
+        if (
+            typeof config.zako_url ===
+            "string" &&
+            /^https:\/\//i.test(
+                config.zako_url
+            )
+        ) {
+
             state.config.zako_url =
                 config.zako_url;
         }
+
     } catch (error) {
-        console.warn("Config unavailable:", error);
+
+        console.warn(
+            "Config unavailable:",
+            error
+        );
     }
 }
 
 
 /* ============================================================
    LANGUAGE
-   ============================================================ */
+============================================================ */
 
 function openLanguageModal() {
-    const modal = document.getElementById("languageModal");
 
-    if (!modal) return;
+    const modal =
+        document.getElementById(
+            "languageModal"
+        );
 
-    modal.classList.remove("hidden");
+    if (!modal) {
+        return;
+    }
+
+
+    modal.classList.remove(
+        "hidden"
+    );
+
 
     document
-        .querySelectorAll(".language-option")
-        .forEach((button) => {
-            const selected =
-                button.dataset.lang === state.lang;
+        .querySelectorAll(
+            ".language-option"
+        )
+        .forEach(
+            (button) => {
 
-            const check = button.querySelector("b");
+                const selected =
+                    button.dataset.lang ===
+                    state.lang;
 
-            if (check) {
-                check.textContent =
-                    selected ? "✓" : "";
+
+                const check =
+                    button.querySelector("b");
+
+
+                if (check) {
+
+                    check.textContent =
+                        selected
+                            ? "✓"
+                            : "";
+                }
+
+
+                button.classList.toggle(
+                    "selected",
+                    selected
+                );
             }
-
-            button.classList.toggle(
-                "selected",
-                selected
-            );
-        });
+        );
 }
 
 
 function closeLanguageModal() {
-    const modal = document.getElementById("languageModal");
+
+    const modal =
+        document.getElementById(
+            "languageModal"
+        );
 
     if (modal) {
-        modal.classList.add("hidden");
+
+        modal.classList.add(
+            "hidden"
+        );
     }
 }
 
 
 function setLanguage(language) {
-    if (!SUPPORTED_LANGUAGES.includes(language)) {
+
+    if (
+        !SUPPORTED_LANGUAGES.includes(
+            language
+        )
+    ) {
+
         return;
     }
 
-    state.lang = language;
+
+    state.lang =
+        language;
+
 
     localStorage.setItem(
         "iq_lang",
         language
     );
 
+
     closeLanguageModal();
+
     updateLanguageButton();
 
-    if (state.screen === "test" && state.session) {
+
+    if (
+        state.screen === "test" &&
+        state.session
+    ) {
+
         renderTest();
+
         return;
     }
 
-    if (state.screen === "result" && state.result) {
+
+    if (
+        state.screen === "result" &&
+        state.result
+    ) {
+
         renderResult();
+
         return;
     }
 
-    if (state.screen === "ranking") {
+
+    if (
+        state.screen === "ranking"
+    ) {
+
         loadRanking();
+
         return;
     }
 
-    if (state.screen === "profile") {
+
+    if (
+        state.screen === "profile"
+    ) {
+
         loadProfile();
+
         return;
     }
+
 
     renderHome();
 }
 
 
 function updateLanguageButton() {
-    const button = document.getElementById("langBtn");
+
+    const button =
+        document.getElementById(
+            "langBtn"
+        );
+
 
     if (button) {
+
         button.textContent =
             state.lang.toUpperCase();
     }
@@ -1014,225 +1952,446 @@ function updateLanguageButton() {
 
 /* ============================================================
    HOME
-   ============================================================ */
+============================================================ */
 
 function renderHome() {
+
     stopTimer();
 
-    activateScreen("homeScreen");
+
+    activateScreen(
+        "homeScreen"
+    );
+
 
     updateLanguageButton();
 
+
     document
-        .querySelectorAll("[data-i18n]")
-        .forEach((element) => {
-            const key = element.dataset.i18n;
+        .querySelectorAll(
+            "[data-i18n]"
+        )
+        .forEach(
+            (element) => {
 
-            const value =
-                TEXT[state.lang]?.[key];
+                const key =
+                    element.dataset.i18n;
 
-            if (typeof value === "string") {
-                element.textContent = value;
+
+                const value =
+                    TEXT[state.lang]?.[key];
+
+
+                if (
+                    typeof value ===
+                    "string"
+                ) {
+
+                    element.textContent =
+                        value;
+                }
             }
-        });
+        );
 }
 
 
 /* ============================================================
    SESSION OBJECT
-   ============================================================ */
+============================================================ */
 
-function normalizeSession(data) {
-    if (!data || typeof data !== "object") {
-        throw new Error("INVALID_SESSION");
-    }
-
-    const rawIndex =
-        Number(data.index ?? 0);
-
-    const index = Math.max(
-        0,
-        Math.min(
-            QUESTIONS_COUNT,
-            Number.isFinite(rawIndex)
-                ? rawIndex
-                : 0
-        )
-    );
+function buildSession(data) {
 
     const answers =
-        Array.isArray(data.answers)
-            ? data.answers.slice(
-                0,
-                QUESTIONS_COUNT
-            )
-            : [];
+        normalizeAnswers(
+            data?.answers
+        );
+
+
+    let index =
+        clampQuestionIndex(
+            data?.index ?? 0
+        );
+
+
+    /*
+     * Normal healthy session:
+     *
+     * index === answers.length
+     *
+     * Example:
+     * 0 answers → index 0
+     * 5 answers → index 5
+     * 16 answers → index 16
+     *
+     * We do NOT silently overwrite the backend
+     * source of truth.
+     */
 
     return {
-        user_id: data.user_id ?? null,
 
-        created: Boolean(data.created),
+        user_id:
+            data?.user_id,
+
+        created:
+            Boolean(
+                data?.created
+            ),
 
         index,
 
         answers,
 
-        elapsed: Math.max(
-            0,
-            Number(data.elapsed || 0)
-        ),
+        elapsed:
+            Math.max(
+                0,
+                Number(
+                    data?.elapsed || 0
+                )
+            ),
 
-        attempts: Math.max(
-            0,
-            Number(data.attempts || 0)
-        ),
+        attempts:
+            Number(
+                data?.attempts || 0
+            ),
 
-        selected: null
+        selected:
+            null
     };
 }
 
 
 /* ============================================================
-   START / RESUME
-   ============================================================ */
+   SESSION START
+============================================================ */
 
 async function startTest() {
+
     if (
         state.busy ||
-        state.submittingAnswer ||
-        state.finishing
+        state.answerSubmitting ||
+        state.busyFinish
     ) {
+
         return;
     }
 
-    if (!isTelegramAuthenticated()) {
-        showToast("Telegram Mini App auth xatosi.");
-        return;
-    }
 
     setBusy(true);
 
-    showToast(tr("loading"));
 
     try {
-        const data = await api(
-            "/api/session/start",
-            {
-                method: "POST",
 
-                body: JSON.stringify({
-                    language: state.lang
-                })
-            }
-        );
+        const data =
+            await api(
+                "/api/session/start",
+                {
+                    method: "POST",
 
-        state.session =
-            normalizeSession(data);
+                    body:
+                        JSON.stringify({
+                            language:
+                                state.lang
+                        })
+                }
+            );
+
 
         if (
-            state.session.index >=
+            !data ||
+            typeof data !== "object"
+        ) {
+
+            throw new Error(
+                "INVALID_SESSION"
+            );
+        }
+
+
+        state.session =
+            buildSession(data);
+
+
+        const answerCount =
+            state.session.answers.length;
+
+
+        /*
+         * NEVER finish solely because index == 16.
+         *
+         * Finish is allowed only when there
+         * are exactly 16 server-supplied answers.
+         */
+
+        if (
+            answerCount ===
             QUESTIONS_COUNT
         ) {
+
+            state.session.index =
+                QUESTIONS_COUNT;
+
             await finishTest();
+
             return;
         }
 
-        renderTest();
-    } catch (error) {
-        console.error("startTest:", error);
 
-        handleSessionError(error);
+        /*
+         * If backend says index 16 but there
+         * are fewer than 16 answers, this is
+         * an inconsistent old session.
+         *
+         * Do NOT call /finish.
+         *
+         * Backend fix will repair such a session.
+         */
+
+        if (
+            state.session.index >=
+            QUESTIONS_COUNT &&
+            answerCount <
+            QUESTIONS_COUNT
+        ) {
+
+            console.error(
+                "Inconsistent session:",
+                {
+                    index:
+                        state.session.index,
+
+                    answers:
+                        answerCount
+                }
+            );
+
+
+            showToast(
+                tr("error")
+            );
+
+            return;
+        }
+
+
+        /*
+         * Healthy session must point to
+         * the next unanswered question.
+         */
+
+        if (
+            state.session.index !==
+            answerCount
+        ) {
+
+            console.warn(
+                "Session index mismatch:",
+                {
+                    index:
+                        state.session.index,
+
+                    answers:
+                        answerCount
+                }
+            );
+        }
+
+
+        renderTest();
+
+    } catch (error) {
+
+        console.error(
+            "startTest:",
+            error
+        );
+
+
+        handleStartError(
+            error
+        );
+
     } finally {
+
         setBusy(false);
     }
 }
 
 
-function handleSessionError(error) {
+/* ============================================================
+   START ERROR
+============================================================ */
+
+function handleStartError(error) {
+
     if (
         error.status === 402 ||
         error.detail === "PAID_RETEST"
     ) {
-        showToast(tr("paid"));
+
+        showToast(
+            tr("paid")
+        );
+
         return;
     }
 
-    if (error.message === "NETWORK_ERROR") {
-        showToast(tr("network"));
+
+    if (
+        error.message ===
+        "NETWORK_ERROR"
+    ) {
+
+        showToast(
+            tr("network")
+        );
+
         return;
     }
 
-    if (error.detail === "INVALID_INIT_DATA") {
-        showToast("Telegram Mini App auth xatosi.");
+
+    if (
+        error.detail ===
+        "INVALID_INIT_DATA"
+    ) {
+
+        showToast(
+            "Telegram Mini App auth xatosi."
+        );
+
         return;
     }
 
-    if (error.detail === "PAID_RETEST") {
-        showToast(tr("paid"));
+
+    if (
+        error.detail ===
+        "SESSION_ACTIVE"
+    ) {
+
+        showToast(
+            tr("session")
+        );
+
         return;
     }
 
-    showToast(tr("error"));
+
+    showToast(
+        tr("error")
+    );
 }
 
 
 /* ============================================================
    TEST RENDER
-   ============================================================ */
+============================================================ */
 
 function renderTest() {
+
     if (!state.session) {
+
         renderHome();
+
         return;
     }
+
 
     const index =
-        Number(state.session.index);
+        clampQuestionIndex(
+            state.session.index
+        );
+
+
+    const answerCount =
+        Array.isArray(
+            state.session.answers
+        )
+            ? state.session.answers.length
+            : 0;
+
+
+    /*
+     * Only render finish state if there
+     * are actually 16 accepted answers.
+     */
 
     if (
-        !Number.isInteger(index) ||
-        index < 0 ||
-        index > QUESTIONS_COUNT
+        answerCount ===
+        QUESTIONS_COUNT
     ) {
-        showToast(tr("error"));
+
+        state.session.index =
+            QUESTIONS_COUNT;
+
+        finishTest();
+
         return;
     }
 
-    if (index === QUESTIONS_COUNT) {
-        finishTest();
+
+    if (
+        index >=
+        QUESTIONS_COUNT
+    ) {
+
+        console.error(
+            "Invalid test state:",
+            {
+                index,
+                answerCount
+            }
+        );
+
+
+        showToast(
+            tr("error")
+        );
+
         return;
     }
+
 
     const question =
         QUESTIONS[index];
 
+
     if (!question) {
-        showToast(tr("error"));
+
+        showToast(
+            tr("error")
+        );
+
         return;
     }
+
 
     const questionText =
         question.text[state.lang] ||
         question.text.uz;
 
+
     const options =
         question.options[state.lang] ||
         question.options.uz;
 
-    const questionNumber =
-        String(index + 1).padStart(2, "0");
 
-    /*
-     * At question 1 = 0% completed.
-     * At question 16 = 93.75% completed.
-     * After final answer backend sends index 16,
-     * then finish is called.
-     */
+    const questionNumber =
+        String(
+            index + 1
+        ).padStart(
+            2,
+            "0"
+        );
+
+
     const progress =
         Math.min(
             100,
-            (index / QUESTIONS_COUNT) * 100
+            (
+                index /
+                QUESTIONS_COUNT
+            ) * 100
         );
+
 
     const puzzle =
         question.puzzle
@@ -1243,77 +2402,118 @@ function renderTest() {
               `
             : "";
 
+
     const answersHTML =
         options
-            .map((option, optionIndex) => {
-                return `
-                    <button
-                        type="button"
-                        class="answer-btn"
-                        data-answer="${optionIndex}"
-                        aria-label="${escapeHTML(
-                            LETTERS[optionIndex] +
-                            ": " +
-                            option
-                        )}"
-                    >
-                        <span class="answer-letter">
-                            ${LETTERS[optionIndex]}
-                        </span>
+            .map(
+                (
+                    option,
+                    optionIndex
+                ) => {
 
-                        <span class="answer-text">
-                            ${escapeHTML(option)}
-                        </span>
-                    </button>
-                `;
-            })
+                    return `
+                        <button
+                            type="button"
+                            class="answer-btn"
+                            data-answer="${optionIndex}"
+                            aria-label="${escapeHTML(
+                                LETTERS[optionIndex] +
+                                ": " +
+                                option
+                            )}"
+                        >
+
+                            <span
+                                class="answer-letter"
+                            >
+                                ${LETTERS[optionIndex]}
+                            </span>
+
+                            <span
+                                class="answer-text"
+                            >
+                                ${escapeHTML(
+                                    option
+                                )}
+                            </span>
+
+                        </button>
+                    `;
+                }
+            )
             .join("");
 
-    const questionScreen =
-        document.getElementById("testScreen");
 
-    if (!questionScreen) return;
+    const questionScreen =
+        document.getElementById(
+            "testScreen"
+        );
+
+
+    if (!questionScreen) {
+        return;
+    }
+
 
     questionScreen.innerHTML = `
+
         <div class="test-head">
 
             <div>
+
                 <span id="questionNumber">
                     ${questionNumber} / ${QUESTIONS_COUNT}
                 </span>
 
                 <div class="progress">
+
                     <div
                         id="progressFill"
                         style="width:${progress}%"
                     ></div>
+
                 </div>
+
             </div>
 
+
             <div class="timer">
+
                 <span>◷</span>
-                <span id="timer">00:00</span>
+
+                <span id="timer">
+                    00:00
+                </span>
+
             </div>
 
         </div>
 
+
         <div class="question-card">
 
             <div class="question-category">
+
                 ${escapeHTML(
                     categoryText(
                         question.category
                     )
                 )}
+
             </div>
 
+
             <h2 id="questionText">
-                ${escapeHTML(questionText)}
+                ${escapeHTML(
+                    questionText
+                )}
             </h2>
+
 
             ${puzzle}
 
         </div>
+
 
         <div
             id="answers"
@@ -1322,23 +2522,35 @@ function renderTest() {
             ${answersHTML}
         </div>
 
+
         <button
             id="nextBtn"
             class="next-btn"
             type="button"
             disabled
         >
+
             <span>
-                ${escapeHTML(tr("next"))}
+                ${escapeHTML(
+                    tr("next")
+                )}
             </span>
 
-            <span>→</span>
+            <span>
+                →
+            </span>
+
         </button>
     `;
 
-    activateScreen("testScreen");
+
+    activateScreen(
+        "testScreen"
+    );
+
 
     bindTestButtons();
+
 
     startTimer();
 }
@@ -1346,35 +2558,53 @@ function renderTest() {
 
 /* ============================================================
    TEST BUTTONS
-   ============================================================ */
+============================================================ */
 
 function bindTestButtons() {
+
     document
-        .querySelectorAll("[data-answer]")
-        .forEach((button) => {
-            button.addEventListener(
-                "click",
-                () => {
-                    if (
-                        state.submittingAnswer ||
-                        state.busy ||
-                        !state.session
-                    ) {
-                        return;
+        .querySelectorAll(
+            "[data-answer]"
+        )
+        .forEach(
+            (button) => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        if (
+                            state.busy ||
+                            state.answerSubmitting
+                        ) {
+
+                            return;
+                        }
+
+
+                        const index =
+                            Number(
+                                button.dataset.answer
+                            );
+
+
+                        selectAnswer(
+                            index
+                        );
                     }
+                );
+            }
+        );
 
-                    const index =
-                        Number(button.dataset.answer);
-
-                    selectAnswer(index);
-                }
-            );
-        });
 
     const next =
-        document.getElementById("nextBtn");
+        document.getElementById(
+            "nextBtn"
+        );
+
 
     if (next) {
+
         next.addEventListener(
             "click",
             submitSelectedAnswer
@@ -1384,89 +2614,128 @@ function bindTestButtons() {
 
 
 /* ============================================================
-   SELECT
-   ============================================================ */
+   SELECT ANSWER
+============================================================ */
 
 function selectAnswer(index) {
+
     if (
         state.busy ||
-        state.submittingAnswer ||
+        state.answerSubmitting ||
         !state.session
     ) {
+
         return;
     }
+
 
     if (
         !Number.isInteger(index) ||
         index < 0 ||
         index > 3
     ) {
+
         return;
     }
 
-    state.session.selected = index;
+
+    state.session.selected =
+        index;
+
 
     document
-        .querySelectorAll("[data-answer]")
-        .forEach((button) => {
-            const active =
-                Number(button.dataset.answer) === index;
+        .querySelectorAll(
+            "[data-answer]"
+        )
+        .forEach(
+            (button) => {
 
-            button.classList.toggle(
-                "selected",
-                active
-            );
+                const active =
+                    Number(
+                        button.dataset.answer
+                    ) === index;
 
-            button.classList.remove("locked");
-        });
+
+                button.classList.toggle(
+                    "selected",
+                    active
+                );
+
+
+                button.classList.remove(
+                    "locked"
+                );
+            }
+        );
+
 
     const next =
-        document.getElementById("nextBtn");
+        document.getElementById(
+            "nextBtn"
+        );
+
 
     if (next) {
-        next.disabled = false;
+
+        next.disabled =
+            false;
     }
 }
 
 
 /* ============================================================
    SUBMIT ANSWER
-   ============================================================ */
+============================================================ */
 
 async function submitSelectedAnswer() {
+
     if (
         state.busy ||
-        state.submittingAnswer ||
-        state.finishing ||
+        state.answerSubmitting ||
         !state.session
     ) {
+
         return;
     }
 
+
     const selected =
         state.session.selected;
+
 
     if (
         selected === null ||
         selected === undefined
     ) {
+
         return;
     }
 
+
     const index =
-        Number(state.session.index);
+        Number(
+            state.session.index
+        );
+
 
     if (
         !Number.isInteger(index) ||
         index < 0 ||
         index >= QUESTIONS_COUNT
     ) {
+
+        console.error(
+            "Invalid answer index:",
+            index
+        );
+
         return;
     }
 
-    state.submittingAnswer = true;
 
-    setBusy(true);
+    state.answerSubmitting =
+        true;
+
 
     const answerButtons =
         Array.from(
@@ -1475,229 +2744,426 @@ async function submitSelectedAnswer() {
             )
         );
 
-    const next =
-        document.getElementById("nextBtn");
 
-    answerButtons.forEach((button) => {
-        button.disabled = true;
-        button.classList.add("locked");
-    });
+    const next =
+        document.getElementById(
+            "nextBtn"
+        );
+
+
+    /*
+     * Lock immediately.
+     *
+     * This is critical because two taps
+     * must never create two answer requests.
+     */
+
+    answerButtons.forEach(
+        (button) => {
+
+            button.disabled =
+                true;
+
+            button.classList.add(
+                "locked"
+            );
+        }
+    );
+
 
     if (next) {
-        next.disabled = true;
+
+        next.disabled =
+            true;
     }
 
+
     try {
-        /*
-         * THIS MUST FINISH FIRST.
-         */
+
         const data =
             await api(
                 "/api/session/answer",
                 {
                     method: "POST",
 
-                    body: JSON.stringify({
-                        index,
-                        selected
-                    })
+                    body:
+                        JSON.stringify({
+                            index,
+                            selected
+                        })
                 }
             );
 
+
         /*
-         * Server is authoritative.
+         * SERVER ACCEPTED THE ANSWER.
+         *
+         * Only now do we modify the local
+         * session state.
          */
+
+        if (
+            !data ||
+            typeof data !== "object"
+        ) {
+
+            throw new Error(
+                "INVALID_ANSWER_RESPONSE"
+            );
+        }
+
+
         const serverIndex =
-            Number(
-                data?.index ??
-                index + 1
+            clampQuestionIndex(
+                data.index ??
+                (index + 1)
             );
 
-        const safeServerIndex =
-            Math.max(
-                index + 1,
-                Math.min(
-                    QUESTIONS_COUNT,
-                    Number.isFinite(serverIndex)
-                        ? serverIndex
-                        : index + 1
-                )
-            );
 
         if (
             !Array.isArray(
                 state.session.answers
             )
         ) {
+
             state.session.answers = [];
         }
+
 
         state.session.answers[index] =
             selected;
 
-        state.session.index =
-            safeServerIndex;
-
-        state.session.selected = null;
 
         /*
-         * Only NOW can finish be called.
+         * Backend should return index + 1.
+         * Use server value as authority.
          */
+
+        state.session.index =
+            serverIndex;
+
+
+        state.session.selected =
+            null;
+
+
+        const answerCount =
+            state.session.answers
+                .filter(
+                    (value) =>
+                        Number.isInteger(
+                            value
+                        )
+                )
+                .length;
+
+
+        /*
+         * FINAL QUESTION
+         *
+         * /answer succeeded first.
+         * Only now is /finish allowed.
+         */
+
         if (
-            safeServerIndex >=
+            index ===
+            QUESTIONS_COUNT - 1 &&
+            answerCount ===
+            QUESTIONS_COUNT &&
+            serverIndex >=
             QUESTIONS_COUNT
         ) {
-            state.submittingAnswer = false;
-            setBusy(false);
 
             await finishTest();
 
             return;
         }
 
+
         /*
-         * Render next question only after
-         * server accepted current answer.
+         * Safety:
+         *
+         * If backend says 16 but local
+         * answer count is not 16, NEVER finish.
          */
+
+        if (
+            serverIndex >=
+            QUESTIONS_COUNT &&
+            answerCount <
+            QUESTIONS_COUNT
+        ) {
+
+            console.error(
+                "Server returned completed index without 16 answers:",
+                {
+                    serverIndex,
+                    answerCount
+                }
+            );
+
+
+            await recoverSession();
+
+            return;
+        }
+
+
         renderTest();
+
     } catch (error) {
+
         console.error(
             "submitSelectedAnswer:",
             error
         );
 
+
         /*
-         * Keep current question.
+         * Server rejected the answer.
+         *
+         * Restore the exact question state.
          */
-        state.session.index = index;
-        state.session.selected = selected;
 
-        answerButtons.forEach((button) => {
-            button.disabled = false;
-            button.classList.remove("locked");
-        });
+        state.session.index =
+            index;
 
-        if (next) {
-            next.disabled = false;
-        }
+        state.session.selected =
+            selected;
 
-        if (error.detail === "OUT_OF_ORDER") {
-            showToast(tr("loading"));
 
-            state.submittingAnswer = false;
-            setBusy(false);
+        if (
+            error.detail ===
+            "OUT_OF_ORDER"
+        ) {
 
             await recoverSession();
 
             return;
         }
 
+
         if (
-            error.detail === "SESSION_COMPLETE"
+            error.detail ===
+            "SESSION_COMPLETE"
         ) {
-            state.submittingAnswer = false;
-            setBusy(false);
 
             await recoverSession();
 
             return;
         }
 
-        if (
-            error.detail === "SESSION_EXPIRED"
-        ) {
-            showToast(tr("session"));
 
-            state.submittingAnswer = false;
-            setBusy(false);
+        if (
+            error.detail ===
+            "SESSION_EXPIRED"
+        ) {
+
+            showToast(
+                tr("session")
+            );
 
             return;
         }
 
+
         if (
-            error.message === "NETWORK_ERROR"
+            error.message ===
+            "NETWORK_ERROR"
         ) {
-            showToast(tr("network"));
-        } else {
-            showToast(tr("error"));
+
+            showToast(
+                tr("network")
+            );
+
+            return;
         }
+
+
+        showToast(
+            tr("error")
+        );
+
     } finally {
-        state.submittingAnswer = false;
-        setBusy(false);
+
+        state.answerSubmitting =
+            false;
     }
 }
 
 
 /* ============================================================
-   RECOVER SESSION
-   ============================================================ */
+   SESSION RECOVERY
+============================================================ */
 
 async function recoverSession() {
-    if (state.recovering) {
+
+    if (
+        state.recovering
+    ) {
+
         return;
     }
 
-    state.recovering = true;
+
+    state.recovering =
+        true;
+
+
+    stopTimer();
+
 
     try {
+
         const data =
             await api(
                 "/api/session/start",
                 {
                     method: "POST",
 
-                    body: JSON.stringify({
-                        language: state.lang
-                    })
+                    body:
+                        JSON.stringify({
+                            language:
+                                state.lang
+                        })
                 }
             );
 
-        state.session =
-            normalizeSession(data);
 
         if (
-            state.session.index >=
+            !data ||
+            typeof data !== "object"
+        ) {
+
+            throw new Error(
+                "INVALID_SESSION"
+            );
+        }
+
+
+        const recovered =
+            buildSession(
+                data
+            );
+
+
+        const answerCount =
+            recovered.answers.length;
+
+
+        /*
+         * If all 16 answers are really
+         * present, finish is safe.
+         */
+
+        if (
+            answerCount ===
             QUESTIONS_COUNT
         ) {
+
+            recovered.index =
+                QUESTIONS_COUNT;
+
+            state.session =
+                recovered;
+
             await finishTest();
+
             return;
         }
 
+
+        /*
+         * Never finish an incomplete session.
+         */
+
+        if (
+            recovered.index >=
+            QUESTIONS_COUNT &&
+            answerCount <
+            QUESTIONS_COUNT
+        ) {
+
+            console.error(
+                "Cannot recover inconsistent session:",
+                {
+                    index:
+                        recovered.index,
+
+                    answers:
+                        answerCount
+                }
+            );
+
+
+            showToast(
+                tr("error")
+            );
+
+            return;
+        }
+
+
+        state.session =
+            recovered;
+
+
         renderTest();
+
     } catch (error) {
+
         console.error(
             "recoverSession:",
             error
         );
 
+
         if (
             error.status === 402 ||
             error.detail === "PAID_RETEST"
         ) {
-            showToast(tr("paid"));
+
+            showToast(
+                tr("paid")
+            );
+
         } else if (
-            error.message === "NETWORK_ERROR"
+            error.message ===
+            "NETWORK_ERROR"
         ) {
-            showToast(tr("network"));
+
+            showToast(
+                tr("network")
+            );
+
         } else {
-            showToast(tr("error"));
+
+            showToast(
+                tr("error")
+            );
         }
+
     } finally {
-        state.recovering = false;
+
+        state.recovering =
+            false;
     }
 }
 
 
 /* ============================================================
    TIMER
-   ============================================================ */
+============================================================ */
 
 function startTimer() {
+
     stopTimer();
+
 
     if (!state.session) {
         return;
     }
+
 
     state.timerBaseElapsed =
         Math.max(
@@ -1707,16 +3173,23 @@ function startTimer() {
             )
         );
 
+
     state.timerClientStarted =
         Date.now();
 
+
     const update = () => {
+
         const timer =
-            document.getElementById("timer");
+            document.getElementById(
+                "timer"
+            );
+
 
         if (!timer) {
             return;
         }
+
 
         const liveElapsed =
             state.timerBaseElapsed +
@@ -1727,11 +3200,16 @@ function startTimer() {
                 ) / 1000
             );
 
+
         timer.textContent =
-            formatTime(liveElapsed);
+            formatTime(
+                liveElapsed
+            );
     };
 
+
     update();
+
 
     state.timer =
         window.setInterval(
@@ -1742,30 +3220,97 @@ function startTimer() {
 
 
 function stopTimer() {
-    if (state.timer !== null) {
+
+    if (
+        state.timer !== null
+    ) {
+
         window.clearInterval(
             state.timer
         );
 
-        state.timer = null;
+        state.timer =
+            null;
     }
 }
 
 
 /* ============================================================
    FINISH
-   ============================================================ */
+============================================================ */
 
 async function finishTest() {
-    if (state.finishing) {
-        return;
-    }
-
-    state.finishing = true;
 
     stopTimer();
 
+
+    /*
+     * Never finish without a session.
+     */
+
+    if (!state.session) {
+
+        return;
+    }
+
+
+    /*
+     * CRITICAL SAFETY CHECK.
+     *
+     * Frontend is not allowed to call /finish
+     * unless 16 answers actually exist.
+     */
+
+    const answerCount =
+        Array.isArray(
+            state.session.answers
+        )
+            ? state.session.answers
+                .filter(
+                    (value) =>
+                        Number.isInteger(
+                            value
+                        )
+                )
+                .length
+            : 0;
+
+
+    if (
+        answerCount !==
+        QUESTIONS_COUNT
+    ) {
+
+        console.error(
+            "finishTest blocked:",
+            {
+                answerCount,
+                index:
+                    state.session.index
+            }
+        );
+
+
+        await recoverSession();
+
+        return;
+    }
+
+
+    if (
+        state.busyFinish
+    ) {
+
+        return;
+    }
+
+
+    state.busyFinish =
+        true;
+
+
     try {
+
         const result =
             await api(
                 "/api/session/finish",
@@ -1776,109 +3321,181 @@ async function finishTest() {
                 }
             );
 
+
         if (
             !result ||
             typeof result !== "object"
         ) {
-            throw new Error("INVALID_RESULT");
+
+            throw new Error(
+                "INVALID_RESULT"
+            );
         }
 
-        state.result = {
-            iq: Number(result.iq),
 
-            raw: Number(
+        const iq =
+            Number(
+                result.iq
+            );
+
+
+        const raw =
+            Number(
                 result.raw || 0
-            ),
+            );
 
-            correct: Number(
+
+        const correct =
+            Number(
                 result.correct || 0
-            ),
+            );
 
-            elapsed: Number(
+
+        const elapsed =
+            Number(
                 result.elapsed || 0
-            ),
+            );
+
+
+        if (
+            !Number.isFinite(iq) ||
+            !Number.isFinite(correct) ||
+            !Number.isFinite(elapsed)
+        ) {
+
+            throw new Error(
+                "INVALID_RESULT"
+            );
+        }
+
+
+        state.result = {
+
+            iq,
+
+            raw,
+
+            correct,
+
+            elapsed,
 
             rank:
                 result.rank === null ||
                 result.rank === undefined
                     ? null
-                    : Number(result.rank)
+                    : Number(
+                        result.rank
+                    )
         };
 
-        state.session = null;
+
+        /*
+         * Completed session is safely stored
+         * on backend.
+         */
+
+        state.session =
+            null;
+
 
         renderResult();
+
     } catch (error) {
+
         console.error(
             "finishTest:",
             error
         );
 
-        if (
-            error.detail === "INCOMPLETE"
-        ) {
-            /*
-             * Server says not all 16 answers exist.
-             * Never show a fake result.
-             */
-            showToast(tr("loading"));
 
-            state.finishing = false;
+        if (
+            error.detail ===
+            "INCOMPLETE"
+        ) {
+
+            /*
+             * Do not hide the problem.
+             * Re-sync with backend.
+             */
 
             await recoverSession();
 
-            return;
-        }
-
-        if (
-            error.detail === "SESSION_EXPIRED"
+        } else if (
+            error.detail ===
+            "SESSION_COMPLETE"
         ) {
-            showToast(tr("session"));
 
-            state.session = null;
+            await recoverSession();
+
+        } else if (
+            error.detail ===
+            "SESSION_EXPIRED"
+        ) {
+
+            showToast(
+                tr("session")
+            );
+
+            state.session =
+                null;
 
             renderHome();
 
-            return;
-        }
-
-        if (
-            error.message === "NETWORK_ERROR"
+        } else if (
+            error.message ===
+            "NETWORK_ERROR"
         ) {
-            showToast(tr("network"));
-            return;
+
+            showToast(
+                tr("network")
+            );
+
+        } else {
+
+            showToast(
+                tr("error")
+            );
         }
 
-        showToast(tr("error"));
     } finally {
-        state.finishing = false;
+
+        state.busyFinish =
+            false;
     }
 }
 
 
 /* ============================================================
    RESULT
-   ============================================================ */
+============================================================ */
 
 function renderResult() {
+
     stopTimer();
 
+
     if (!state.result) {
+
         renderHome();
+
         return;
     }
 
+
     const result =
         state.result;
+
 
     const screen =
         document.getElementById(
             "resultScreen"
         );
 
+
     if (!screen) {
         return;
     }
+
 
     const rank =
         result.rank !== null &&
@@ -1886,18 +3503,22 @@ function renderResult() {
             ? `#${result.rank}`
             : "—";
 
+
     screen.innerHTML = `
+
         <div class="result-header">
 
             <div class="success-icon">
                 ✓
             </div>
 
+
             <div class="eyebrow">
                 ${escapeHTML(
                     tr("finished")
                 )}
             </div>
+
 
             <h1>
                 ${escapeHTML(
@@ -1907,6 +3528,7 @@ function renderResult() {
 
         </div>
 
+
         <div class="score-card">
 
             <span>
@@ -1915,9 +3537,13 @@ function renderResult() {
                 )}
             </span>
 
+
             <strong>
-                ${escapeHTML(result.iq)}
+                ${escapeHTML(
+                    result.iq
+                )}
             </strong>
+
 
             <small>
                 ${escapeHTML(
@@ -1927,23 +3553,29 @@ function renderResult() {
 
         </div>
 
+
         <div class="result-stats">
 
             <div>
+
                 <strong>
                     ${escapeHTML(
-                        result.correct
-                    )}/${QUESTIONS_COUNT}
+                        `${result.correct}/${QUESTIONS_COUNT}`
+                    )}
                 </strong>
+
 
                 <span>
                     ${escapeHTML(
                         tr("correct")
                     )}
                 </span>
+
             </div>
 
+
             <div>
+
                 <strong>
                     ${escapeHTML(
                         formatTime(
@@ -1952,33 +3584,46 @@ function renderResult() {
                     )}
                 </strong>
 
+
                 <span>
                     ${escapeHTML(
                         tr("time")
                     )}
                 </span>
+
             </div>
 
+
             <div>
+
                 <strong>
-                    ${escapeHTML(rank)}
+                    ${escapeHTML(
+                        rank
+                    )}
                 </strong>
+
 
                 <span>
                     ${escapeHTML(
                         tr("rank")
                     )}
                 </span>
+
             </div>
 
         </div>
+
 
         <button
             id="certificateBtn"
             class="primary-btn"
             type="button"
         >
-            🎓
+
+            <span>
+                🎓
+            </span>
+
 
             <span>
                 ${escapeHTML(
@@ -1986,79 +3631,114 @@ function renderResult() {
                 )}
             </span>
 
+
             <span class="arrow">
                 →
             </span>
+
         </button>
+
 
         <button
             id="shareBtn"
             class="secondary-btn"
             type="button"
         >
-            ↗
+
+            <span>
+                ↗
+            </span>
+
 
             <span>
                 ${escapeHTML(
                     tr("share")
                 )}
             </span>
+
         </button>
+
 
         <button
             id="retestBtn"
             class="secondary-btn"
             type="button"
         >
-            🔄
+
+            <span>
+                🔄
+            </span>
+
 
             <span>
                 ${escapeHTML(
                     tr("retest")
                 )}
             </span>
+
         </button>
+
 
         <button
             id="zakoBtn"
             class="secondary-btn"
             type="button"
         >
-            🚀
+
+            <span>
+                🚀
+            </span>
+
 
             <span>
                 ${escapeHTML(
                     tr("improve")
                 )}
             </span>
+
         </button>
     `;
 
-    activateScreen("resultScreen");
+
+    activateScreen(
+        "resultScreen"
+    );
+
 
     document
-        .getElementById("certificateBtn")
+        .getElementById(
+            "certificateBtn"
+        )
         ?.addEventListener(
             "click",
             showCertificate
         );
 
+
     document
-        .getElementById("shareBtn")
+        .getElementById(
+            "shareBtn"
+        )
         ?.addEventListener(
             "click",
             shareResult
         );
 
+
     document
-        .getElementById("retestBtn")
+        .getElementById(
+            "retestBtn"
+        )
         ?.addEventListener(
             "click",
             startRetest
         );
 
+
     document
-        .getElementById("zakoBtn")
+        .getElementById(
+            "zakoBtn"
+        )
         ?.addEventListener(
             "click",
             openZako
@@ -2068,49 +3748,116 @@ function renderResult() {
 
 /* ============================================================
    RETEST
-   ============================================================ */
+============================================================ */
 
 async function startRetest() {
+
     if (
         state.busy ||
-        state.finishing ||
-        state.submittingAnswer
+        state.answerSubmitting ||
+        state.busyFinish
     ) {
+
         return;
     }
 
+
     setBusy(true);
 
-    try {
-        await api(
-            "/api/session/start",
-            {
-                method: "POST",
 
-                body: JSON.stringify({
-                    language: state.lang
-                })
-            }
-        );
+    try {
+
+        const data =
+            await api(
+                "/api/session/start",
+                {
+                    method: "POST",
+
+                    body:
+                        JSON.stringify({
+                            language:
+                                state.lang
+                        })
+                }
+            );
+
 
         /*
-         * Current backend intentionally returns 402
-         * until payment is implemented.
+         * If backend eventually supports payment,
+         * a new session will be returned here.
          */
+
+        if (
+            data &&
+            typeof data === "object"
+        ) {
+
+            state.session =
+                buildSession(
+                    data
+                );
+
+
+            const answerCount =
+                state.session.answers.length;
+
+
+            if (
+                answerCount ===
+                QUESTIONS_COUNT
+            ) {
+
+                await finishTest();
+
+                return;
+            }
+
+
+            renderTest();
+
+            return;
+        }
+
+
+        throw new Error(
+            "INVALID_SESSION"
+        );
+
     } catch (error) {
+
+        console.error(
+            "startRetest:",
+            error
+        );
+
+
         if (
             error.status === 402 ||
             error.detail === "PAID_RETEST"
         ) {
-            showToast(tr("paid"));
+
+            showToast(
+                tr("paid")
+            );
+
         } else if (
-            error.message === "NETWORK_ERROR"
+            error.message ===
+            "NETWORK_ERROR"
         ) {
-            showToast(tr("network"));
+
+            showToast(
+                tr("network")
+            );
+
         } else {
-            showToast(tr("error"));
+
+            showToast(
+                tr("error")
+            );
         }
+
     } finally {
+
         setBusy(false);
     }
 }
@@ -2118,16 +3865,23 @@ async function startRetest() {
 
 /* ============================================================
    CERTIFICATE
-   ============================================================ */
+============================================================ */
 
 async function showCertificate() {
-    if (state.busy) {
+
+    if (
+        state.busy
+    ) {
+
         return;
     }
 
+
     setBusy(true);
 
+
     try {
+
         const response =
             await fetch(
                 "/api/certificate",
@@ -2139,56 +3893,86 @@ async function showCertificate() {
                             telegramInitData()
                     },
 
-                    cache: "no-store"
+                    cache:
+                        "no-store"
                 }
             );
 
+
         if (!response.ok) {
-            let detail = "";
+
+            let detail =
+                "";
+
 
             try {
+
                 const data =
                     await response.json();
 
                 detail =
                     data?.detail || "";
+
             } catch {
-                detail = "";
+
+                detail =
+                    "";
             }
+
 
             if (
                 response.status === 403 ||
-                detail === "REFERRALS_REQUIRED"
+                detail ===
+                    "REFERRALS_REQUIRED"
             ) {
+
                 showInviteRequirement();
+
                 return;
             }
+
 
             if (
                 response.status === 404 ||
-                detail === "NO_RESULT"
+                detail ===
+                    "NO_RESULT"
             ) {
+
                 showToast(
-                    tr("certificateNoResult")
+                    tr(
+                        "certificateNoResult"
+                    )
                 );
+
                 return;
             }
 
+
             showToast(
-                tr("certificateError")
+                tr(
+                    "certificateError"
+                )
             );
 
             return;
         }
 
+
         const blob =
             await response.blob();
 
+
         const url =
-            URL.createObjectURL(blob);
+            URL.createObjectURL(
+                blob
+            );
+
 
         const overlay =
-            document.createElement("div");
+            document.createElement(
+                "div"
+            );
+
 
         overlay.style.cssText = `
             position:fixed;
@@ -2208,11 +3992,20 @@ async function showCertificate() {
             -webkit-backdrop-filter:blur(14px);
         `;
 
-        const image =
-            document.createElement("img");
 
-        image.src = url;
-        image.alt = "ZAKO IQ Certificate";
+        const image =
+            document.createElement(
+                "img"
+            );
+
+
+        image.src =
+            url;
+
+
+        image.alt =
+            "ZAKO IQ Certificate";
+
 
         image.style.cssText = `
             display:block;
@@ -2224,36 +4017,72 @@ async function showCertificate() {
                 0 25px 80px rgba(0,0,0,.55);
         `;
 
-        const close =
-            document.createElement("button");
 
-        close.className = "primary-btn";
-        close.type = "button";
-        close.style.maxWidth = "620px";
-        close.textContent = tr("back");
+        const close =
+            document.createElement(
+                "button"
+            );
+
+
+        close.className =
+            "primary-btn";
+
+
+        close.type =
+            "button";
+
+
+        close.style.maxWidth =
+            "620px";
+
+
+        close.textContent =
+            tr("back");
+
 
         close.addEventListener(
             "click",
             () => {
-                URL.revokeObjectURL(url);
+
+                URL.revokeObjectURL(
+                    url
+                );
+
                 overlay.remove();
             }
         );
 
-        overlay.appendChild(image);
-        overlay.appendChild(close);
 
-        document.body.appendChild(overlay);
+        overlay.appendChild(
+            image
+        );
+
+
+        overlay.appendChild(
+            close
+        );
+
+
+        document.body.appendChild(
+            overlay
+        );
+
     } catch (error) {
+
         console.error(
             "certificate:",
             error
         );
 
+
         showToast(
-            tr("certificateError")
+            tr(
+                "certificateError"
+            )
         );
+
     } finally {
+
         setBusy(false);
     }
 }
@@ -2261,11 +4090,15 @@ async function showCertificate() {
 
 /* ============================================================
    CERTIFICATE REQUIREMENT
-   ============================================================ */
+============================================================ */
 
 function showInviteRequirement() {
+
     const overlay =
-        document.createElement("div");
+        document.createElement(
+            "div"
+        );
+
 
     overlay.style.cssText = `
         position:fixed;
@@ -2283,8 +4116,12 @@ function showInviteRequirement() {
         -webkit-backdrop-filter:blur(12px);
     `;
 
+
     const card =
-        document.createElement("div");
+        document.createElement(
+            "div"
+        );
+
 
     card.style.cssText = `
         width:min(100%, 480px);
@@ -2296,7 +4133,9 @@ function showInviteRequirement() {
         box-shadow:0 25px 80px rgba(0,0,0,.45);
     `;
 
+
     card.innerHTML = `
+
         <div style="
             width:60px;
             height:60px;
@@ -2311,6 +4150,7 @@ function showInviteRequirement() {
             🎓
         </div>
 
+
         <h2 style="
             margin:0 0 10px;
             font-size:23px;
@@ -2321,6 +4161,7 @@ function showInviteRequirement() {
             )}
         </h2>
 
+
         <p style="
             margin:0 0 20px;
             color:#aeb5c5;
@@ -2328,15 +4169,19 @@ function showInviteRequirement() {
             font-size:14px;
         ">
             ${escapeHTML(
-                tr("certificateRequired")
+                tr(
+                    "certificateRequired"
+                )
             )}
         </p>
+
 
         <button
             id="inviteModalBtn"
             class="primary-btn"
             type="button"
         >
+
             👥
 
             <span>
@@ -2348,7 +4193,9 @@ function showInviteRequirement() {
             <span class="arrow">
                 →
             </span>
+
         </button>
+
 
         <button
             id="closeInviteBtn"
@@ -2361,25 +4208,40 @@ function showInviteRequirement() {
         </button>
     `;
 
-    overlay.appendChild(card);
 
-    document.body.appendChild(overlay);
+    overlay.appendChild(
+        card
+    );
+
+
+    document.body.appendChild(
+        overlay
+    );
+
 
     document
-        .getElementById("inviteModalBtn")
+        .getElementById(
+            "inviteModalBtn"
+        )
         ?.addEventListener(
             "click",
             () => {
+
                 overlay.remove();
+
                 shareInvite();
             }
         );
 
+
     document
-        .getElementById("closeInviteBtn")
+        .getElementById(
+            "closeInviteBtn"
+        )
         ?.addEventListener(
             "click",
             () => {
+
                 overlay.remove();
             }
         );
@@ -2388,9 +4250,10 @@ function showInviteRequirement() {
 
 /* ============================================================
    SHARE
-   ============================================================ */
+============================================================ */
 
 function webAppPublicURL() {
+
     return (
         window.location.origin +
         "/app"
@@ -2398,20 +4261,31 @@ function webAppPublicURL() {
 }
 
 
-function openTelegramShare(url, text) {
+function openTelegramShare(
+    url,
+    text
+) {
+
     const shareURL =
         "https://t.me/share/url" +
         "?url=" +
-        encodeURIComponent(url) +
+        encodeURIComponent(
+            url
+        ) +
         "&text=" +
-        encodeURIComponent(text);
+        encodeURIComponent(
+            text
+        );
+
 
     try {
+
         if (
             tg &&
             typeof tg.openTelegramLink ===
                 "function"
         ) {
+
             tg.openTelegramLink(
                 shareURL
             );
@@ -2419,14 +4293,18 @@ function openTelegramShare(url, text) {
             return true;
         }
 
+
         window.open(
             shareURL,
             "_blank",
             "noopener,noreferrer"
         );
 
+
         return true;
+
     } catch (error) {
+
         console.error(
             "Telegram share:",
             error
@@ -2438,9 +4316,11 @@ function openTelegramShare(url, text) {
 
 
 async function shareResult() {
+
     if (!state.result) {
         return;
     }
+
 
     const text =
         `🧠 IQ TEST\n\n` +
@@ -2450,46 +4330,60 @@ async function shareResult() {
         )}\n\n` +
         `${tr("shareText")}`;
 
+
     const opened =
         openTelegramShare(
             webAppPublicURL(),
             text
         );
 
+
     if (!opened) {
-        await copyText(text);
+
+        await copyText(
+            text
+        );
     }
 }
 
 
 /* ============================================================
    INVITE
-   ============================================================ */
+============================================================ */
 
 function getBotUsername() {
+
     return (
         state.config.bot_username ||
         ""
     )
-        .replace(/^@/, "")
+        .replace(
+            /^@/,
+            ""
+        )
         .trim();
 }
 
 
 function shareInvite() {
+
     const user =
         telegramUser();
+
 
     const userId =
         user?.id;
 
+
     const botUsername =
         getBotUsername();
+
 
     if (
         !botUsername ||
         !userId
     ) {
+
         showToast(
             tr("cannotOpen")
         );
@@ -2497,9 +4391,11 @@ function shareInvite() {
         return;
     }
 
+
     const inviteURL =
         `https://t.me/${botUsername}` +
         `?start=ref_${userId}`;
+
 
     openTelegramShare(
         inviteURL,
@@ -2510,15 +4406,18 @@ function shareInvite() {
 
 /* ============================================================
    COPY
-   ============================================================ */
+============================================================ */
 
 async function copyText(text) {
+
     try {
+
         if (
             navigator.clipboard &&
             typeof navigator.clipboard.writeText ===
                 "function"
         ) {
+
             await navigator.clipboard.writeText(
                 text
             );
@@ -2529,12 +4428,15 @@ async function copyText(text) {
 
             return true;
         }
+
     } catch (error) {
+
         console.warn(
             "Clipboard:",
             error
         );
     }
+
 
     showToast(
         tr("cannotOpen")
@@ -2546,33 +4448,44 @@ async function copyText(text) {
 
 /* ============================================================
    ZAKO
-   ============================================================ */
+============================================================ */
 
 function openZako() {
+
     const url =
         state.config.zako_url ||
         "https://t.me/zako_tbot";
 
+
     try {
+
         if (
             tg &&
             typeof tg.openTelegramLink ===
                 "function"
         ) {
-            tg.openTelegramLink(url);
+
+            tg.openTelegramLink(
+                url
+            );
+
             return;
         }
+
 
         window.open(
             url,
             "_blank",
             "noopener,noreferrer"
         );
+
     } catch (error) {
+
         console.error(
             "openZako:",
             error
         );
+
 
         showToast(
             tr("cannotOpen")
@@ -2583,42 +4496,50 @@ function openZako() {
 
 /* ============================================================
    RANKING
-   ============================================================ */
+============================================================ */
 
 async function loadRanking() {
+
     if (
         state.busy ||
-        state.finishing ||
-        state.submittingAnswer
+        state.answerSubmitting
     ) {
+
         return;
     }
+
 
     activateScreen(
         "rankingScreen"
     );
+
 
     const screen =
         document.getElementById(
             "rankingScreen"
         );
 
+
     if (!screen) {
         return;
     }
 
+
     screen.innerHTML = `
+
         <div class="page-title">
 
             <div class="page-icon">
                 🏆
             </div>
 
+
             <h1>
                 ${escapeHTML(
                     tr("ranking")
                 )}
             </h1>
+
 
             <p>
                 ${escapeHTML(
@@ -2628,48 +4549,62 @@ async function loadRanking() {
 
         </div>
 
+
         <div
             id="rankingList"
             class="ranking-list"
         >
+
             <div class="empty-state">
                 ${escapeHTML(
                     tr("loading")
                 )}
             </div>
+
         </div>
     `;
 
+
     try {
+
         const data =
             await api(
                 "/api/ranking"
             );
+
 
         const list =
             document.getElementById(
                 "rankingList"
             );
 
+
         if (!list) {
             return;
         }
 
+
         if (
             !data ||
-            !Array.isArray(data.items) ||
+            !Array.isArray(
+                data.items
+            ) ||
             data.items.length === 0
         ) {
+
             list.innerHTML = `
+
                 <div class="empty-state">
                     ${escapeHTML(
                         tr("noRanking")
                     )}
                 </div>
+
             `;
 
             return;
         }
+
 
         list.innerHTML =
             data.items
@@ -2678,29 +4613,41 @@ async function loadRanking() {
                         item,
                         index
                     ) => {
+
                         const name =
                             item.first_name ||
                             item.username ||
                             tr("user");
 
+
                         const score =
                             item.best_score ??
                             "—";
 
-                        return `
-                            <div class="ranking-row">
 
-                                <div class="ranking-position">
+                        return `
+
+                            <div
+                                class="ranking-row"
+                            >
+
+                                <div
+                                    class="ranking-position"
+                                >
                                     ${index + 1}
                                 </div>
 
-                                <div class="ranking-user">
+
+                                <div
+                                    class="ranking-user"
+                                >
 
                                     <strong>
                                         ${escapeHTML(
                                             name
                                         )}
                                     </strong>
+
 
                                     ${
                                         item.username
@@ -2716,7 +4663,10 @@ async function loadRanking() {
 
                                 </div>
 
-                                <div class="ranking-score">
+
+                                <div
+                                    class="ranking-score"
+                                >
                                     IQ ${escapeHTML(
                                         score
                                     )}
@@ -2727,19 +4677,25 @@ async function loadRanking() {
                     }
                 )
                 .join("");
+
     } catch (error) {
+
         console.error(
             "ranking:",
             error
         );
+
 
         const list =
             document.getElementById(
                 "rankingList"
             );
 
+
         if (list) {
+
             list.innerHTML = `
+
                 <div class="empty-state">
                     ${escapeHTML(
                         error.message ===
@@ -2748,6 +4704,7 @@ async function loadRanking() {
                             : tr("error")
                     )}
                 </div>
+
             `;
         }
     }
@@ -2756,42 +4713,53 @@ async function loadRanking() {
 
 /* ============================================================
    PROFILE
-   ============================================================ */
+============================================================ */
 
 async function loadProfile() {
+
     if (
         state.busy ||
-        state.finishing ||
-        state.submittingAnswer
+        state.answerSubmitting
     ) {
+
         return;
     }
+
 
     activateScreen(
         "profileScreen"
     );
+
 
     const screen =
         document.getElementById(
             "profileScreen"
         );
 
+
     if (!screen) {
         return;
     }
 
+
     screen.innerHTML = `
+
         <div class="page-title">
 
-            <div class="profile-avatar">
+            <div
+                class="profile-avatar"
+                id="profileAvatar"
+            >
                 …
             </div>
 
-            <h1>
+
+            <h1 id="profileName">
                 ${escapeHTML(
-                    tr("profile")
+                    tr("loading")
                 )}
             </h1>
+
 
             <p>
                 ${escapeHTML(
@@ -2801,63 +4769,82 @@ async function loadProfile() {
 
         </div>
 
+
         <div
             class="profile-score"
-            id="profileScore"
         >
+
             <span>
                 ${escapeHTML(
                     tr("bestIq")
                 )}
             </span>
 
-            <strong>
+
+            <strong id="bestIq">
                 —
             </strong>
+
         </div>
 
-        <div
-            class="profile-grid"
-            id="profileGrid"
-        >
+
+        <div class="profile-grid">
+
 
             <div class="stat-card">
-                <strong>—</strong>
+
+                <strong id="profileRank">
+                    —
+                </strong>
 
                 <span>
                     ${escapeHTML(
                         tr("rank")
                     )}
                 </span>
+
             </div>
 
+
             <div class="stat-card">
-                <strong>—</strong>
+
+                <strong id="profileAttempts">
+                    0
+                </strong>
 
                 <span>
                     ${escapeHTML(
                         tr("tests")
                     )}
                 </span>
+
             </div>
 
+
             <div class="stat-card">
-                <strong>—</strong>
+
+                <strong id="profileReferrals">
+                    0
+                </strong>
 
                 <span>
                     ${escapeHTML(
                         tr("referrals")
                     )}
                 </span>
+
             </div>
 
+
         </div>
+
 
         <button
             id="inviteBtn"
             class="primary-btn"
             type="button"
         >
+
             👥
 
             <span>
@@ -2869,89 +4856,145 @@ async function loadProfile() {
             <span class="arrow">
                 →
             </span>
+
         </button>
     `;
 
+
     document
-        .getElementById("inviteBtn")
+        .getElementById(
+            "inviteBtn"
+        )
         ?.addEventListener(
             "click",
             shareInvite
         );
 
+
     try {
+
         const profile =
             await api(
                 "/api/profile"
             );
 
+
+        if (
+            !profile ||
+            typeof profile !== "object"
+        ) {
+
+            throw new Error(
+                "INVALID_PROFILE"
+            );
+        }
+
+
         state.profile =
             profile;
+
 
         const name =
             profile.first_name ||
             profile.username ||
             tr("user");
 
+
         const avatar =
-            document.querySelector(
-                "#profileScreen .profile-avatar"
+            document.getElementById(
+                "profileAvatar"
             );
 
+
         if (avatar) {
+
             avatar.textContent =
-                String(name)
+                String(
+                    name
+                )
                     .trim()
                     .charAt(0)
                     .toUpperCase() ||
                 "?";
         }
 
+
         const title =
-            document.querySelector(
-                "#profileScreen .page-title h1"
+            document.getElementById(
+                "profileName"
             );
 
+
         if (title) {
+
             title.textContent =
                 name;
         }
 
+
         const score =
-            document.querySelector(
-                "#profileScore strong"
+            document.getElementById(
+                "bestIq"
             );
 
+
         if (score) {
+
             score.textContent =
                 profile.best_score ??
                 "—";
         }
 
-        const cards =
-            document.querySelectorAll(
-                "#profileGrid .stat-card strong"
+
+        const rank =
+            document.getElementById(
+                "profileRank"
             );
 
-        if (cards.length >= 3) {
-            cards[0].textContent =
+
+        if (rank) {
+
+            rank.textContent =
                 profile.rank
                     ? `#${profile.rank}`
                     : "—";
+        }
 
-            cards[1].textContent =
+
+        const attempts =
+            document.getElementById(
+                "profileAttempts"
+            );
+
+
+        if (attempts) {
+
+            attempts.textContent =
                 profile.attempts ??
                 0;
+        }
 
-            cards[2].textContent =
+
+        const referrals =
+            document.getElementById(
+                "profileReferrals"
+            );
+
+
+        if (referrals) {
+
+            referrals.textContent =
                 profile.referrals ??
                 0;
         }
+
     } catch (error) {
+
         console.error(
             "profile:",
             error
         );
+
 
         showToast(
             error.message ===
@@ -2965,41 +5008,68 @@ async function loadProfile() {
 
 /* ============================================================
    NAVIGATION
-   ============================================================ */
+============================================================ */
 
 function goHome() {
+
     stopTimer();
 
-    state.session = null;
 
-    state.submittingAnswer = false;
-    state.finishing = false;
+    state.session =
+        null;
+
+
+    state.answerSubmitting =
+        false;
+
 
     renderHome();
 }
 
 
 function handleBack() {
-    if (state.screen === "home") {
+
+    if (
+        state.screen ===
+        "home"
+    ) {
+
         return;
     }
 
-    if (state.screen === "test") {
-        /*
-         * Do not destroy backend session.
-         * Only leave the current screen.
-         * The active backend session can be recovered
-         * when the user starts the test again.
-         */
+
+    if (
+        state.screen ===
+        "test"
+    ) {
+
+        const leave =
+            window.confirm(
+                tr("leaveTest")
+            );
+
+
+        if (!leave) {
+            return;
+        }
+
 
         stopTimer();
 
-        state.session = null;
 
-        renderHome();
+        state.session =
+            null;
+
+
+        state.answerSubmitting =
+            false;
+
+
+        goHome();
 
         return;
     }
+
 
     goHome();
 }
@@ -3007,77 +5077,110 @@ function handleBack() {
 
 /* ============================================================
    GLOBAL EVENTS
-   ============================================================ */
+============================================================ */
 
 function bindGlobalEvents() {
+
     document
-        .getElementById("startBtn")
+        .getElementById(
+            "startBtn"
+        )
         ?.addEventListener(
             "click",
             startTest
         );
 
+
     document
-        .getElementById("rankingBtn")
+        .getElementById(
+            "rankingBtn"
+        )
         ?.addEventListener(
             "click",
             loadRanking
         );
 
+
     document
-        .getElementById("profileBtn")
+        .getElementById(
+            "profileBtn"
+        )
         ?.addEventListener(
             "click",
             loadProfile
         );
 
+
     document
-        .getElementById("langBtn")
+        .getElementById(
+            "langBtn"
+        )
         ?.addEventListener(
             "click",
             openLanguageModal
         );
 
+
     document
-        .getElementById("backBtn")
+        .getElementById(
+            "backBtn"
+        )
         ?.addEventListener(
             "click",
             handleBack
         );
 
+
     document
-        .querySelector(".modal-backdrop")
+        .querySelector(
+            ".modal-backdrop"
+        )
         ?.addEventListener(
             "click",
             closeLanguageModal
         );
 
+
     document
-        .querySelectorAll(".language-option")
-        .forEach((button) => {
-            button.addEventListener(
-                "click",
-                () => {
-                    setLanguage(
-                        button.dataset.lang
-                    );
-                }
-            );
-        });
+        .querySelectorAll(
+            ".language-option"
+        )
+        .forEach(
+            (button) => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        setLanguage(
+                            button.dataset.lang
+                        );
+                    }
+                );
+            }
+        );
 }
 
 
 /* ============================================================
    INIT
-   ============================================================ */
+============================================================ */
 
 async function init() {
+
+    /*
+     * Normalize language.
+     */
+
     if (
         !SUPPORTED_LANGUAGES.includes(
             state.lang
         )
     ) {
-        state.lang = "uz";
+
+        state.lang =
+            "uz";
+
 
         localStorage.setItem(
             "iq_lang",
@@ -3085,55 +5188,77 @@ async function init() {
         );
     }
 
+
+    /*
+     * Telegram must be initialized
+     * before authenticated API calls.
+     */
+
     setupTelegram();
 
     applyTheme();
 
+
+    /*
+     * Bind buttons BEFORE loading config.
+     *
+     * Therefore a slow /api/config request
+     * cannot make the home screen feel dead.
+     */
+
     bindGlobalEvents();
+
 
     renderHome();
 
     updateLanguageButton();
 
+
     /*
-     * IMPORTANT:
-     * We do NOT call /api/session/start here.
-     *
-     * Starting/resuming a session happens only
-     * when the user presses START TEST.
-     *
-     * This prevents accidental 402 / finish calls
-     * during Mini App initialization.
+     * Config is only needed for referral
+     * and ZAKO link.
      */
 
     await loadConfig();
+
+
+    /*
+     * Telegram theme changes.
+     */
 
     if (
         tg &&
         typeof tg.onEvent ===
             "function"
     ) {
+
         tg.onEvent(
             "themeChanged",
             applyTheme
         );
     }
 
-    state.initialized = true;
+
+    state.initialized =
+        true;
 }
 
 
 /* ============================================================
    START
-   ============================================================ */
+============================================================ */
 
-init().catch((error) => {
-    console.error(
-        "App initialization:",
-        error
-    );
+init().catch(
+    (error) => {
 
-    showToast(
-        tr("error")
-    );
-});
+        console.error(
+            "App initialization:",
+            error
+        );
+
+
+        showToast(
+            tr("error")
+        );
+    }
+);
