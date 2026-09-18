@@ -7,69 +7,46 @@
     let pollingTimer = null;
     let modal = null;
 
-    function tg() {
-        return window.Telegram && window.Telegram.WebApp
-            ? window.Telegram.WebApp
-            : null;
+    function getTelegram() {
+        return window.Telegram?.WebApp || null;
     }
 
-    function initData() {
-        const telegram = tg();
-        return telegram && telegram.initData
-            ? telegram.initData
-            : "";
+    function getInitData() {
+        const telegram = getTelegram();
+
+        return telegram?.initData || "";
     }
 
-    async function api(path, options) {
-        options = options || {};
+    async function api(path, options = {}) {
+        const headers = {
+            "Content-Type": "application/json",
+            "X-Telegram-Init-Data": getInitData(),
+            ...(options.headers || {})
+        };
 
-        const headers = Object.assign(
-            {
-                "Content-Type": "application/json",
-                "X-Telegram-Init-Data": initData()
-            },
-            options.headers || {}
-        );
-
-        const response = await fetch(path, Object.assign({}, options, {
-            headers: headers,
+        const response = await fetch(path, {
+            ...options,
+            headers,
             cache: "no-store"
-        }));
+        });
 
         let data = null;
 
-        const contentType =
-            response.headers.get("content-type") || "";
-
-        if (contentType.includes("application/json")) {
-            try {
-                data = await response.json();
-            } catch (e) {
-                data = null;
-            }
-        } else {
-            try {
-                const text = await response.text();
-                data = { message: text };
-            } catch (e) {
-                data = null;
-            }
+        try {
+            data = await response.json();
+        } catch {
+            data = null;
         }
 
         if (!response.ok) {
             const error = new Error(
-                data && (data.detail || data.message)
-                    ? (data.detail || data.message)
-                    : "HTTP_" + response.status
+                data?.detail ||
+                data?.message ||
+                `HTTP_${response.status}`
             );
 
             error.status = response.status;
-            error.detail =
-                data && (data.detail || data.message)
-                    ? (data.detail || data.message)
-                    : "";
-
-            error.data = data;
+            error.detail = data?.detail || "";
 
             throw error;
         }
@@ -82,7 +59,7 @@
     }
 
     function escapeHTML(value) {
-        return String(value == null ? "" : value)
+        return String(value ?? "")
             .replaceAll("&", "&amp;")
             .replaceAll("<", "&lt;")
             .replaceAll(">", "&gt;")
@@ -96,6 +73,7 @@
         }
 
         const style = document.createElement("style");
+
         style.id = "zako-payment-styles";
 
         style.textContent = `
@@ -103,31 +81,31 @@
                 position: fixed;
                 inset: 0;
                 z-index: 999999;
-                background: rgba(0,0,0,.78);
+                background: rgba(0,0,0,.82);
                 display: flex;
-                align-items: flex-end;
+                align-items: center;
                 justify-content: center;
-                padding: 12px;
+                padding: 16px;
                 box-sizing: border-box;
             }
 
             .zako-pay-modal {
                 width: 100%;
                 max-width: 520px;
-                max-height: 88vh;
+                max-height: 90vh;
                 overflow-y: auto;
                 background: #10131d;
                 color: #fff;
-                border: 1px solid rgba(255,255,255,.10);
+                border: 1px solid rgba(255,255,255,.12);
                 border-radius: 24px;
                 padding: 22px;
                 box-sizing: border-box;
-                box-shadow: 0 20px 80px rgba(0,0,0,.5);
+                box-shadow: 0 20px 80px rgba(0,0,0,.6);
             }
 
             .zako-pay-title {
-                font-size: 22px;
-                font-weight: 800;
+                font-size: 23px;
+                font-weight: 900;
                 margin-bottom: 8px;
             }
 
@@ -144,8 +122,8 @@
                 text-align: center;
                 padding: 18px;
                 border-radius: 18px;
-                background: rgba(139,108,255,.12);
-                border: 1px solid rgba(139,108,255,.25);
+                background: rgba(139,108,255,.14);
+                border: 1px solid rgba(139,108,255,.28);
                 margin-bottom: 18px;
             }
 
@@ -182,9 +160,9 @@
                 border: 0;
                 border-radius: 12px;
                 padding: 9px 12px;
-                background: #252b3b;
+                background: #292f40;
                 color: #fff;
-                font-weight: 700;
+                font-weight: 800;
                 cursor: pointer;
             }
 
@@ -262,17 +240,19 @@
         closePayment();
 
         modal = document.createElement("div");
+
         modal.className = "zako-pay-overlay";
 
         modal.innerHTML = `
             <div class="zako-pay-modal">
+
                 <div class="zako-pay-title">
                     💳 To‘lov
                 </div>
 
                 <div class="zako-pay-subtitle">
-                    To‘lovni amalga oshiring va chek/skrinshotni
-                    bot chatiga yuboring.
+                    Keyingi IQ testni boshlash uchun
+                    to‘lovni amalga oshiring.
                 </div>
 
                 <div id="zakoPayContent">
@@ -280,12 +260,11 @@
                         To‘lov ma’lumotlari yuklanmoqda...
                     </div>
                 </div>
+
             </div>
         `;
 
         document.body.appendChild(modal);
-
-        return modal;
     }
 
     function showPaymentContent(data) {
@@ -302,10 +281,12 @@
 
         let cardsHTML = "";
 
-        cards.forEach(function (card) {
+        cards.forEach(card => {
             cardsHTML += `
                 <div class="zako-pay-card">
+
                     <div class="zako-pay-card-info">
+
                         <div class="zako-pay-card-number">
                             ${escapeHTML(card.card_number)}
                         </div>
@@ -313,6 +294,7 @@
                         <div class="zako-pay-card-holder">
                             ${escapeHTML(card.holder || "")}
                         </div>
+
                     </div>
 
                     <button
@@ -322,6 +304,7 @@
                     >
                         Nusxa
                     </button>
+
                 </div>
             `;
         });
@@ -335,7 +318,7 @@
                 cardsHTML ||
                 `
                 <div class="zako-pay-status">
-                    Hozircha faol karta mavjud emas.
+                    ❌ Hozircha faol karta mavjud emas.
                 </div>
                 `
             }
@@ -368,19 +351,48 @@
                 class="zako-pay-status"
                 id="zakoPaymentStatus"
             >
-                To‘lov qilgach, chekni bot chatiga yuboring.
+                1. Kartaga pul o'tkazing.
+                <br>
+                2. Chekni botga yuboring.
+                <br>
+                3. Admin tasdiqlashini kuting.
             </div>
         `;
 
         document
             .querySelectorAll(".zako-pay-copy")
-            .forEach(function (button) {
-                button.addEventListener("click", function () {
-                    const card =
-                        button.getAttribute("data-card") || "";
+            .forEach(button => {
 
-                    copyCard(card, button);
-                });
+                button.addEventListener(
+                    "click",
+                    async () => {
+
+                        const card =
+                            button.getAttribute(
+                                "data-card"
+                            ) || "";
+
+                        try {
+                            await navigator.clipboard
+                                .writeText(card);
+
+                            const old =
+                                button.textContent;
+
+                            button.textContent = "✓";
+
+                            setTimeout(() => {
+                                button.textContent = old;
+                            }, 1200);
+
+                        } catch {
+                            alert(
+                                "Karta raqami: " +
+                                card
+                            );
+                        }
+                    }
+                );
             });
 
         document
@@ -405,21 +417,6 @@
             );
     }
 
-    async function copyCard(card, button) {
-        try {
-            await navigator.clipboard.writeText(card);
-
-            const oldText = button.textContent;
-            button.textContent = "✓";
-
-            setTimeout(function () {
-                button.textContent = oldText;
-            }, 1200);
-        } catch (error) {
-            alert("Karta raqami: " + card);
-        }
-    }
-
     async function openBotPayment() {
         if (!currentPayment) {
             return;
@@ -430,12 +427,9 @@
             "iqtest_ubot";
 
         const url =
-            "https://t.me/" +
-            botUsername +
-            "?start=pay_" +
-            currentPayment.payment_id;
+            `https://t.me/${botUsername}?start=pay_${currentPayment.payment_id}`;
 
-        const telegram = tg();
+        const telegram = getTelegram();
 
         try {
             if (
@@ -446,24 +440,24 @@
             } else {
                 window.open(
                     url,
-                    "_blank",
-                    "noopener,noreferrer"
+                    "_blank"
                 );
             }
-        } catch (error) {
+        } catch {
             window.open(
                 url,
-                "_blank",
-                "noopener,noreferrer"
+                "_blank"
             );
         }
 
         const status =
-            document.getElementById("zakoPaymentStatus");
+            document.getElementById(
+                "zakoPaymentStatus"
+            );
 
         if (status) {
-            status.textContent =
-                "Botga o'ting → chek/skrinshotni yuboring → keyin shu yerga qaytib, «To‘lovni tekshirish»ni bosing.";
+            status.innerHTML =
+                "Botga o'ting → chek/skrinshotni yuboring → admin tasdiqlashini kuting → keyin Mini App'ga qayting.";
         }
     }
 
@@ -473,18 +467,20 @@
         }
 
         const status =
-            document.getElementById("zakoPaymentStatus");
+            document.getElementById(
+                "zakoPaymentStatus"
+            );
 
         if (status) {
             status.textContent =
-                "To‘lov holati tekshirilmoqda...";
+                "⏳ To‘lov holati tekshirilmoqda...";
         }
 
         try {
-            const data = await api(
-                "/api/payment/" +
-                currentPayment.payment_id
-            );
+            const data =
+                await api(
+                    `/api/payment/${currentPayment.payment_id}`
+                );
 
             if (data.status === "approved") {
                 paymentApproved();
@@ -492,6 +488,7 @@
             }
 
             if (data.status === "rejected") {
+
                 if (status) {
                     status.textContent =
                         "❌ To‘lov admin tomonidan rad etilgan.";
@@ -501,19 +498,20 @@
             }
 
             if (status) {
-                status.textContent =
-                    "⏳ To‘lov hali tasdiqlanmagan. Chek yuborganingizni tekshiring.";
+                status.innerHTML =
+                    "⏳ To‘lov hali tasdiqlanmagan.<br>Chek yuborganingizni tekshiring.";
             }
 
         } catch (error) {
+
             console.error(
-                "[ZAKO IQ PAYMENT] check:",
+                "[ZAKO IQ PAYMENT] status:",
                 error
             );
 
             if (status) {
                 status.textContent =
-                    "❌ Tekshirishda xatolik. Qayta urinib ko‘ring.";
+                    "❌ Tekshirishda xatolik yuz berdi.";
             }
         }
     }
@@ -523,20 +521,24 @@
             clearInterval(pollingTimer);
         }
 
-        pollingTimer = setInterval(
-            checkPayment,
-            7000
-        );
+        pollingTimer =
+            setInterval(
+                checkPayment,
+                7000
+            );
     }
 
     function paymentApproved() {
+
         if (pollingTimer) {
             clearInterval(pollingTimer);
             pollingTimer = null;
         }
 
         const content =
-            document.getElementById("zakoPayContent");
+            document.getElementById(
+                "zakoPayContent"
+            );
 
         if (!content) {
             return;
@@ -544,6 +546,7 @@
 
         content.innerHTML = `
             <div class="zako-pay-success">
+
                 <div class="zako-pay-success-icon">
                     ✅
                 </div>
@@ -555,35 +558,47 @@
                 <div class="zako-pay-subtitle">
                     Yangi testingiz ochilmoqda...
                 </div>
+
             </div>
         `;
 
-        setTimeout(function () {
+        setTimeout(() => {
+
             closePayment();
 
+            /*
+             * To‘lov tasdiqlangandan keyin
+             * app.js dagi startTest() ishlaydi.
+             */
             if (
-                typeof window.startTest === "function"
+                typeof window.startTest ===
+                "function"
             ) {
                 window.startTest();
             } else {
                 window.location.reload();
             }
+
         }, 700);
     }
 
-    async function openRetestPayment() {
+    async function openPayment() {
+
         createModal();
 
         try {
-            const data = await api(
-                "/api/payment/create",
-                {
-                    method: "POST",
-                    body: JSON.stringify({
-                        purpose: "retest"
-                    })
-                }
-            );
+
+            const data =
+                await api(
+                    "/api/payment/create",
+                    {
+                        method: "POST",
+
+                        body: JSON.stringify({
+                            purpose: "retest"
+                        })
+                    }
+                );
 
             if (
                 !data ||
@@ -601,6 +616,7 @@
             startPolling();
 
         } catch (error) {
+
             console.error(
                 "[ZAKO IQ PAYMENT] create:",
                 error
@@ -619,9 +635,10 @@
                 error.detail ===
                 "NO_PAYMENT_CARD"
             ) {
+
                 content.innerHTML = `
                     <div class="zako-pay-status">
-                        ❌ Hozircha to‘lov kartasi sozlanmagan.
+                        ❌ Hozircha faol karta mavjud emas.
                     </div>
 
                     <button
@@ -633,33 +650,24 @@
                     </button>
                 `;
 
-                document
-                    .getElementById(
-                        "zakoClosePayment"
-                    )
-                    ?.addEventListener(
-                        "click",
-                        closePayment
-                    );
+            } else {
 
-                return;
+                content.innerHTML = `
+                    <div class="zako-pay-status">
+                        ❌ To‘lov oynasini ochishda xatolik.
+                        <br><br>
+                        Qayta urinib ko‘ring.
+                    </div>
+
+                    <button
+                        type="button"
+                        class="zako-pay-secondary"
+                        id="zakoClosePayment"
+                    >
+                        Yopish
+                    </button>
+                `;
             }
-
-            content.innerHTML = `
-                <div class="zako-pay-status">
-                    ❌ To‘lov oynasini ochishda xatolik yuz berdi.
-                    <br><br>
-                    Qayta urinib ko‘ring.
-                </div>
-
-                <button
-                    type="button"
-                    class="zako-pay-secondary"
-                    id="zakoClosePayment"
-                >
-                    Yopish
-                </button>
-            `;
 
             document
                 .getElementById(
@@ -673,17 +681,25 @@
     }
 
     /*
-     * Retest tugmasini app.js ichiga tegmasdan ushlaymiz.
+     * MUHIM:
      *
-     * capture=true bo‘lgani uchun app.js dagi eski
-     * click handleridan oldin ishlaydi.
+     * Endi ikkala tugmani ham ushlaymiz:
+     *
+     * #retestBtn
+     * #startBtn
+     *
+     * #startBtn kerak, chunki foydalanuvchi
+     * bosh sahifadan qayta test boshlashi mumkin.
      */
+
     document.addEventListener(
         "click",
         function (event) {
+
             const button =
-                event.target.closest &&
-                event.target.closest("#retestBtn");
+                event.target.closest?.(
+                    "#retestBtn, #startBtn"
+                );
 
             if (!button) {
                 return;
@@ -692,19 +708,16 @@
             event.preventDefault();
             event.stopImmediatePropagation();
 
-            openRetestPayment();
+            openPayment();
         },
         true
     );
 
-    /*
-     * Global test uchun:
-     * window.openZakoPayment()
-     */
     window.openZakoPayment =
-        openRetestPayment;
+        openPayment;
 
     console.log(
         "[ZAKO IQ PAYMENT] ready"
     );
+
 })();
