@@ -2,15 +2,15 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
-from urllib.parse import parse_qsl
+from typing import Any, Optional
 
 import asyncpg
-import uvicorn
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -19,2141 +19,2033 @@ from aiogram.types import (
     Message,
     WebAppInfo,
 )
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+import uvicorn
 
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-DATABASE_URL = os.environ["DATABASE_URL"]
-WEBAPP_URL = os.environ["WEBAPP_URL"].rstrip("/")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/")
+PORT = int(os.getenv("PORT", "10000"))
 
-PORT = int(os.environ.get("PORT", "10000"))
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "0") or 0)
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+PRICE_UZS = int(os.getenv("PRICE_UZS", "15000"))
 
-# Retest price.
-PRICE_UZS = int(os.environ.get("PRICE_UZS", "3000"))
+BOT_USERNAME = os.getenv("BOT_USERNAME", "").strip().lstrip("@")
 
-WEBAPP_DIR = Path(__file__).parent / "webapp"
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN environment variable is required")
 
-if not WEBAPP_DIR.exists():
-    raise RuntimeError("webapp directory not found")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required")
 
-if not WEBAPP_URL.startswith("https://"):
-    raise RuntimeError("WEBAPP_URL must start with https://")
+if not WEBAPP_URL:
+    raise RuntimeError("WEBAPP_URL environment variable is required")
 
 
 # ============================================================
-# TEST DEFINITION
+# LOGGING
 # ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+
+logger = logging.getLogger("iq-test")
+
+
+# ============================================================
+# CONSTANTS
+# ============================================================
+
+QUESTION_COUNT = 16
+TIME_LIMIT_SECONDS = 8 * 60
+
+MIN_IQ = 70
+MAX_IQ = 178
+
+FREE_ATTEMPT = True
+
+
+# Difficulty weights.
+WEIGHTS = [
+    5,
+    5,
+    7,
+    7,
+    9,
+    9,
+    11,
+    11,
+    13,
+    13,
+    15,
+    15,
+    17,
+    17,
+    19,
+    23,
+]
+
+MAX_RAW = sum(WEIGHTS)
+
+
+# ============================================================
+# QUESTION BANK
 #
 # IMPORTANT:
-#
-# These are ORIGINAL reasoning items.
-#
-# They are designed around:
-#   - pattern induction
-#   - relational reasoning
-#   - spatial transformation
-#   - classification
-#   - numerical abstraction
-#   - multi-rule reasoning
-#
-# They are NOT copied from Raven or another proprietary test.
-#
-# "correct" remains SERVER-SIDE.
-# It is never sent to the Mini App.
-#
-# Difficulty:
-#   1 = easiest
-#   8 = hardest
-#
-# The scoring system later maps the weighted raw score to the
-# entertainment-style "IQ" number shown by the product.
-#
-# IMPORTANT PSYCHOMETRIC NOTE:
-# A real norm-referenced IQ score requires pilot testing,
-# item analysis, reliability, validity and normative data.
+# correct answer is NEVER returned to the frontend.
 # ============================================================
 
-
 QUESTIONS = [
-
-    # --------------------------------------------------------
-    # 01 — BASIC ABSTRACT PATTERN
-    # Rule:
-    # triangle rotates 90° clockwise each step.
-    # Sequence:
-    # ↑ -> → -> ↓ -> ?
-    # Answer: ←
-    # --------------------------------------------------------
     {
         "id": "Q01",
         "difficulty": 1,
-        "category": "PATTERN",
-        "type": "visual",
-        "prompt": "Ketma-ketlikni davom ettiradigan belgini toping.",
-        "visual": {
-            "kind": "sequence",
-            "items": ["↑", "→", "↓", "?"]
-        },
-        "options": ["←", "↑", "→", "↓"],
-        "correct": 0,
-        "weight": 5,
+        "category": "Pattern",
+        "text": "2, 4, 6, 8, ?",
+        "options": ["9", "10", "11", "12"],
+        "correct": 1,
     },
-
-    # --------------------------------------------------------
-    # 02 — SIMPLE RELATION
-    # --------------------------------------------------------
     {
         "id": "Q02",
         "difficulty": 1,
-        "category": "RELATION",
-        "type": "visual",
-        "prompt": "Qaysi belgi qoidani to‘g‘ri davom ettiradi?",
-        "visual": {
-            "kind": "sequence",
-            "items": ["○", "●", "○", "●", "?"]
-        },
-        "options": ["○", "●", "△", "□"],
-        "correct": 0,
-        "weight": 5,
+        "category": "Pattern",
+        "text": "A, C, E, G, ?",
+        "options": ["H", "I", "J", "K"],
+        "correct": 1,
     },
-
-    # --------------------------------------------------------
-    # 03 — NUMBER TRANSFORMATION
-    #
-    # 2 -> 5 (+3)
-    # 5 -> 11 (+6)
-    # 11 -> 23 (+12)
-    # next = +24 => 47
-    # --------------------------------------------------------
     {
         "id": "Q03",
         "difficulty": 2,
-        "category": "ABSTRACT",
-        "type": "text",
-        "prompt": "Qatorni davom ettiring: 2, 5, 11, 23, ?",
-        "visual": None,
-        "options": ["35", "45", "47", "49"],
+        "category": "Number",
+        "text": "3, 6, 12, 24, ?",
+        "options": ["36", "42", "48", "54"],
         "correct": 2,
-        "weight": 7,
     },
-
-    # --------------------------------------------------------
-    # 04 — CLASSIFICATION
-    #
-    # Three options have mirror symmetry;
-    # one does not.
-    # --------------------------------------------------------
     {
         "id": "Q04",
         "difficulty": 2,
-        "category": "CLASSIFICATION",
-        "type": "visual",
-        "prompt": "Qaysi variant qolgan uchtasidan mantiqan farq qiladi?",
-        "visual": {
-            "kind": "symbols",
-            "items": [
-                "●○●",
-                "○●○",
-                "△○△",
-                "●○△"
-            ]
-        },
-        "options": [
-            "●○●",
-            "○●○",
-            "△○△",
-            "●○△"
-        ],
-        "correct": 3,
-        "weight": 7,
+        "category": "Number",
+        "text": "20, 17, 14, 11, ?",
+        "options": ["8", "9", "7", "6"],
+        "correct": 0,
     },
-
-    # --------------------------------------------------------
-    # 05 — ANALOGICAL TRANSFORMATION
-    #
-    # Shape moves one position clockwise.
-    # --------------------------------------------------------
     {
         "id": "Q05",
         "difficulty": 3,
-        "category": "ANALOGY",
-        "type": "visual",
-        "prompt": "Birinchi juftlikdagi o‘zgarishni ikkinchi juftlikka qo‘llang.",
-        "visual": {
-            "kind": "analogy",
-            "left": "▲○",
-            "middle": "○▲",
-            "right": "■◇"
-        },
-        "options": [
-            "■◇",
-            "◇■",
-            "□◇",
-            "◇□"
-        ],
-        "correct": 1,
-        "weight": 9,
+        "category": "Logic",
+        "text": "Qaysi son boshqalardan farq qiladi?",
+        "options": ["16", "25", "36", "45"],
+        "correct": 3,
     },
-
-    # --------------------------------------------------------
-    # 06 — MULTIPLICATIVE SEQUENCE
-    #
-    # 3, 6, 12, 24, 48
-    # --------------------------------------------------------
     {
         "id": "Q06",
         "difficulty": 3,
-        "category": "ABSTRACT",
-        "type": "text",
-        "prompt": "Qatorni davom ettiring: 3, 6, 12, 24, ?",
-        "visual": None,
-        "options": ["36", "42", "48", "54"],
+        "category": "Pattern",
+        "text": "1, 4, 9, 16, ?",
+        "options": ["20", "24", "25", "27"],
         "correct": 2,
-        "weight": 9,
     },
-
-    # --------------------------------------------------------
-    # 07 — SPATIAL ROTATION
-    #
-    # L-shape rotated 90 degrees.
-    # --------------------------------------------------------
     {
         "id": "Q07",
         "difficulty": 4,
-        "category": "SPATIAL",
-        "type": "visual",
-        "prompt": "Shakl 90° o‘ngga aylantirilsa, qaysi ko‘rinish hosil bo‘ladi?",
-        "visual": {
-            "kind": "rotation",
-            "shape": "L"
-        },
-        "options": [
-            "┌",
-            "┐",
-            "└",
-            "┘"
-        ],
-        "correct": 1,
-        "weight": 11,
+        "category": "Logic",
+        "text": "Agar barcha ZOR lar LUM bo‘lsa va barcha LUM lar KEN bo‘lsa, ZOR lar nima?",
+        "options": ["KEN", "LUM emas", "ZOR emas", "Aniqlab bo‘lmaydi"],
+        "correct": 0,
     },
-
-    # --------------------------------------------------------
-    # 08 — TWO-STEP NUMBER RULE
-    #
-    # 1 -> 4 (+3)
-    # 4 -> 10 (+6)
-    # 10 -> 22 (+12)
-    # 22 -> 46 (+24)
-    # 46 -> 94 (+48)
-    # --------------------------------------------------------
     {
         "id": "Q08",
         "difficulty": 4,
-        "category": "ABSTRACT",
-        "type": "text",
-        "prompt": "Qatorni davom ettiring: 1, 4, 10, 22, 46, ?",
-        "visual": None,
-        "options": ["82", "90", "94", "98"],
+        "category": "Number",
+        "text": "2, 3, 5, 8, 12, ?",
+        "options": ["15", "16", "17", "18"],
         "correct": 2,
-        "weight": 11,
     },
-
-    # --------------------------------------------------------
-    # 09 — MATRIX COUNTING
-    #
-    # Row/column pattern:
-    # 2 3 5
-    # 3 4 7
-    # 5 7 ?
-    #
-    # third = first + second => 12
-    # --------------------------------------------------------
     {
         "id": "Q09",
         "difficulty": 5,
-        "category": "MATRIX",
-        "type": "matrix",
-        "prompt": "Har bir qatorda uchinchi qiymat birinchi ikkitasining yig‘indisidir. X ni toping.",
-        "visual": {
-            "kind": "numeric_matrix",
-            "matrix": [
-                ["2", "3", "5"],
-                ["3", "4", "7"],
-                ["5", "7", "?"]
-            ]
-        },
-        "options": ["10", "11", "12", "13"],
-        "correct": 2,
-        "weight": 13,
+        "category": "Pattern",
+        "text": "81, 27, 9, 3, ?",
+        "options": ["0", "1", "2", "6"],
+        "correct": 1,
     },
-
-    # --------------------------------------------------------
-    # 10 — ALTERNATING OPERATION
-    #
-    # +2, *2:
-    # 3 +2 =5
-    # 5*2=10
-    # 10+2=12
-    # 12*2=24
-    # 24+2=26
-    # --------------------------------------------------------
     {
         "id": "Q10",
         "difficulty": 5,
-        "category": "SEQUENCE",
-        "type": "text",
-        "prompt": "Qatorni davom ettiring: 3, 5, 10, 12, 24, 26, ?",
-        "visual": None,
-        "options": ["28", "48", "50", "52"],
-        "correct": 1,
-        "weight": 13,
+        "category": "Logic",
+        "text": "5 ta mashina 5 daqiqada 5 ta detal ishlab chiqaradi. 100 ta mashina 100 ta detalni qancha vaqtda ishlab chiqaradi?",
+        "options": ["5 daqiqa", "20 daqiqa", "100 daqiqa", "500 daqiqa"],
+        "correct": 0,
     },
-
-    # --------------------------------------------------------
-    # 11 — MULTI-RULE SHAPE MATRIX
-    #
-    # Row operation:
-    # first shape + second shape = third shape
-    # using shape combination.
-    # --------------------------------------------------------
     {
         "id": "Q11",
         "difficulty": 6,
-        "category": "MATRIX",
-        "type": "visual",
-        "prompt": "Qator va ustundagi ikkita qoidani birgalikda qo‘llab, X ni toping.",
-        "visual": {
-            "kind": "shape_matrix",
-            "matrix": [
-                ["○", "△", "○△"],
-                ["□", "◇", "□◇"],
-                ["○□", "△◇", "?"]
-            ]
-        },
-        "options": [
-            "○△",
-            "□◇",
-            "○□△◇",
-            "○△□◇"
-        ],
-        "correct": 3,
-        "weight": 15,
+        "category": "Number",
+        "text": "4, 7, 13, 25, 49, ?",
+        "options": ["73", "81", "97", "101"],
+        "correct": 2,
     },
-
-    # --------------------------------------------------------
-    # 12 — SPATIAL COMPOSITION
-    # --------------------------------------------------------
     {
         "id": "Q12",
         "difficulty": 6,
-        "category": "SPATIAL",
-        "type": "visual",
-        "prompt": "Chapdagi ikki shakl birlashtirilsa, qaysi natija hosil bo‘ladi?",
-        "visual": {
-            "kind": "composition",
-            "left": "└",
-            "right": "┐"
-        },
-        "options": [
-            "□",
-            "◇",
-            "△",
-            "○"
-        ],
+        "category": "Logic",
+        "text": "Bir qatorida 3 ta qora va 2 ta oq katak bor. Har bir qora katakdan keyin oq katak kelishi shart. Nechta tartib mumkin?",
+        "options": ["3", "4", "5", "6"],
         "correct": 0,
-        "weight": 15,
     },
-
-    # --------------------------------------------------------
-    # 13 — HIGHER-ORDER NUMBER PATTERN
-    #
-    # Differences:
-    # 4, 8, 16, 32 -> next 64
-    # 3,7,15,31,63 => next 127
-    # --------------------------------------------------------
     {
         "id": "Q13",
         "difficulty": 7,
-        "category": "ABSTRACT",
-        "type": "text",
-        "prompt": "Qatorni davom ettiring: 3, 7, 15, 31, 63, ?",
-        "visual": None,
-        "options": ["95", "111", "127", "129"],
-        "correct": 2,
-        "weight": 17,
+        "category": "Pattern",
+        "text": "1, 2, 6, 24, 120, ?",
+        "options": ["240", "360", "600", "720"],
+        "correct": 3,
     },
-
-    # --------------------------------------------------------
-    # 14 — DUAL-CONSTRAINT LOGIC
-    #
-    # Need number divisible by 4 and odd? impossible.
-    # Instead:
-    # divisible by 3 and even => 12.
-    # --------------------------------------------------------
     {
         "id": "Q14",
         "difficulty": 7,
-        "category": "LOGIC",
-        "type": "text",
-        "prompt": "Qaysi son bir vaqtning o‘zida juft va 3 ga bo‘linadi?",
-        "visual": None,
-        "options": ["9", "10", "12", "15"],
-        "correct": 2,
-        "weight": 17,
+        "category": "Logic",
+        "text": "A > B. B > C. D > A. Qaysi biri eng katta?",
+        "options": ["A", "B", "C", "D"],
+        "correct": 3,
     },
-
-    # --------------------------------------------------------
-    # 15 — ADVANCED ALTERNATING TRANSFORMATION
-    #
-    # +3, *2:
-    # 4+3=7
-    # 7*2=14
-    # 14+3=17
-    # 17*2=34
-    # 34+3=37
-    # 37*2=74
-    # --------------------------------------------------------
     {
         "id": "Q15",
         "difficulty": 8,
-        "category": "ADVANCED",
-        "type": "text",
-        "prompt": "Navbatma-navbat +3 va ×2 qoidasini qo‘llang. 4, 7, 14, 17, 34, 37, ?",
-        "visual": None,
-        "options": ["71", "72", "74", "80"],
+        "category": "Number",
+        "text": "2, 6, 12, 20, 30, ?",
+        "options": ["36", "40", "42", "44"],
         "correct": 2,
-        "weight": 19,
     },
-
-    # --------------------------------------------------------
-    # 16 — HIGHEST DIFFICULTY ABSTRACT MATRIX
-    #
-    # Four components:
-    # shape, count, fill, direction.
-    #
-    # This item is intentionally the hardest.
-    # --------------------------------------------------------
     {
         "id": "Q16",
         "difficulty": 8,
-        "category": "ADVANCED MATRIX",
-        "type": "matrix",
-        "prompt": "Shakl, son va yo‘nalishdagi uchta qoidani birlashtirib, X ni toping.",
-        "visual": {
-            "kind": "advanced_matrix",
-            "matrix": [
-                ["○↑", "○→", "○↓"],
-                ["△↑", "△→", "△↓"],
-                ["□↑", "□→", "?"]
-            ]
-        },
-        "options": [
-            "□←",
-            "□↑",
-            "□↓",
-            "△↓"
-        ],
-        "correct": 2,
-        "weight": 23,
+        "category": "Logic",
+        "text": "Bir sonning 3 baravari undan 18 ga katta. Bu son nechchi?",
+        "options": ["6", "8", "9", "12"],
+        "correct": 0,
     },
 ]
 
 
-QUESTIONS_COUNT = len(QUESTIONS)
-
-QUESTION_MAP = {
-    q["id"]: q
-    for q in QUESTIONS
-}
-
-QUESTION_ORDER = [
-    q["id"]
-    for q in QUESTIONS
-]
-
-MAX_RAW = sum(
-    q["weight"]
-    for q in QUESTIONS
-)
-
-
 # ============================================================
-# SCORE
+# VALIDATION
 # ============================================================
 
-def calculate_raw_score(answers: dict):
-    raw = 0
-    correct = 0
-
-    for question_id, selected in answers.items():
-
-        question = QUESTION_MAP.get(question_id)
-
-        if not question:
-            continue
-
-        try:
-            selected = int(selected)
-        except (TypeError, ValueError):
-            continue
-
-        if selected == question["correct"]:
-            raw += question["weight"]
-            correct += 1
-
-    return raw, correct
-
-
-def calculate_iq_style_score(raw: int):
-    """
-    Product score.
-
-    This intentionally produces the requested high-end display range.
-    It is NOT a clinically standardized IQ conversion.
-
-    Minimum: 70
-    Maximum: 178
-    """
-
-    if MAX_RAW <= 0:
-        return 70
-
-    normalized = raw / MAX_RAW
-
-    score = round(
-        70 + normalized * 108
+if len(QUESTIONS) != QUESTION_COUNT:
+    raise RuntimeError(
+        f"Question count error: expected {QUESTION_COUNT}, "
+        f"got {len(QUESTIONS)}"
     )
 
-    return max(70, min(178, score))
+if len(WEIGHTS) != QUESTION_COUNT:
+    raise RuntimeError("Weights count does not match question count")
+
+for q in QUESTIONS:
+    if len(q["options"]) != 4:
+        raise RuntimeError(f"{q['id']} must have exactly 4 options")
+
+    if not 0 <= q["correct"] < 4:
+        raise RuntimeError(f"Invalid correct answer in {q['id']}")
 
 
 # ============================================================
-# PUBLIC QUESTION SERIALIZATION
+# GLOBALS
 # ============================================================
 
-def public_question(question):
+pool: Optional[asyncpg.Pool] = None
+bot: Optional[Bot] = None
+dp = Dispatcher()
+
+
+# ============================================================
+# TIME
+# ============================================================
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+# ============================================================
+# QUESTION SERIALIZATION
+# ============================================================
+
+def public_questions() -> list[dict[str, Any]]:
     """
-    Remove the answer key before sending a question to the client.
+    Never expose correct answers.
     """
-
-    return {
-        "id": question["id"],
-        "difficulty": question["difficulty"],
-        "category": question["category"],
-        "type": question["type"],
-        "prompt": question["prompt"],
-        "visual": question["visual"],
-        "options": question["options"],
-    }
-
-
-def public_questions():
     return [
-        public_question(q)
+        {
+            "id": q["id"],
+            "difficulty": q["difficulty"],
+            "category": q["category"],
+            "text": q["text"],
+            "options": q["options"],
+        }
         for q in QUESTIONS
     ]
 
 
 # ============================================================
-# TELEGRAM AUTH
+# IQ SCORING
 # ============================================================
 
-def validate_init_data(init_data: str):
+def calculate_iq(raw_score: int) -> int:
+    """
+    Product score mapped into requested 70–178 range.
+
+    This is NOT a standardized clinical IQ scale.
+    """
+    raw_score = max(0, min(MAX_RAW, raw_score))
+
+    value = MIN_IQ + (
+        raw_score / MAX_RAW
+    ) * (MAX_IQ - MIN_IQ)
+
+    return max(
+        MIN_IQ,
+        min(MAX_IQ, int(round(value))),
+    )
+
+
+# ============================================================
+# TELEGRAM WEBAPP AUTH
+# ============================================================
+
+def validate_telegram_init_data(
+    init_data: str,
+) -> Optional[dict[str, Any]]:
+    """
+    Validate Telegram WebApp initData using HMAC.
+
+    Returns parsed user data or None.
+    """
 
     if not init_data:
-        raise HTTPException(
-            status_code=401,
-            detail="Telegram authorization required"
-        )
+        return None
 
     try:
-        pairs = dict(
-            parse_qsl(
-                init_data,
-                keep_blank_values=True
-            )
+        pairs = {}
+
+        for item in init_data.split("&"):
+            if "=" not in item:
+                continue
+
+            key, value = item.split("=", 1)
+
+            from urllib.parse import unquote
+
+            pairs[key] = unquote(value)
+
+        received_hash = pairs.pop("hash", None)
+
+        if not received_hash:
+            return None
+
+        auth_date = pairs.get("auth_date")
+
+        if not auth_date:
+            return None
+
+        try:
+            auth_time = int(auth_date)
+        except ValueError:
+            return None
+
+        # Telegram auth data should not be ancient.
+        if abs(int(time.time()) - auth_time) > 86400:
+            return None
+
+        data_check_string = "\n".join(
+            f"{key}={pairs[key]}"
+            for key in sorted(pairs)
         )
+
+        secret_key = hmac.new(
+            b"WebAppData",
+            BOT_TOKEN.encode(),
+            hashlib.sha256,
+        ).digest()
+
+        calculated_hash = hmac.new(
+            secret_key,
+            data_check_string.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac.compare_digest(
+            calculated_hash,
+            received_hash,
+        ):
+            return None
+
+        user_raw = pairs.get("user")
+
+        if not user_raw:
+            return None
+
+        user = json.loads(user_raw)
+
+        if not user.get("id"):
+            return None
+
+        return {
+            "telegram_id": int(user["id"]),
+            "username": user.get("username"),
+            "first_name": user.get("first_name"),
+            "last_name": user.get("last_name"),
+        }
+
     except Exception:
+        logger.exception("Telegram initData validation failed")
+        return None
+
+
+async def get_webapp_user(
+    init_data: str,
+) -> dict[str, Any]:
+    user = validate_telegram_init_data(init_data)
+
+    if not user:
         raise HTTPException(
             status_code=401,
-            detail="Invalid Telegram init data"
+            detail="INVALID_TELEGRAM_DATA",
         )
 
-    received_hash = pairs.pop("hash", None)
-
-    if not received_hash:
-        raise HTTPException(
-            status_code=401,
-            detail="Telegram hash missing"
-        )
-
-    auth_date = int(
-        pairs.get("auth_date", "0")
-    )
-
-    # 24 hour validity.
-    if not auth_date:
-        raise HTTPException(
-            status_code=401,
-            detail="Telegram auth_date missing"
-        )
-
-    if abs(
-        int(time.time()) - auth_date
-    ) > 86400:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Telegram session expired"
-        )
-
-    data_check_string = "\n".join(
-        f"{key}={pairs[key]}"
-        for key in sorted(pairs)
-    )
-
-    secret_key = hmac.new(
-        b"WebAppData",
-        BOT_TOKEN.encode(),
-        hashlib.sha256
-    ).digest()
-
-    calculated_hash = hmac.new(
-        secret_key,
-        data_check_string.encode(),
-        hashlib.sha256
-    ).hexdigest()
-
-    if not hmac.compare_digest(
-        calculated_hash,
-        received_hash
-    ):
-
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid Telegram signature"
-        )
-
-    user_raw = pairs.get("user")
-
-    if not user_raw:
-        raise HTTPException(
-            status_code=401,
-            detail="Telegram user missing"
-        )
-
-    try:
-        return json.loads(user_raw)
-
-    except json.JSONDecodeError:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid Telegram user data"
-        )
-
-
-async def authenticate(request: Request):
-
-    init_data = request.headers.get(
-        "X-Telegram-Init-Data",
-        ""
-    )
-
-    user = validate_init_data(init_data)
-
-    try:
-        user_id = int(user["id"])
-    except Exception:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid Telegram user ID"
-        )
-
-    return user_id, user
+    return user
 
 
 # ============================================================
 # DATABASE
 # ============================================================
 
-async def init_db(pool):
+async def init_db() -> None:
+    global pool
 
-    async with pool.acquire() as con:
+    pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=10,
+        command_timeout=30,
+    )
 
-        await con.execute(
+    async with pool.acquire() as conn:
+
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-
-                user_id BIGINT PRIMARY KEY,
-
+                telegram_id BIGINT PRIMARY KEY,
                 username TEXT,
-
                 first_name TEXT,
-
                 last_name TEXT,
-
-                attempts INTEGER NOT NULL DEFAULT 0,
-
-                best_score INTEGER NOT NULL DEFAULT 0,
-
-                best_raw INTEGER NOT NULL DEFAULT 0,
-
-                best_time INTEGER NOT NULL DEFAULT 0,
-
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
+            )
+            """
+        )
 
-
-            CREATE TABLE IF NOT EXISTS test_sessions (
-
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS attempts (
                 attempt_id UUID PRIMARY KEY,
-
-                user_id BIGINT NOT NULL
-                    REFERENCES users(user_id)
+                telegram_id BIGINT NOT NULL
+                    REFERENCES users(telegram_id)
                     ON DELETE CASCADE,
 
-                question_order JSONB NOT NULL,
-
                 started_at TIMESTAMPTZ NOT NULL,
-
                 finished_at TIMESTAMPTZ,
 
+                elapsed_seconds INTEGER NOT NULL DEFAULT 0,
+
                 answers JSONB,
-
-                elapsed_seconds INTEGER,
-
                 raw_score INTEGER,
-
-                correct INTEGER,
-
+                correct_count INTEGER,
                 iq_score INTEGER,
 
                 status TEXT NOT NULL DEFAULT 'active',
 
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-
-
-            CREATE INDEX IF NOT EXISTS
-            idx_test_sessions_user_status
-
-            ON test_sessions(
-                user_id,
-                status
-            );
-
-
-            CREATE TABLE IF NOT EXISTS attempts (
-
-                attempt_id UUID PRIMARY KEY,
-
-                user_id BIGINT NOT NULL
-                    REFERENCES users(user_id)
-                    ON DELETE CASCADE,
-
-                raw_score INTEGER NOT NULL,
-
-                iq_score INTEGER NOT NULL,
-
-                correct INTEGER NOT NULL,
-
-                elapsed_seconds INTEGER NOT NULL,
-
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-
-
-            CREATE INDEX IF NOT EXISTS
-            idx_attempts_ranking
-
-            ON attempts(
-                iq_score DESC,
-                elapsed_seconds ASC
-            );
-
-
-            CREATE TABLE IF NOT EXISTS payments (
-
-                id BIGSERIAL PRIMARY KEY,
-
-                user_id BIGINT NOT NULL
-                    REFERENCES users(user_id)
-                    ON DELETE CASCADE,
-
-                purpose TEXT NOT NULL,
-
-                amount INTEGER NOT NULL,
-
-                status TEXT NOT NULL DEFAULT 'pending',
-
-                consumed BOOLEAN NOT NULL DEFAULT FALSE,
-
-                proof_file_id TEXT,
-
-                approved_at TIMESTAMPTZ,
-
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-
-
-            CREATE INDEX IF NOT EXISTS
-            idx_payments_user
-
-            ON payments(
-                user_id,
-                purpose,
-                status,
-                consumed
-            );
+            )
             """
         )
 
-
-async def upsert_user(pool, telegram_user):
-
-    async with pool.acquire() as con:
-
-        await con.execute(
+        await conn.execute(
             """
-            INSERT INTO users(
-                user_id,
+            CREATE INDEX IF NOT EXISTS idx_attempts_user
+            ON attempts(telegram_id)
+            """
+        )
+
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_attempts_ranking
+            ON attempts(iq_score DESC)
+            WHERE status='finished'
+            """
+        )
+
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS payments (
+                payment_id UUID PRIMARY KEY,
+
+                telegram_id BIGINT NOT NULL
+                    REFERENCES users(telegram_id)
+                    ON DELETE CASCADE,
+
+                amount INTEGER NOT NULL,
+
+                purpose TEXT NOT NULL DEFAULT 'retest',
+
+                status TEXT NOT NULL DEFAULT 'pending',
+
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                decided_at TIMESTAMPTZ,
+
+                admin_id BIGINT
+            )
+            """
+        )
+
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_payments_user
+            ON payments(telegram_id)
+            """
+        )
+
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_payments_status
+            ON payments(status)
+            """
+        )
+
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS payment_cards (
+                id BIGSERIAL PRIMARY KEY,
+
+                title TEXT NOT NULL,
+                card_number TEXT NOT NULL,
+
+                owner_name TEXT,
+
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+
+    logger.info("Database initialized")
+
+
+# ============================================================
+# USER UPSERT
+# ============================================================
+
+async def upsert_user(user: dict[str, Any]) -> None:
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO users (
+                telegram_id,
                 username,
                 first_name,
                 last_name
             )
+            VALUES ($1,$2,$3,$4)
 
-            VALUES(
-                $1,
-                $2,
-                $3,
-                $4
-            )
-
-            ON CONFLICT(user_id)
-
+            ON CONFLICT (telegram_id)
             DO UPDATE SET
-
-                username = EXCLUDED.username,
-
-                first_name = EXCLUDED.first_name,
-
-                last_name = EXCLUDED.last_name,
-
-                updated_at = NOW()
+                username=EXCLUDED.username,
+                first_name=EXCLUDED.first_name,
+                last_name=EXCLUDED.last_name,
+                updated_at=NOW()
             """,
-
-            int(telegram_user["id"]),
-
-            telegram_user.get("username"),
-
-            telegram_user.get("first_name"),
-
-            telegram_user.get("last_name"),
+            user["telegram_id"],
+            user.get("username"),
+            user.get("first_name"),
+            user.get("last_name"),
         )
 
 
 # ============================================================
-# MODELS
+# ATTEMPT HELPERS
 # ============================================================
 
-class FinishPayload(BaseModel):
+async def get_attempt(
+    attempt_id: uuid.UUID,
+) -> Optional[asyncpg.Record]:
 
-    attempt_id: uuid.UUID
+    assert pool is not None
 
-    answers: dict[str, int] = Field(
-        default_factory=dict
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            """
+            SELECT *
+            FROM attempts
+            WHERE attempt_id=$1
+            """,
+            attempt_id,
+        )
+
+
+async def abandon_active_attempts(
+    telegram_id: int,
+) -> None:
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE attempts
+            SET status='abandoned',
+                finished_at=NOW()
+            WHERE telegram_id=$1
+              AND status='active'
+            """,
+            telegram_id,
+        )
+
+
+# ============================================================
+# PAYMENT HELPERS
+# ============================================================
+
+async def has_unused_retest_payment(
+    telegram_id: int,
+) -> bool:
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT payment_id
+            FROM payments
+            WHERE telegram_id=$1
+              AND purpose='retest'
+              AND status='approved'
+            ORDER BY decided_at ASC
+            LIMIT 1
+            """,
+            telegram_id,
+        )
+
+        return row is not None
+
+
+async def consume_retest_payment(
+    conn: asyncpg.Connection,
+    telegram_id: int,
+) -> Optional[uuid.UUID]:
+
+    row = await conn.fetchrow(
+        """
+        SELECT payment_id
+        FROM payments
+        WHERE telegram_id=$1
+          AND purpose='retest'
+          AND status='approved'
+        ORDER BY decided_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+        """,
+        telegram_id,
     )
 
-    elapsed_seconds: int = Field(
-        ge=0,
-        le=3600
+    if not row:
+        return None
+
+    payment_id = row["payment_id"]
+
+    await conn.execute(
+        """
+        UPDATE payments
+        SET status='used'
+        WHERE payment_id=$1
+          AND status='approved'
+        """,
+        payment_id,
     )
 
+    return payment_id
 
-class PaymentCreate(BaseModel):
 
+# ============================================================
+# REQUEST MODELS
+# ============================================================
+
+class StartAttemptRequest(BaseModel):
+    attempt_id: Optional[str] = None
+
+
+class FinishAttemptRequest(BaseModel):
+    attempt_id: str
+    answers: dict[str, int] = Field(default_factory=dict)
+    elapsed_seconds: int = Field(default=0, ge=0, le=TIME_LIMIT_SECONDS + 120)
+
+
+class PaymentCreateRequest(BaseModel):
     purpose: str = "retest"
 
 
+class AdminDecisionRequest(BaseModel):
+    action: str
+
+
 # ============================================================
-# FASTAPI
+# FASTAPI LIFESPAN
 # ============================================================
 
-async def create_app():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
 
-    pool = await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=1,
-        max_size=5,
-        ssl="require",
-    )
+    yield
 
-    await init_db(pool)
+    global pool
 
-    app = FastAPI(
-        title="IQ Test Bot",
-        version="2.0.0"
-    )
+    if pool:
+        await pool.close()
+
+    logger.info("Database pool closed")
 
 
-    # --------------------------------------------------------
-    # HEALTH
-    # --------------------------------------------------------
-
-    @app.get("/health")
-    async def health():
-
-        return {
-            "ok": True,
-            "service": "iq-test-bot",
-            "version": "2.0.0",
-        }
+app = FastAPI(
+    title="IQ Test Bot API",
+    version="3.0.0",
+    lifespan=lifespan,
+)
 
 
-    @app.get("/")
-    async def root():
+# ============================================================
+# HEALTH
+# ============================================================
 
-        return {
-            "ok": True,
-            "service": "iq-test-bot"
-        }
-
-
-    # --------------------------------------------------------
-    # MINI APP
-    # --------------------------------------------------------
-
-    @app.get("/app")
-    async def app_page():
-
-        return FileResponse(
-            WEBAPP_DIR / "index.html"
-        )
+@app.get("/")
+async def root():
+    return {
+        "ok": True,
+        "service": "IQ TEST BOT",
+    }
 
 
-    @app.get("/static/{file_path:path}")
-    async def static_file(file_path: str):
-
-        target = (
-            WEBAPP_DIR / file_path
-        ).resolve()
-
-        web_root = WEBAPP_DIR.resolve()
-
-        if (
-            target != web_root
-            and web_root not in target.parents
-        ):
-
-            raise HTTPException(
-                status_code=404
-            )
-
-        if not target.is_file():
-
-            raise HTTPException(
-                status_code=404
-            )
-
-        return FileResponse(target)
+@app.get("/health")
+async def health():
+    return {
+        "ok": True,
+        "database": pool is not None,
+    }
 
 
-    # --------------------------------------------------------
-    # CONFIG
-    # --------------------------------------------------------
+@app.get("/api/config")
+async def api_config():
+    return {
+        "ok": True,
+        "question_count": QUESTION_COUNT,
+        "time_limit": TIME_LIMIT_SECONDS,
+        "price": PRICE_UZS,
+        "max_iq": MAX_IQ,
+    }
 
-    @app.get("/api/config")
-    async def api_config(request: Request):
 
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
+# ============================================================
+# TEST PACKAGE
+# ============================================================
 
-        await upsert_user(
-            pool,
-            telegram_user
-        )
+@app.get("/api/test/package")
+async def test_package(
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
 
-        async with pool.acquire() as con:
+    await upsert_user(user)
 
-            user = await con.fetchrow(
+    return {
+        "ok": True,
+        "question_count": QUESTION_COUNT,
+        "time_limit": TIME_LIMIT_SECONDS,
+        "questions": public_questions(),
+    }
+
+
+# ============================================================
+# START ATTEMPT
+# ============================================================
+
+@app.post("/api/session/start")
+async def start_attempt(
+    body: StartAttemptRequest,
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    await upsert_user(user)
+
+    telegram_id = user["telegram_id"]
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        async with conn.transaction():
+
+            # Never allow multiple active attempts.
+            await conn.execute(
                 """
-                SELECT
-                    attempts,
-                    best_score,
-                    best_time
-                FROM users
-                WHERE user_id=$1
+                UPDATE attempts
+                SET status='abandoned',
+                    finished_at=NOW()
+                WHERE telegram_id=$1
+                  AND status='active'
                 """,
-                user_id
+                telegram_id,
             )
 
-        return {
+            # Check finished attempts.
+            count = await conn.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM attempts
+                WHERE telegram_id=$1
+                  AND status='finished'
+                """,
+                telegram_id,
+            )
 
-            "question_count": QUESTIONS_COUNT,
+            payment_used = None
 
-            "max_score": 178,
+            if count > 0:
 
-            "price_uzs": PRICE_UZS,
-
-            "attempts": (
-                user["attempts"]
-                if user
-                else 0
-            ),
-
-            "best_score": (
-                user["best_score"]
-                if user
-                else 0
-            ),
-
-            "best_time": (
-                user["best_time"]
-                if user
-                else 0
-            ),
-
-            "test_version": "2.0.0",
-
-            "score_type": "reasoning_score",
-
-            "standardized_iq": False,
-        }
-
-
-    # --------------------------------------------------------
-    # TEST PACKAGE
-    # --------------------------------------------------------
-
-    @app.get("/api/test/package")
-    async def test_package(request: Request):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        await upsert_user(
-            pool,
-            telegram_user
-        )
-
-        return {
-
-            "version": "2.0.0",
-
-            "question_count": QUESTIONS_COUNT,
-
-            "questions": public_questions(),
-
-            # Approximate maximum duration.
-            "duration_seconds": 16 * 30,
-        }
-
-
-    # --------------------------------------------------------
-    # START SESSION
-    # --------------------------------------------------------
-
-    @app.post("/api/session/start")
-    async def session_start(request: Request):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        await upsert_user(
-            pool,
-            telegram_user
-        )
-
-        async with pool.acquire() as con:
-
-            async with con.transaction():
-
-                # Lock user.
-                user = await con.fetchrow(
-                    """
-                    SELECT
-                        attempts
-                    FROM users
-                    WHERE user_id=$1
-                    FOR UPDATE
-                    """,
-                    user_id
+                payment_used = await consume_retest_payment(
+                    conn,
+                    telegram_id,
                 )
 
-                if not user:
-
+                if not payment_used:
                     raise HTTPException(
-                        status_code=404,
-                        detail="User not found"
+                        status_code=402,
+                        detail="PAID_RETEST",
                     )
 
-                attempts = user["attempts"]
+            attempt_id = uuid.uuid4()
 
+            if body.attempt_id:
+                try:
+                    requested_id = uuid.UUID(body.attempt_id)
 
-                # Abandon old active sessions.
-                await con.execute(
-                    """
-                    UPDATE test_sessions
-
-                    SET
-                        status='abandoned',
-                        finished_at=NOW()
-
-                    WHERE
-                        user_id=$1
-                        AND status='active'
-                    """,
-                    user_id
-                )
-
-
-                # First attempt is free.
-                #
-                # Further attempts require an approved
-                # and unused retest payment.
-
-                if attempts > 0:
-
-                    payment = await con.fetchrow(
+                    # Only use client attempt_id if it is not already present.
+                    existing = await conn.fetchrow(
                         """
-                        SELECT
-                            id
-
-                        FROM payments
-
-                        WHERE
-                            user_id=$1
-                            AND purpose='retest'
-                            AND status='approved'
-                            AND consumed=FALSE
-
-                        ORDER BY id ASC
-
-                        LIMIT 1
-
-                        FOR UPDATE
+                        SELECT attempt_id
+                        FROM attempts
+                        WHERE attempt_id=$1
                         """,
-                        user_id
+                        requested_id,
                     )
 
-                    if not payment:
+                    if not existing:
+                        attempt_id = requested_id
 
-                        raise HTTPException(
-                            status_code=402,
-                            detail="RETEST_PAYMENT_REQUIRED"
-                        )
+                except ValueError:
+                    pass
 
-                    await con.execute(
-                        """
-                        UPDATE payments
-
-                        SET consumed=TRUE
-
-                        WHERE id=$1
-                        """,
-                        payment["id"]
-                    )
-
-
-                attempt_id = uuid.uuid4()
-
-                started_at = datetime.now(
-                    timezone.utc
-                )
-
-
-                await con.execute(
-                    """
-                    INSERT INTO test_sessions(
-
-                        attempt_id,
-
-                        user_id,
-
-                        question_order,
-
-                        started_at,
-
-                        status
-
-                    )
-
-                    VALUES(
-
-                        $1,
-
-                        $2,
-
-                        $3::jsonb,
-
-                        $4,
-
-                        'active'
-                    )
-                    """,
-
+            await conn.execute(
+                """
+                INSERT INTO attempts (
                     attempt_id,
-
-                    user_id,
-
-                    json.dumps(
-                        QUESTION_ORDER
-                    ),
-
+                    telegram_id,
                     started_at,
-                )
-
-
-        return {
-
-            "ok": True,
-
-            "attempt_id": str(
-                attempt_id
-            ),
-
-            "started_at":
-                started_at.isoformat(),
-
-            "duration_seconds":
-                16 * 30,
-
-            "questions":
-                public_questions(),
-        }
-
-
-    # --------------------------------------------------------
-    # FINISH TEST
-    # --------------------------------------------------------
-
-    @app.post("/api/session/finish")
-    async def session_finish(
-        payload: FinishPayload,
-        request: Request
-    ):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        await upsert_user(
-            pool,
-            telegram_user
-        )
-
-        async with pool.acquire() as con:
-
-            async with con.transaction():
-
-                session = await con.fetchrow(
-                    """
-                    SELECT *
-
-                    FROM test_sessions
-
-                    WHERE
-                        attempt_id=$1
-                        AND user_id=$2
-
-                    FOR UPDATE
-                    """,
-
-                    payload.attempt_id,
-
-                    user_id,
-                )
-
-                if not session:
-
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Attempt not found"
-                    )
-
-
-                # Idempotency:
-                #
-                # If client retries the same attempt,
-                # NEVER create another attempt/ranking entry.
-
-                if session["status"] == "finished":
-
-                    return {
-
-                        "ok": True,
-
-                        "already_processed": True,
-
-                        "attempt_id":
-                            str(payload.attempt_id),
-
-                        "iq_score":
-                            session["iq_score"],
-
-                        "raw_score":
-                            session["raw_score"],
-
-                        "correct":
-                            session["correct"],
-
-                        "elapsed_seconds":
-                            session["elapsed_seconds"],
-                    }
-
-
-                allowed_ids = set(
-                    session["question_order"]
-                )
-
-
-                clean_answers = {}
-
-                for question_id, answer in (
-                    payload.answers.items()
-                ):
-
-                    question_id = str(
-                        question_id
-                    )
-
-                    if question_id not in allowed_ids:
-                        continue
-
-                    try:
-                        answer = int(answer)
-                    except (
-                        TypeError,
-                        ValueError
-                    ):
-                        continue
-
-                    if not 0 <= answer <= 3:
-                        continue
-
-                    clean_answers[
-                        question_id
-                    ] = answer
-
-
-                raw_score, correct = (
-                    calculate_raw_score(
-                        clean_answers
-                    )
-                )
-
-
-                iq_score = (
-                    calculate_iq_style_score(
-                        raw_score
-                    )
-                )
-
-
-                await con.execute(
-                    """
-                    UPDATE test_sessions
-
-                    SET
-
-                        answers=$1::jsonb,
-
-                        elapsed_seconds=$2,
-
-                        raw_score=$3,
-
-                        correct=$4,
-
-                        iq_score=$5,
-
-                        status='finished',
-
-                        finished_at=NOW()
-
-                    WHERE
-                        attempt_id=$6
-                    """,
-
-                    json.dumps(
-                        clean_answers
-                    ),
-
-                    payload.elapsed_seconds,
-
-                    raw_score,
-
-                    correct,
-
-                    iq_score,
-
-                    payload.attempt_id,
-                )
-
-
-                # Unique attempt_id makes this safe against
-                # duplicate network retries.
-
-                await con.execute(
-                    """
-                    INSERT INTO attempts(
-
-                        attempt_id,
-
-                        user_id,
-
-                        raw_score,
-
-                        iq_score,
-
-                        correct,
-
-                        elapsed_seconds
-
-                    )
-
-                    VALUES(
-
-                        $1,
-
-                        $2,
-
-                        $3,
-
-                        $4,
-
-                        $5,
-
-                        $6
-                    )
-
-                    ON CONFLICT(attempt_id)
-
-                    DO NOTHING
-                    """,
-
-                    payload.attempt_id,
-
-                    user_id,
-
-                    raw_score,
-
-                    iq_score,
-
-                    correct,
-
-                    payload.elapsed_seconds,
-                )
-
-
-                # Update user's personal best.
-
-                await con.execute(
-                    """
-                    UPDATE users
-
-                    SET
-
-                        attempts =
-                            attempts + 1,
-
-                        best_score =
-                            GREATEST(
-                                best_score,
-                                $2
-                            ),
-
-                        best_raw =
-                            GREATEST(
-                                best_raw,
-                                $3
-                            ),
-
-                        best_time =
-                            CASE
-
-                                WHEN
-                                    best_score < $2
-                                    OR best_time = 0
-
-                                THEN $4
-
-                                WHEN
-                                    best_score = $2
-                                    AND $4 < best_time
-
-                                THEN $4
-
-                                ELSE best_time
-
-                            END,
-
-                        updated_at=NOW()
-
-                    WHERE
-                        user_id=$1
-                    """,
-
-                    user_id,
-
-                    iq_score,
-
-                    raw_score,
-
-                    payload.elapsed_seconds,
-                )
-
-
-        return {
-
-            "ok": True,
-
-            "already_processed": False,
-
-            "attempt_id":
-                str(payload.attempt_id),
-
-            "iq_score":
-                iq_score,
-
-            "raw_score":
-                raw_score,
-
-            "correct":
-                correct,
-
-            "elapsed_seconds":
-                payload.elapsed_seconds,
-
-            "score_label":
-                "IQ",
-
-            "standardized":
-                False,
-        }
-
-
-    # --------------------------------------------------------
-    # PROFILE
-    # --------------------------------------------------------
-
-    @app.get("/api/profile")
-    async def profile(request: Request):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        await upsert_user(
-            pool,
-            telegram_user
-        )
-
-        async with pool.acquire() as con:
-
-            user = await con.fetchrow(
-                """
-                SELECT
-                    attempts,
-                    best_score,
-                    best_time
-
-                FROM users
-
-                WHERE user_id=$1
-                """,
-
-                user_id,
-            )
-
-
-            rank = await con.fetchval(
-                """
-                SELECT
-                    COUNT(*) + 1
-
-                FROM users
-
-                WHERE
-                    attempts > 0
-
-                    AND best_score >
-
-                    COALESCE(
-                        (
-                            SELECT best_score
-
-                            FROM users
-
-                            WHERE user_id=$1
-                        ),
-                        0
-                    )
-                """,
-
-                user_id,
-            )
-
-
-        return {
-
-            "attempts":
-                user["attempts"]
-                if user else 0,
-
-            "best_score":
-                user["best_score"]
-                if user else 0,
-
-            "best_time":
-                user["best_time"]
-                if user else 0,
-
-            "rank":
-                int(rank or 1),
-        }
-
-
-    # --------------------------------------------------------
-    # RANKING
-    # --------------------------------------------------------
-
-    @app.get("/api/ranking")
-    async def ranking(request: Request):
-
-        await authenticate(request)
-
-        async with pool.acquire() as con:
-
-            rows = await con.fetch(
-                """
-                SELECT
-
-                    first_name,
-
-                    username,
-
-                    best_score,
-
-                    best_time
-
-                FROM users
-
-                WHERE attempts > 0
-
-                ORDER BY
-
-                    best_score DESC,
-
-                    CASE
-
-                        WHEN best_time = 0
-                        THEN 999999
-
-                        ELSE best_time
-
-                    END ASC
-
-                LIMIT 100
-                """
-            )
-
-
-        return {
-
-            "items": [
-
-                {
-
-                    "position":
-                        index + 1,
-
-                    "name":
-                        row["first_name"]
-                        or row["username"]
-                        or "Foydalanuvchi",
-
-                    "username":
-                        row["username"],
-
-                    "score":
-                        row["best_score"],
-
-                    "time":
-                        row["best_time"],
-                }
-
-                for index, row
-                in enumerate(rows)
-            ]
-        }
-
-
-    # ========================================================
-    # PAYMENT
-    # ========================================================
-
-    @app.post("/api/payment/create")
-    async def create_payment(
-        payload: PaymentCreate,
-        request: Request
-    ):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        await upsert_user(
-            pool,
-            telegram_user
-        )
-
-
-        if payload.purpose != "retest":
-
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid payment purpose"
-            )
-
-
-        async with pool.acquire() as con:
-
-            existing = await con.fetchrow(
-                """
-                SELECT
-
-                    id,
-
-                    amount,
-
                     status
-
-                FROM payments
-
-                WHERE
-
-                    user_id=$1
-
-                    AND purpose='retest'
-
-                    AND status IN(
-                        'pending',
-                        'approved'
-                    )
-
-                    AND consumed=FALSE
-
-                ORDER BY id DESC
-
-                LIMIT 1
-                """,
-
-                user_id,
-            )
-
-
-            if existing:
-
-                return {
-
-                    "payment_id":
-                        existing["id"],
-
-                    "amount":
-                        existing["amount"],
-
-                    "status":
-                        existing["status"],
-                }
-
-
-            payment = await con.fetchrow(
-                """
-                INSERT INTO payments(
-
-                    user_id,
-
-                    purpose,
-
-                    amount
-
                 )
-
-                VALUES(
-
-                    $1,
-
-                    'retest',
-
-                    $2
-
-                )
-
-                RETURNING
-
-                    id,
-
-                    amount,
-
-                    status
+                VALUES ($1,$2,NOW(),'active')
                 """,
-
-                user_id,
-
-                PRICE_UZS,
+                attempt_id,
+                telegram_id,
             )
 
-
-        return {
-
-            "payment_id":
-                payment["id"],
-
-            "amount":
-                payment["amount"],
-
-            "status":
-                payment["status"],
-        }
-
-
-    @app.get("/api/payment/{payment_id}")
-    async def payment_status(
-        payment_id: int,
-        request: Request
-    ):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        await upsert_user(
-            pool,
-            telegram_user
-        )
-
-
-        async with pool.acquire() as con:
-
-            payment = await con.fetchrow(
-                """
-                SELECT
-
-                    id,
-
-                    amount,
-
-                    status,
-
-                    consumed
-
-                FROM payments
-
-                WHERE
-
-                    id=$1
-
-                    AND user_id=$2
-                """,
-
-                payment_id,
-
-                user_id,
-            )
-
-
-        if not payment:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Payment not found"
-            )
-
-
-        return {
-
-            "payment_id":
-                payment["id"],
-
-            "amount":
-                payment["amount"],
-
-            "status":
-                payment["status"],
-
-            "consumed":
-                payment["consumed"],
-        }
-
-
-    # ========================================================
-    # ADMIN PAYMENT APPROVAL
-    # ========================================================
-
-    @app.post(
-        "/api/admin/payment/{payment_id}/approve"
-    )
-    async def admin_payment_approve(
-        payment_id: int,
-        request: Request
-    ):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        if not ADMIN_ID:
-
-            raise HTTPException(
-                status_code=403,
-                detail="ADMIN_ID is not configured"
-            )
-
-
-        if user_id != ADMIN_ID:
-
-            raise HTTPException(
-                status_code=403,
-                detail="Admin only"
-            )
-
-
-        async with pool.acquire() as con:
-
-            result = await con.execute(
-                """
-                UPDATE payments
-
-                SET
-
-                    status='approved',
-
-                    approved_at=NOW()
-
-                WHERE
-
-                    id=$1
-
-                    AND status='pending'
-                """,
-
-                payment_id,
-            )
-
-
-        return {
-
-            "ok": True,
-
-            "updated":
-                result.endswith("1"),
-        }
-
-
-    # ========================================================
-    # ADMIN PAYMENT REJECTION
-    # ========================================================
-
-    @app.post(
-        "/api/admin/payment/{payment_id}/reject"
-    )
-    async def admin_payment_reject(
-        payment_id: int,
-        request: Request
-    ):
-
-        user_id, telegram_user = (
-            await authenticate(request)
-        )
-
-        if not ADMIN_ID:
-
-            raise HTTPException(
-                status_code=403,
-                detail="ADMIN_ID is not configured"
-            )
-
-
-        if user_id != ADMIN_ID:
-
-            raise HTTPException(
-                status_code=403,
-                detail="Admin only"
-            )
-
-
-        async with pool.acquire() as con:
-
-            result = await con.execute(
-                """
-                UPDATE payments
-
-                SET
-
-                    status='rejected'
-
-                WHERE
-
-                    id=$1
-
-                    AND status='pending'
-                """,
-
-                payment_id,
-            )
-
-
-        return {
-
-            "ok": True,
-
-            "updated":
-                result.endswith("1"),
-        }
-
-
-    return app, pool
+    return {
+        "ok": True,
+        "attempt_id": str(attempt_id),
+        "attemptId": str(attempt_id),
+        "question_count": QUESTION_COUNT,
+        "time_limit": TIME_LIMIT_SECONDS,
+        "timeLimit": TIME_LIMIT_SECONDS,
+        "questions": public_questions(),
+    }
 
 
 # ============================================================
-# TELEGRAM BOT
+# FINISH ATTEMPT
+# ============================================================
+
+@app.post("/api/session/finish")
+async def finish_attempt(
+    body: FinishAttemptRequest,
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    await upsert_user(user)
+
+    try:
+        attempt_id = uuid.UUID(body.attempt_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="INVALID_ATTEMPT_ID",
+        )
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        async with conn.transaction():
+
+            attempt = await conn.fetchrow(
+                """
+                SELECT *
+                FROM attempts
+                WHERE attempt_id=$1
+                FOR UPDATE
+                """,
+                attempt_id,
+            )
+
+            if not attempt:
+                raise HTTPException(
+                    status_code=404,
+                    detail="ATTEMPT_NOT_FOUND",
+                )
+
+            if attempt["telegram_id"] != user["telegram_id"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="ATTEMPT_OWNER_MISMATCH",
+                )
+
+            # Idempotency:
+            # if already finished, return exactly the stored result.
+            if attempt["status"] == "finished":
+                return {
+                    "ok": True,
+                    "attempt_id": str(attempt_id),
+                    "status": "finished",
+                    "iq": attempt["iq_score"],
+                    "iq_score": attempt["iq_score"],
+                    "raw_score": attempt["raw_score"],
+                    "correct": attempt["correct_count"],
+                    "correct_count": attempt["correct_count"],
+                    "elapsed_seconds": attempt["elapsed_seconds"],
+                    "elapsed": attempt["elapsed_seconds"],
+                    "synced": True,
+                    "idempotent": True,
+                }
+
+            if attempt["status"] != "active":
+                raise HTTPException(
+                    status_code=409,
+                    detail="ATTEMPT_NOT_ACTIVE",
+                )
+
+            # Server is authoritative.
+            elapsed = min(
+                body.elapsed_seconds,
+                TIME_LIMIT_SECONDS,
+            )
+
+            answers = body.answers or {}
+
+            if not isinstance(answers, dict):
+                raise HTTPException(
+                    status_code=400,
+                    detail="INVALID_ANSWERS",
+                )
+
+            # Strict answer validation.
+            clean_answers: dict[str, int] = {}
+
+            for key, value in answers.items():
+
+                if not isinstance(key, str):
+                    continue
+
+                if not isinstance(value, int):
+                    continue
+
+                if key not in {q["id"] for q in QUESTIONS}:
+                    continue
+
+                if value < 0 or value >= 4:
+                    continue
+
+                clean_answers[key] = value
+
+            raw_score = 0
+            correct_count = 0
+
+            question_map = {
+                q["id"]: q
+                for q in QUESTIONS
+            }
+
+            for index, question in enumerate(QUESTIONS):
+
+                selected = clean_answers.get(
+                    question["id"]
+                )
+
+                if selected is not None:
+                    if selected == question["correct"]:
+                        raw_score += WEIGHTS[index]
+                        correct_count += 1
+
+            iq_score = calculate_iq(raw_score)
+
+            await conn.execute(
+                """
+                UPDATE attempts
+                SET
+                    finished_at=NOW(),
+                    elapsed_seconds=$2,
+                    answers=$3::jsonb,
+                    raw_score=$4,
+                    correct_count=$5,
+                    iq_score=$6,
+                    status='finished'
+                WHERE attempt_id=$1
+                """,
+                attempt_id,
+                elapsed,
+                json.dumps(clean_answers),
+                raw_score,
+                correct_count,
+                iq_score,
+            )
+
+    return {
+        "ok": True,
+        "attempt_id": str(attempt_id),
+        "attemptId": str(attempt_id),
+        "status": "finished",
+
+        "iq": iq_score,
+        "iq_score": iq_score,
+
+        "raw_score": raw_score,
+
+        "correct": correct_count,
+        "correct_count": correct_count,
+
+        "total": QUESTION_COUNT,
+        "question_count": QUESTION_COUNT,
+
+        "elapsed_seconds": elapsed,
+        "elapsed": elapsed,
+
+        "synced": True,
+        "idempotent": False,
+    }
+
+
+# ============================================================
+# PROFILE
+# ============================================================
+
+@app.get("/api/profile")
+async def profile(
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    await upsert_user(user)
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE status='finished'
+                ) AS tests,
+
+                MAX(iq_score) FILTER (
+                    WHERE status='finished'
+                ) AS best_iq,
+
+                AVG(iq_score) FILTER (
+                    WHERE status='finished'
+                ) AS average_iq
+
+            FROM attempts
+            WHERE telegram_id=$1
+            """,
+            user["telegram_id"],
+        )
+
+    return {
+        "ok": True,
+        "user": {
+            "telegram_id": user["telegram_id"],
+            "username": user.get("username"),
+            "first_name": user.get("first_name"),
+            "last_name": user.get("last_name"),
+        },
+        "tests": int(row["tests"] or 0),
+        "best_iq": int(row["best_iq"]) if row["best_iq"] is not None else None,
+        "average_iq": (
+            round(float(row["average_iq"]), 1)
+            if row["average_iq"] is not None
+            else None
+        ),
+    }
+
+
+# ============================================================
+# RANKING
+# ============================================================
+
+@app.get("/api/ranking")
+async def ranking(
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    await upsert_user(user)
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                a.telegram_id,
+                a.iq_score,
+                a.correct_count,
+                a.finished_at,
+                u.username,
+                u.first_name
+            FROM attempts a
+            JOIN users u
+              ON u.telegram_id=a.telegram_id
+
+            WHERE a.status='finished'
+              AND a.iq_score IS NOT NULL
+
+            ORDER BY
+                a.iq_score DESC,
+                a.finished_at ASC
+
+            LIMIT 100
+            """
+        )
+
+        my_best = await conn.fetchrow(
+            """
+            SELECT MAX(iq_score) AS iq
+            FROM attempts
+            WHERE telegram_id=$1
+              AND status='finished'
+            """,
+            user["telegram_id"],
+        )
+
+    items = []
+
+    for position, row in enumerate(rows, start=1):
+
+        display_name = (
+            row["first_name"]
+            or (
+                f"@{row['username']}"
+                if row["username"]
+                else "Foydalanuvchi"
+            )
+        )
+
+        items.append(
+            {
+                "position": position,
+                "rank": position,
+                "name": display_name,
+                "username": row["username"],
+                "iq": row["iq_score"],
+                "score": row["iq_score"],
+                "correct": row["correct_count"],
+            }
+        )
+
+    my_iq = my_best["iq"]
+
+    my_position = None
+
+    if my_iq is not None:
+        my_position = await conn_fetch_rank(
+            user["telegram_id"],
+            my_iq,
+        )
+
+    return {
+        "ok": True,
+        "items": items,
+        "ranking": items,
+        "my_rank": my_position,
+        "my_position": my_position,
+        "my_score": my_iq,
+        "my_iq": my_iq,
+    }
+
+
+async def conn_fetch_rank(
+    telegram_id: int,
+    iq: int,
+) -> Optional[int]:
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        rank = await conn.fetchval(
+            """
+            SELECT COUNT(*) + 1
+            FROM (
+                SELECT
+                    telegram_id,
+                    MAX(iq_score) AS best_iq
+                FROM attempts
+                WHERE status='finished'
+                GROUP BY telegram_id
+            ) x
+            WHERE x.best_iq > $1
+            """,
+            iq,
+        )
+
+        return int(rank) if rank is not None else None
+
+
+# ============================================================
+# PAYMENT CREATE
+# ============================================================
+
+@app.post("/api/payment/create")
+async def create_payment(
+    body: PaymentCreateRequest,
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    await upsert_user(user)
+
+    purpose = body.purpose.strip().lower()
+
+    if purpose not in {
+        "retest",
+        "result",
+    }:
+        purpose = "retest"
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        cards = await conn.fetch(
+            """
+            SELECT
+                id,
+                title,
+                card_number,
+                owner_name
+            FROM payment_cards
+            WHERE active=TRUE
+            ORDER BY id ASC
+            """
+        )
+
+        if not cards:
+            raise HTTPException(
+                status_code=503,
+                detail="NO_PAYMENT_CARD",
+            )
+
+        payment_id = uuid.uuid4()
+
+        await conn.execute(
+            """
+            INSERT INTO payments (
+                payment_id,
+                telegram_id,
+                amount,
+                purpose,
+                status
+            )
+            VALUES ($1,$2,$3,$4,'pending')
+            """,
+            payment_id,
+            user["telegram_id"],
+            PRICE_UZS,
+            purpose,
+        )
+
+    return {
+        "ok": True,
+        "payment_id": str(payment_id),
+        "paymentId": str(payment_id),
+        "amount": PRICE_UZS,
+        "purpose": purpose,
+        "status": "pending",
+
+        "cards": [
+            {
+                "id": card["id"],
+                "title": card["title"],
+                "card_number": card["card_number"],
+                "owner_name": card["owner_name"],
+            }
+            for card in cards
+        ],
+    }
+
+
+# ============================================================
+# PAYMENT STATUS
+# ============================================================
+
+@app.get("/api/payment/{payment_id}")
+async def payment_status(
+    payment_id: str,
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    try:
+        pid = uuid.UUID(payment_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="INVALID_PAYMENT_ID",
+        )
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        row = await conn.fetchrow(
+            """
+            SELECT
+                payment_id,
+                amount,
+                purpose,
+                status,
+                created_at,
+                decided_at
+            FROM payments
+            WHERE payment_id=$1
+              AND telegram_id=$2
+            """,
+            pid,
+            user["telegram_id"],
+        )
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="PAYMENT_NOT_FOUND",
+        )
+
+    return {
+        "ok": True,
+        "payment_id": str(row["payment_id"]),
+        "paymentId": str(row["payment_id"]),
+        "amount": row["amount"],
+        "purpose": row["purpose"],
+        "status": row["status"],
+        "created_at": row["created_at"].isoformat(),
+        "decided_at": (
+            row["decided_at"].isoformat()
+            if row["decided_at"]
+            else None
+        ),
+    }
+
+
+# ============================================================
+# ADMIN AUTH
+# ============================================================
+
+def is_admin(telegram_id: int) -> bool:
+    return (
+        ADMIN_ID != 0
+        and telegram_id == ADMIN_ID
+    )
+
+
+# ============================================================
+# ADMIN PAYMENT LIST
+# ============================================================
+
+@app.get("/api/admin/payments")
+async def admin_payments(
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    if not is_admin(user["telegram_id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="ADMIN_ONLY",
+        )
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                payment_id,
+                telegram_id,
+                amount,
+                purpose,
+                status,
+                created_at,
+                decided_at
+            FROM payments
+            ORDER BY created_at DESC
+            LIMIT 100
+            """
+        )
+
+    return {
+        "ok": True,
+        "payments": [
+            {
+                "payment_id": str(row["payment_id"]),
+                "telegram_id": row["telegram_id"],
+                "amount": row["amount"],
+                "purpose": row["purpose"],
+                "status": row["status"],
+                "created_at": row["created_at"].isoformat(),
+                "decided_at": (
+                    row["decided_at"].isoformat()
+                    if row["decided_at"]
+                    else None
+                ),
+            }
+            for row in rows
+        ],
+    }
+
+
+# ============================================================
+# ADMIN PAYMENT DECISION
+# ============================================================
+
+@app.post("/api/admin/payment/{payment_id}")
+async def admin_payment_decision(
+    payment_id: str,
+    body: AdminDecisionRequest,
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    if not is_admin(user["telegram_id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="ADMIN_ONLY",
+        )
+
+    action = body.action.strip().lower()
+
+    if action not in {
+        "approve",
+        "reject",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="INVALID_ACTION",
+        )
+
+    try:
+        pid = uuid.UUID(payment_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="INVALID_PAYMENT_ID",
+        )
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        async with conn.transaction():
+
+            payment = await conn.fetchrow(
+                """
+                SELECT *
+                FROM payments
+                WHERE payment_id=$1
+                FOR UPDATE
+                """,
+                pid,
+            )
+
+            if not payment:
+                raise HTTPException(
+                    status_code=404,
+                    detail="PAYMENT_NOT_FOUND",
+                )
+
+            if payment["status"] != "pending":
+                return {
+                    "ok": True,
+                    "status": payment["status"],
+                    "already_decided": True,
+                }
+
+            new_status = (
+                "approved"
+                if action == "approve"
+                else "rejected"
+            )
+
+            await conn.execute(
+                """
+                UPDATE payments
+                SET
+                    status=$2,
+                    decided_at=NOW(),
+                    admin_id=$3
+                WHERE payment_id=$1
+                  AND status='pending'
+                """,
+                pid,
+                new_status,
+                user["telegram_id"],
+            )
+
+            telegram_id = payment["telegram_id"]
+
+    # Telegram notification.
+    if bot:
+
+        try:
+
+            if action == "approve":
+
+                await bot.send_message(
+                    telegram_id,
+                    (
+                        "✅ To‘lov tasdiqlandi.\n\n"
+                        "IQ TEST qayta topshirish imkoniyati ochildi."
+                    ),
+                )
+
+            else:
+
+                await bot.send_message(
+                    telegram_id,
+                    (
+                        "❌ To‘lov rad etildi.\n\n"
+                        "Agar xatolik bo‘lsa, qayta to‘lov yuboring."
+                    ),
+                )
+
+        except Exception:
+            logger.exception(
+                "Could not send payment notification"
+            )
+
+    return {
+        "ok": True,
+        "status": (
+            "approved"
+            if action == "approve"
+            else "rejected"
+        ),
+    }
+
+
+# ============================================================
+# ADMIN ADD CARD
+# ============================================================
+
+@app.post("/api/admin/cards")
+async def admin_add_card(
+    request: Request,
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    if not is_admin(user["telegram_id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="ADMIN_ONLY",
+        )
+
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="INVALID_JSON",
+        )
+
+    title = str(data.get("title", "")).strip()
+    card_number = str(data.get("card_number", "")).strip()
+    owner_name = str(data.get("owner_name", "")).strip()
+
+    if not title or not card_number:
+        raise HTTPException(
+            status_code=400,
+            detail="CARD_DATA_REQUIRED",
+        )
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        card_id = await conn.fetchval(
+            """
+            INSERT INTO payment_cards (
+                title,
+                card_number,
+                owner_name,
+                active
+            )
+            VALUES ($1,$2,$3,TRUE)
+            RETURNING id
+            """,
+            title,
+            card_number,
+            owner_name or None,
+        )
+
+    return {
+        "ok": True,
+        "card_id": card_id,
+    }
+
+
+# ============================================================
+# ADMIN CARD LIST
+# ============================================================
+
+@app.get("/api/admin/cards")
+async def admin_cards(
+    x_telegram_init_data: str = Header(default=""),
+):
+    user = await get_webapp_user(x_telegram_init_data)
+
+    if not is_admin(user["telegram_id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="ADMIN_ONLY",
+        )
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                id,
+                title,
+                card_number,
+                owner_name,
+                active
+            FROM payment_cards
+            ORDER BY id ASC
+            """
+        )
+
+    return {
+        "ok": True,
+        "cards": [
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "card_number": row["card_number"],
+                "owner_name": row["owner_name"],
+                "active": row["active"],
+            }
+            for row in rows
+        ],
+    }
+
+
+# ============================================================
+# BOT
+# ============================================================
+
+def main_keyboard() -> InlineKeyboardMarkup:
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🧠 IQ TEST",
+                    web_app=WebAppInfo(
+                        url=WEBAPP_URL
+                    ),
+                )
+            ]
+        ]
+    )
+
+
+@dp.message(CommandStart())
+async def start_handler(message: Message):
+
+    if message.from_user:
+
+        user = {
+            "telegram_id": message.from_user.id,
+            "username": message.from_user.username,
+            "first_name": message.from_user.first_name,
+            "last_name": message.from_user.last_name,
+        }
+
+        try:
+            await upsert_user(user)
+        except Exception:
+            logger.exception(
+                "Could not save Telegram user"
+            )
+
+    await message.answer(
+        (
+            "🧠 <b>IQ TEST</b>\n\n"
+            "16 ta mantiqiy savol.\n"
+            "Vaqt: 8 daqiqa.\n\n"
+            "Natijangiz test yakunida hisoblanadi."
+        ),
+        reply_markup=main_keyboard(),
+    )
+
+
+# ============================================================
+# ADMIN TELEGRAM COMMANDS
+# ============================================================
+
+@dp.message(F.text == "/admin")
+async def admin_command(message: Message):
+
+    if not message.from_user:
+        return
+
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Ruxsat yo‘q.")
+        return
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        pending = await conn.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM payments
+            WHERE status='pending'
+            """
+        )
+
+        users = await conn.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM users
+            """
+        )
+
+        tests = await conn.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM attempts
+            WHERE status='finished'
+            """
+        )
+
+    await message.answer(
+        (
+            "🛠 <b>ADMIN PANEL</b>\n\n"
+            f"👥 Users: <b>{users}</b>\n"
+            f"🧠 Finished tests: <b>{tests}</b>\n"
+            f"💳 Pending payments: <b>{pending}</b>\n\n"
+            "To‘lovlarni ko‘rish:\n"
+            "/payments"
+        )
+    )
+
+
+@dp.message(F.text == "/payments")
+async def payments_command(message: Message):
+
+    if not message.from_user:
+        return
+
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Ruxsat yo‘q.")
+        return
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                payment_id,
+                telegram_id,
+                amount,
+                purpose,
+                status,
+                created_at
+            FROM payments
+            WHERE status='pending'
+            ORDER BY created_at ASC
+            LIMIT 20
+            """
+        )
+
+    if not rows:
+        await message.answer(
+            "📭 Hozir pending to‘lov yo‘q."
+        )
+        return
+
+    for row in rows:
+
+        payment_id = str(row["payment_id"])
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Tasdiqlash",
+                        callback_data=f"pay:approve:{payment_id}",
+                    ),
+                    InlineKeyboardButton(
+                        text="❌ Rad etish",
+                        callback_data=f"pay:reject:{payment_id}",
+                    ),
+                ]
+            ]
+        )
+
+        await message.answer(
+            (
+                "💳 <b>Yangi to‘lov</b>\n\n"
+                f"👤 User: <code>{row['telegram_id']}</code>\n"
+                f"💰 Summa: <b>{row['amount']:,} UZS</b>\n"
+                f"🎯 Purpose: {row['purpose']}\n"
+                f"🆔 <code>{payment_id}</code>\n"
+                f"📅 {row['created_at'].isoformat()}"
+            ),
+            reply_markup=keyboard,
+        )
+
+
+# ============================================================
+# ADMIN CALLBACK
+# ============================================================
+
+@dp.callback_query(F.data.startswith("pay:"))
+async def payment_callback(callback):
+
+    if not callback.from_user:
+        return
+
+    if not is_admin(callback.from_user.id):
+        await callback.answer(
+            "⛔ Ruxsat yo‘q.",
+            show_alert=True,
+        )
+        return
+
+    parts = callback.data.split(":")
+
+    if len(parts) != 3:
+        await callback.answer(
+            "Noto‘g‘ri callback.",
+            show_alert=True,
+        )
+        return
+
+    _, action, payment_id = parts
+
+    try:
+        pid = uuid.UUID(payment_id)
+    except ValueError:
+        await callback.answer(
+            "Payment ID xato.",
+            show_alert=True,
+        )
+        return
+
+    assert pool is not None
+
+    async with pool.acquire() as conn:
+
+        async with conn.transaction():
+
+            payment = await conn.fetchrow(
+                """
+                SELECT *
+                FROM payments
+                WHERE payment_id=$1
+                FOR UPDATE
+                """,
+                pid,
+            )
+
+            if not payment:
+                await callback.answer(
+                    "To‘lov topilmadi.",
+                    show_alert=True,
+                )
+                return
+
+            if payment["status"] != "pending":
+                await callback.answer(
+                    f"Allaqachon: {payment['status']}",
+                    show_alert=True,
+                )
+                return
+
+            new_status = (
+                "approved"
+                if action == "approve"
+                else "rejected"
+            )
+
+            await conn.execute(
+                """
+                UPDATE payments
+                SET
+                    status=$2,
+                    decided_at=NOW(),
+                    admin_id=$3
+                WHERE payment_id=$1
+                  AND status='pending'
+                """,
+                pid,
+                new_status,
+                callback.from_user.id,
+            )
+
+            telegram_id = payment["telegram_id"]
+
+    if action == "approve":
+
+        await callback.answer(
+            "✅ To‘lov tasdiqlandi."
+        )
+
+        text = (
+            "✅ <b>To‘lov tasdiqlandi</b>\n\n"
+            "Qayta IQ TEST topshirish imkoniyati ochildi."
+        )
+
+    else:
+
+        await callback.answer(
+            "❌ To‘lov rad etildi."
+        )
+
+        text = (
+            "❌ <b>To‘lov rad etildi</b>\n\n"
+            "Qayta to‘lov yuborishingiz mumkin."
+        )
+
+    try:
+        await bot.send_message(
+            telegram_id,
+            text,
+        )
+    except Exception:
+        logger.exception(
+            "Payment notification failed"
+        )
+
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=None
+        )
+    except Exception:
+        pass
+
+
+# ============================================================
+# WEB SERVER + BOT RUNNER
 # ============================================================
 
 async def run_bot():
-
-    app, pool = await create_app()
+    global bot
 
     bot = Bot(
         token=BOT_TOKEN
     )
 
-    dispatcher = Dispatcher()
-
-
-    # --------------------------------------------------------
-    # /start
-    # --------------------------------------------------------
-
-    @dispatcher.message(
-        CommandStart()
-    )
-    async def start_handler(
-        message: Message
-    ):
-
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-
-                [
-
-                    InlineKeyboardButton(
-
-                        text="🧠 IQ TESTNI BOSHLASH",
-
-                        web_app=WebAppInfo(
-                            url=f"{WEBAPP_URL}/app"
-                        )
-                    )
-                ]
-            ]
-        )
-
-
-        await message.answer(
-
-            "🧠 IQ TEST\n\n"
-
-            "16 ta mantiqiy va abstrakt "
-            "fikrlash topshirig‘i.\n\n"
-
-            "Test davomida javoblaringiz "
-            "serverga yuborilmaydi.\n"
-
-            "Natija test yakunida tekshiriladi.",
-
-            reply_markup=keyboard
-        )
-
-
-    # --------------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------------
-
-    @dispatcher.message(F.text)
-    async def fallback(
-        message: Message
-    ):
-
-        await message.answer(
-
-            "IQ testni ochish uchun "
-            "/start buyrug‘ini bosing."
-        )
-
-
-    # --------------------------------------------------------
-    # WEB SERVER
-    # --------------------------------------------------------
-
-    uvicorn_config = uvicorn.Config(
-
-        app,
-
-        host="0.0.0.0",
-
-        port=PORT,
-
-        log_level="info",
-    )
-
-    server = uvicorn.Server(
-        uvicorn_config
-    )
-
-
-    async def run_web():
-
-        await server.serve()
-
+    logger.info("Starting Telegram polling")
 
     try:
-
-        await asyncio.gather(
-
-            dispatcher.start_polling(
-                bot
-            ),
-
-            run_web(),
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
         )
-
     finally:
-
-        await pool.close()
-
         await bot.session.close()
 
 
+async def run_web():
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=PORT,
+        log_level="info",
+    )
+
+    server = uvicorn.Server(config)
+
+    logger.info(
+        "Starting FastAPI server on port %s",
+        PORT,
+    )
+
+    await server.serve()
+
+
+async def main():
+    await asyncio.gather(
+        run_web(),
+        run_bot(),
+    )
+
+
 # ============================================================
-# ENTRY POINT
+# ENTRYPOINT
 # ============================================================
 
 if __name__ == "__main__":
-
-    asyncio.run(
-        run_bot()
-    )
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Stopped")
