@@ -1831,7 +1831,9 @@
     return true;
   }
 
+  
   function boot() {
+  try {
     telegramReady();
     updateOfflineUI();
 
@@ -1843,8 +1845,7 @@
     setupVisibilityProtection();
     setupBackButton();
 
-    const restored =
-      restoreSession();
+    const restored = restoreSession();
 
     if (restored) {
       if (
@@ -1854,11 +1855,22 @@
         renderQuestion();
       }
 
+      setLoader(false);
       return;
     }
 
     showScreen("homeScreen");
+    setLoader(false);
+
+  } catch (error) {
+    console.error("IQ TEST BOOT ERROR:", error);
+
+    setLoader(false);
+    showScreen("homeScreen");
+
+    toast(t("error"));
   }
+}
 
   /*
    * Sync previously completed offline attempts.
