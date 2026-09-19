@@ -1,12 +1,22 @@
 /* ============================================================
-   IQ TEST — webapp/app.js
-   Local-first test engine
-   - No request per answer
-   - Local autosave
-   - Offline-safe
-   - One final sync
-   - Idempotent attempt_id
-   - Compatible with the current index.html
+   IQ TEST BOT — webapp/app.js
+   Local-first reasoning test
+
+   ARCHITECTURE
+   ------------------------------------------------------------
+   START:
+     1 request -> server creates authenticated attempt
+
+   DURING TEST:
+     0 requests
+     answers live only in localStorage
+
+   FINISH:
+     1 request -> server verifies/scorers result
+
+   OFFLINE:
+     completed payload is queued locally
+     and retried automatically when internet returns
    ============================================================ */
 
 (() => {
@@ -15,37 +25,39 @@
   const tg = window.Telegram?.WebApp || null;
   const API = "";
 
-  const STORAGE_KEY = "iq_test_active_v3";
-  const QUEUE_KEY = "iq_test_sync_queue_v3";
-  const LANG_KEY = "iq_test_lang_v3";
+  const STORAGE_KEY = "iq_test_active_v4";
+  const QUEUE_KEY = "iq_test_finish_queue_v4";
+  const LANG_KEY = "iq_test_lang_v4";
 
   const QUESTION_COUNT = 16;
   const TOTAL_SECONDS = 8 * 60;
 
   const state = {
     lang: localStorage.getItem(LANG_KEY) || "uz",
-    package: null,
     session: null,
     result: null,
-    ranking: null,
     busy: false,
     finishing: false,
-    clockTimer: null,
-    saveTimer: null
+    clock: null,
+    autosave: null
   };
 
   const LETTERS = ["A", "B", "C", "D"];
 
+  /* ==========================================================
+     TEXT
+     ========================================================== */
+
   const T = {
     uz: {
       title: "IQ TEST",
-      desc: "16 ta original mantiqiy puzzle orqali fikrlash qobiliyatingizni sinab ko‘ring.",
+      desc: "16 ta qisqa reasoning topshirig‘i orqali fikrlashingizni sinang.",
       start: "TESTNI BOSHLASH",
       ranking: "Reyting",
       profile: "Profil",
       free: "Birinchi test — bepul",
-      why: "Natija va reytingingiz avtomatik saqlanadi.",
-      question: "MANTIQIY PUZZLE",
+      why: "Test davomida javoblar serverga yuborilmaydi.",
+      puzzle: "REASONING",
       time: "Vaqt",
       correct: "To‘g‘ri",
       score: "IQ",
@@ -54,41 +66,35 @@
       next: "DAVOM ETISH",
       finish: "NATIJANI KO‘RISH",
       loading: "Yuklanmoqda…",
-      sending: "Natija tekshirilmoqda…",
-      offline: "Internet yo‘q. Test baribir davom etadi.",
+      checking: "Natija tekshirilmoqda…",
+      offline: "Internet yo‘q. Test davom etadi.",
       synced: "Natija serverga saqlandi.",
       pending: "Natija internet tiklanganda yuboriladi.",
       error: "Xatolik yuz berdi.",
       retry: "QAYTA URINISH",
-      back: "Orqaga",
-      tests: "Testlar",
-      best: "Eng yaxshi IQ",
-      referrals: "Takliflar",
-      retest: "QAYTA TEST",
-      paid: "Keyingi test pullik.",
-      quit: "Testdan chiqasizmi?",
-      quitText: "Joriy natija saqlanadi va keyin davom ettirishingiz mumkin.",
-      stay: "TESTDA QOLISH",
-      leave: "CHIQISH",
-      noData: "Ma’lumot topilmadi.",
-      telegramOnly: "Bu ilovani Telegram ichidan oching.",
       share: "NATIJANI ULASHISH",
       certificate: "SERTIFIKAT",
       develop: "IQ’IMNI RIVOJLANTIRISH",
+      quit: "Testdan chiqasizmi?",
+      quitText: "Joriy progress qurilmangizda saqlanadi.",
+      stay: "TESTDA QOLISH",
+      leave: "CHIQISH",
+      noData: "Ma’lumot topilmadi.",
+      paid: "Keyingi test pullik.",
       cannotStart: "Testni boshlab bo‘lmadi.",
       cannotFinish: "Natijani yuborib bo‘lmadi.",
-      sync: "Sinxronlashtirilmoqda…"
+      session: "Test davom ettirilmoqda."
     },
 
     ru: {
-      title: "IQ TEST",
-      desc: "Проверьте логическое мышление с помощью 16 оригинальных задач.",
+      title: "IQ ТЕСТ",
+      desc: "16 коротких заданий на логику и reasoning.",
       start: "НАЧАТЬ ТЕСТ",
       ranking: "Рейтинг",
       profile: "Профиль",
       free: "Первая попытка — бесплатно",
-      why: "Результат и рейтинг сохраняются автоматически.",
-      question: "ЛОГИЧЕСКАЯ ЗАДАЧА",
+      why: "Во время теста ответы не отправляются на сервер.",
+      puzzle: "REASONING",
       time: "Время",
       correct: "Верно",
       score: "IQ",
@@ -97,41 +103,35 @@
       next: "ПРОДОЛЖИТЬ",
       finish: "ПОКАЗАТЬ РЕЗУЛЬТАТ",
       loading: "Загрузка…",
-      sending: "Результат проверяется…",
-      offline: "Нет интернета. Тест продолжится.",
+      checking: "Проверка результата…",
+      offline: "Нет интернета. Тест продолжается.",
       synced: "Результат сохранён.",
-      pending: "Результат будет отправлен после восстановления интернета.",
+      pending: "Результат отправится после восстановления интернета.",
       error: "Произошла ошибка.",
       retry: "ПОВТОРИТЬ",
-      back: "Назад",
-      tests: "Тесты",
-      best: "Лучший IQ",
-      referrals: "Приглашения",
-      retest: "ПОВТОРНЫЙ ТЕСТ",
-      paid: "Следующая попытка платная.",
-      quit: "Выйти из теста?",
-      quitText: "Текущий прогресс будет сохранён.",
-      stay: "ОСТАТЬСЯ",
-      leave: "ВЫЙТИ",
-      noData: "Данные не найдены.",
-      telegramOnly: "Откройте приложение внутри Telegram.",
       share: "ПОДЕЛИТЬСЯ",
       certificate: "СЕРТИФИКАТ",
       develop: "РАЗВИВАТЬ IQ",
+      quit: "Выйти из теста?",
+      quitText: "Прогресс сохранится на устройстве.",
+      stay: "ОСТАТЬСЯ",
+      leave: "ВЫЙТИ",
+      noData: "Данные не найдены.",
+      paid: "Следующая попытка платная.",
       cannotStart: "Не удалось начать тест.",
       cannotFinish: "Не удалось отправить результат.",
-      sync: "Синхронизация…"
+      session: "Тест продолжается."
     },
 
     en: {
       title: "IQ TEST",
-      desc: "Test your reasoning with 16 original logic puzzles.",
+      desc: "16 short reasoning tasks designed for quick mobile play.",
       start: "START TEST",
       ranking: "Ranking",
       profile: "Profile",
       free: "First attempt — free",
-      why: "Your result and ranking are saved automatically.",
-      question: "LOGIC PUZZLE",
+      why: "Answers are not sent to the server during the test.",
+      puzzle: "REASONING",
       time: "Time",
       correct: "Correct",
       score: "IQ",
@@ -140,36 +140,397 @@
       next: "CONTINUE",
       finish: "VIEW RESULT",
       loading: "Loading…",
-      sending: "Checking result…",
-      offline: "No internet. The test will continue.",
+      checking: "Checking result…",
+      offline: "No internet. The test continues.",
       synced: "Result saved.",
       pending: "Result will be sent when internet returns.",
       error: "Something went wrong.",
       retry: "RETRY",
-      back: "Back",
-      tests: "Tests",
-      best: "Best IQ",
-      referrals: "Invites",
-      retest: "RETAKE TEST",
-      paid: "The next attempt is paid.",
-      quit: "Leave the test?",
-      quitText: "Your current progress will be saved.",
-      stay: "STAY",
-      leave: "LEAVE",
-      noData: "No data found.",
-      telegramOnly: "Open this app inside Telegram.",
       share: "SHARE RESULT",
       certificate: "CERTIFICATE",
       develop: "DEVELOP MY IQ",
+      quit: "Leave the test?",
+      quitText: "Your progress will be saved locally.",
+      stay: "STAY",
+      leave: "LEAVE",
+      noData: "No data found.",
+      paid: "The next attempt is paid.",
       cannotStart: "Could not start the test.",
       cannotFinish: "Could not submit the result.",
-      sync: "Synchronizing…"
+      session: "Test in progress."
     }
   };
 
   function t(key) {
     return T[state.lang]?.[key] || T.uz[key] || key;
   }
+
+  /* ==========================================================
+     QUESTION BANK
+     ----------------------------------------------------------
+     IMPORTANT:
+     - 16 questions
+     - 4 options each
+     - correct is used ONLY locally for UI-free operation.
+     - Server will have the same answer key and remains
+       authoritative at final submission.
+     ========================================================== */
+
+  const QUESTIONS = [
+    {
+      id: "Q01",
+      type: "pattern",
+      text: {
+        uz: "Ketma-ketlikni davom ettiring.",
+        ru: "Продолжите последовательность.",
+        en: "Continue the sequence."
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>2</span>
+          <span>4</span>
+          <span>8</span>
+          <span>16</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["24", "30", "32", "36"],
+      correct: 2
+    },
+
+    {
+      id: "Q02",
+      type: "number",
+      text: {
+        uz: "Qaysi son yetishmayapti?",
+        ru: "Какого числа не хватает?",
+        en: "Which number is missing?"
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>3</span>
+          <span>6</span>
+          <span>11</span>
+          <span>18</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["25", "27", "29", "31"],
+      correct: 1
+    },
+
+    {
+      id: "Q03",
+      type: "pattern",
+      text: {
+        uz: "Qaysi belgi keyingi bo‘ladi?",
+        ru: "Какой символ будет следующим?",
+        en: "Which symbol comes next?"
+      },
+      visual: `
+        <div class="shape-sequence">
+          <span>●</span>
+          <span>▲</span>
+          <span>●</span>
+          <span>▲</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["●", "▲", "■", "◆"],
+      correct: 0
+    },
+
+    {
+      id: "Q04",
+      type: "number",
+      text: {
+        uz: "Qoidani toping.",
+        ru: "Найдите правило.",
+        en: "Find the rule."
+      },
+      visual: `
+        <div class="math-sequence">
+          <span>5 → 11</span>
+          <span>7 → 15</span>
+          <span>9 → 19</span>
+          <span>12 → ?</span>
+        </div>
+      `,
+      options: ["23", "24", "25", "27"],
+      correct: 2
+    },
+
+    {
+      id: "Q05",
+      type: "number",
+      text: {
+        uz: "Ketma-ketlikni davom ettiring.",
+        ru: "Продолжите последовательность.",
+        en: "Continue the sequence."
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>1</span>
+          <span>4</span>
+          <span>9</span>
+          <span>16</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["20", "24", "25", "27"],
+      correct: 2
+    },
+
+    {
+      id: "Q06",
+      type: "logic",
+      text: {
+        uz: "Barcha A — B. Qaysi xulosa aniq?",
+        ru: "Все A — это B. Какой вывод точен?",
+        en: "All A are B. Which conclusion is certain?"
+      },
+      visual: `
+        <div class="logic-box">
+          <span>A</span>
+          <i>→</i>
+          <span>B</span>
+        </div>
+      `,
+      options: [
+        "Barcha B — A",
+        "Hech bir A — B emas",
+        "A bo‘lsa, B ham bo‘ladi",
+        "Ba’zi B — A emas"
+      ],
+      correct: 2
+    },
+
+    {
+      id: "Q07",
+      type: "number",
+      text: {
+        uz: "Keyingi sonni toping.",
+        ru: "Найдите следующее число.",
+        en: "Find the next number."
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>2</span>
+          <span>6</span>
+          <span>12</span>
+          <span>20</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["28", "30", "32", "36"],
+      correct: 1
+    },
+
+    {
+      id: "Q08",
+      type: "pattern",
+      text: {
+        uz: "Qaysi shakl naqshni to‘ldiradi?",
+        ru: "Какая фигура завершает узор?",
+        en: "Which shape completes the pattern?"
+      },
+      visual: `
+        <svg viewBox="0 0 320 150" class="question-svg">
+          <rect x="15" y="30" width="60" height="60" rx="8"/>
+          <circle cx="45" cy="60" r="15"/>
+
+          <rect x="95" y="30" width="60" height="60" rx="8"/>
+          <path d="M125 43 L140 75 L110 75 Z"/>
+
+          <rect x="175" y="30" width="60" height="60" rx="8"/>
+          <circle cx="205" cy="60" r="15"/>
+
+          <rect x="255" y="30" width="50" height="60" rx="8"/>
+          <text x="272" y="70" font-size="28">?</text>
+        </svg>
+      `,
+      options: ["●", "▲", "■", "◆"],
+      correct: 1
+    },
+
+    {
+      id: "Q09",
+      type: "number",
+      text: {
+        uz: "Qaysi son yetishmayapti?",
+        ru: "Какого числа не хватает?",
+        en: "Which number is missing?"
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>4</span>
+          <span>9</span>
+          <span>19</span>
+          <span>39</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["69", "79", "89", "99"],
+      correct: 1
+    },
+
+    {
+      id: "Q10",
+      type: "letters",
+      text: {
+        uz: "Harflar qatorini davom ettiring.",
+        ru: "Продолжите ряд букв.",
+        en: "Continue the letter sequence."
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>A</span>
+          <span>C</span>
+          <span>F</span>
+          <span>J</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["M", "N", "O", "P"],
+      correct: 2
+    },
+
+    {
+      id: "Q11",
+      type: "logic",
+      text: {
+        uz: "Qaysi tartib barcha shartlarga mos?",
+        ru: "Какой порядок соответствует всем условиям?",
+        en: "Which order satisfies all conditions?"
+      },
+      visual: `
+        <div class="logic-lines">
+          <div>A &lt; B</div>
+          <div>B &lt; C</div>
+          <div>D &lt; A</div>
+        </div>
+      `,
+      options: [
+        "A B C D",
+        "D A B C",
+        "B D A C",
+        "C B A D"
+      ],
+      correct: 1
+    },
+
+    {
+      id: "Q12",
+      type: "number",
+      text: {
+        uz: "Keyingi sonni toping.",
+        ru: "Найдите следующее число.",
+        en: "Find the next number."
+      },
+      visual: `
+        <div class="sequence-big">
+          <span>2</span>
+          <span>5</span>
+          <span>11</span>
+          <span>23</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["35", "41", "47", "49"],
+      correct: 2
+    },
+
+    {
+      id: "Q13",
+      type: "logic",
+      text: {
+        uz: "Faqat bitta gap rost. Qaysi quti?",
+        ru: "Только одно утверждение истинно. Какая коробка?",
+        en: "Only one statement is true. Which box?"
+      },
+      visual: `
+        <div class="boxes">
+          <div>A</div>
+          <div>B</div>
+          <div>C</div>
+        </div>
+      `,
+      options: [
+        "A qutida",
+        "B qutida",
+        "C qutida",
+        "Aniqlab bo‘lmaydi"
+      ],
+      correct: 1
+    },
+
+    {
+      id: "Q14",
+      type: "number",
+      text: {
+        uz: "Qaysi son qoidaga mos?",
+        ru: "Какое число соответствует правилу?",
+        en: "Which number follows the rule?"
+      },
+      visual: `
+        <div class="math-sequence">
+          <span>2 × 3 + 2 = 8</span>
+          <span>3 × 4 + 3 = 15</span>
+          <span>4 × 5 + 4 = 24</span>
+        </div>
+      `,
+      options: ["30", "32", "35", "36"],
+      correct: 2
+    },
+
+    {
+      id: "Q15",
+      type: "pattern",
+      text: {
+        uz: "Naqshni davom ettiring.",
+        ru: "Продолжите узор.",
+        en: "Continue the pattern."
+      },
+      visual: `
+        <div class="shape-sequence">
+          <span>○↑</span>
+          <span>●→</span>
+          <span>○↓</span>
+          <span>●←</span>
+          <b>?</b>
+        </div>
+      `,
+      options: ["○↑", "●↑", "○→", "●↓"],
+      correct: 0
+    },
+
+    {
+      id: "Q16",
+      type: "logic",
+      text: {
+        uz: "Qaysi xulosa majburiy?",
+        ru: "Какой вывод обязателен?",
+        en: "Which conclusion must be true?"
+      },
+      visual: `
+        <div class="logic-lines">
+          <div>Ba'zi A → B</div>
+          <div>B → C</div>
+        </div>
+      `,
+      options: [
+        "Barcha A — C",
+        "Ba'zi A — C",
+        "Barcha C — A",
+        "A va C bog‘liq emas"
+      ],
+      correct: 1
+    }
+  ];
+
+  /* ==========================================================
+     BASIC HELPERS
+     ========================================================== */
 
   function esc(value) {
     return String(value ?? "")
@@ -180,29 +541,66 @@
       .replaceAll("'", "&#39;");
   }
 
-  function uuid() {
-    if (crypto?.randomUUID) return crypto.randomUUID();
-
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-    const h = [...bytes].map(x => x.toString(16).padStart(2, "0"));
-
-    return (
-      h.slice(0, 4).join("") + "-" +
-      h.slice(4, 6).join("") + "-" +
-      h.slice(6, 8).join("") + "-" +
-      h.slice(8, 10).join("") + "-" +
-      h.slice(10, 16).join("")
-    );
-  }
-
   function initData() {
     return tg?.initData || "";
   }
+
+  function online() {
+    return navigator.onLine !== false;
+  }
+
+  function now() {
+    return Date.now();
+  }
+
+  function uuid() {
+    if (crypto?.randomUUID) {
+      return crypto.randomUUID();
+    }
+
+    const a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+
+    a[6] = (a[6] & 15) | 64;
+    a[8] = (a[8] & 63) | 128;
+
+    const h = [...a].map(x =>
+      x.toString(16).padStart(2, "0")
+    );
+
+    return [
+      h.slice(0, 4).join(""),
+      h.slice(4, 6).join(""),
+      h.slice(6, 8).join(""),
+      h.slice(8, 10).join(""),
+      h.slice(10, 16).join("")
+    ].join("-");
+  }
+
+  function formatTime(seconds) {
+    seconds = Math.max(0, Math.floor(seconds));
+
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+
+    return (
+      String(m).padStart(2, "0") +
+      ":" +
+      String(s).padStart(2, "0")
+    );
+  }
+
+  function parseJSON(value, fallback) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+
+  /* ==========================================================
+     TELEGRAM
+     ========================================================== */
 
   function telegramReady() {
     if (!tg) return;
@@ -211,67 +609,55 @@
       tg.ready();
       tg.expand();
 
-      if (tg.setHeaderColor) {
-        tg.setHeaderColor("#080b12");
-      }
+      tg.setHeaderColor?.("#090b12");
+      tg.setBackgroundColor?.("#090b12");
 
-      if (tg.setBackgroundColor) {
-        tg.setBackgroundColor("#080b12");
+      if (tg.enableClosingConfirmation) {
+        tg.enableClosingConfirmation();
       }
     } catch (e) {
-      console.warn("Telegram WebApp init:", e);
+      console.warn("Telegram:", e);
     }
   }
 
-  function isOnline() {
-    return navigator.onLine !== false;
-  }
+  /* ==========================================================
+     LOCAL STORAGE
+     ========================================================== */
 
-  function now() {
-    return Date.now();
-  }
-
-  function safeJSONParse(value, fallback = null) {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return fallback;
-    }
-  }
-
-  function saveActiveSession() {
+  function saveSession() {
     if (!state.session) return;
 
     try {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
-          version: 3,
+          version: 4,
           savedAt: now(),
           ...state.session
         })
       );
     } catch (e) {
-      console.warn("localStorage save failed:", e);
+      console.warn("Session save:", e);
     }
   }
 
-  function loadActiveSession() {
+  function loadSession() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
+
       if (!raw) return null;
 
-      const data = safeJSONParse(raw);
+      const data = parseJSON(raw, null);
 
-      if (!data || data.version !== 3) {
+      if (!data || data.version !== 4) {
         localStorage.removeItem(STORAGE_KEY);
         return null;
       }
 
       if (
         !data.attemptId ||
-        !Array.isArray(data.questions) ||
-        !Array.isArray(data.answers)
+        !Array.isArray(data.answers) ||
+        data.answers.length !== QUESTION_COUNT
       ) {
         localStorage.removeItem(STORAGE_KEY);
         return null;
@@ -283,7 +669,7 @@
     }
   }
 
-  function clearActiveSession() {
+  function clearSession() {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
@@ -291,27 +677,30 @@
 
   function queueResult(payload) {
     try {
-      const queue = safeJSONParse(
+      const queue = parseJSON(
         localStorage.getItem(QUEUE_KEY) || "[]",
         []
       );
 
-      const exists = queue.some(
-        x => x?.attempt_id === payload.attempt_id
-      );
-
-      if (!exists) {
+      if (
+        !queue.some(
+          x => x?.attempt_id === payload.attempt_id
+        )
+      ) {
         queue.push(payload);
       }
 
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(
+        QUEUE_KEY,
+        JSON.stringify(queue)
+      );
     } catch (e) {
-      console.error("Queue error:", e);
+      console.error("Queue:", e);
     }
   }
 
   function getQueue() {
-    return safeJSONParse(
+    return parseJSON(
       localStorage.getItem(QUEUE_KEY) || "[]",
       []
     );
@@ -319,54 +708,40 @@
 
   function setQueue(queue) {
     try {
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(
+        QUEUE_KEY,
+        JSON.stringify(queue)
+      );
     } catch {}
   }
 
-  async function syncQueue() {
-    if (!isOnline()) return;
-
-    const queue = getQueue();
-
-    if (!queue.length) return;
-
-    const remaining = [];
-
-    for (const payload of queue) {
-      try {
-        await api("/api/session/finish", {
-          method: "POST",
-          body: JSON.stringify(payload)
-        });
-      } catch (e) {
-        remaining.push(payload);
-      }
-    }
-
-    setQueue(remaining);
-  }
+  /* ==========================================================
+     API
+     ========================================================== */
 
   async function api(path, options = {}) {
     const controller = new AbortController();
 
-    const timeout = setTimeout(() => {
+    const timer = setTimeout(() => {
       controller.abort();
     }, 15000);
 
-    const headers = {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": initData(),
-      "Cache-Control": "no-cache",
-      ...(options.headers || {})
-    };
-
     try {
-      const response = await fetch(API + path, {
-        ...options,
-        headers,
-        cache: "no-store",
-        signal: controller.signal
-      });
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": initData(),
+        ...(options.headers || {})
+      };
+
+      const response = await fetch(
+        API + path,
+        {
+          ...options,
+          headers,
+          cache: "no-store",
+          signal: controller.signal
+        }
+      );
 
       const text = await response.text();
 
@@ -376,7 +751,9 @@
         try {
           data = JSON.parse(text);
         } catch {
-          data = { detail: text };
+          data = {
+            detail: text
+          };
         }
       }
 
@@ -388,23 +765,33 @@
         );
 
         error.status = response.status;
-        error.code = data?.code || data?.error || data?.detail;
+        error.code =
+          data?.code ||
+          data?.error ||
+          data?.detail;
 
         throw error;
       }
 
       return data;
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(timer);
     }
   }
 
-  function showScreen(id) {
-    document.querySelectorAll(".screen").forEach(screen => {
-      screen.classList.remove("active");
-    });
+  /* ==========================================================
+     UI
+     ========================================================== */
 
-    const screen = document.getElementById(id);
+  function showScreen(id) {
+    document
+      .querySelectorAll(".screen")
+      .forEach(el =>
+        el.classList.remove("active")
+      );
+
+    const screen =
+      document.getElementById(id);
 
     if (screen) {
       screen.classList.add("active");
@@ -416,23 +803,30 @@
     });
   }
 
-  function setLoader(visible) {
-    const loader = document.getElementById("globalLoader");
+  function loader(show) {
+    const el =
+      document.getElementById("globalLoader");
 
-    if (!loader) return;
+    if (!el) return;
 
-    loader.classList.toggle("hidden", !visible);
+    el.classList.toggle(
+      "hidden",
+      !show
+    );
   }
 
   let toastTimer = null;
 
   function toast(message) {
-    const el = document.getElementById("toast");
-    const msg = document.getElementById("toastMessage");
+    const el =
+      document.getElementById("toast");
 
-    if (!el || !msg) return;
+    const text =
+      document.getElementById("toastMessage");
 
-    msg.textContent = message;
+    if (!el || !text) return;
+
+    text.textContent = message;
 
     el.classList.add("visible");
 
@@ -443,355 +837,168 @@
     }, 2400);
   }
 
-  function updateOfflineUI() {
-    const banner = document.getElementById("offlineBanner");
+  function offlineUI() {
+    const banner =
+      document.getElementById("offlineBanner");
 
     if (!banner) return;
 
-    banner.classList.toggle("visible", !isOnline());
-  }
-
-  function formatTime(seconds) {
-    seconds = Math.max(0, Math.floor(seconds));
-
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-
-    return (
-      String(minutes).padStart(2, "0") +
-      ":" +
-      String(secs).padStart(2, "0")
+    banner.classList.toggle(
+      "visible",
+      !online()
     );
   }
 
-  function elapsedSeconds() {
-    if (!state.session) return 0;
-
-    return Math.max(
-      0,
-      Math.floor(
-        (now() - state.session.startedAt) / 1000
-      )
-    );
-  }
-
-  function remainingSeconds() {
-    if (!state.session) return TOTAL_SECONDS;
-
-    return Math.max(
-      0,
-      Math.ceil(
-        (state.session.deadline - now()) / 1000
-      )
-    );
-  }
-
-  function updateTimer() {
-    const timer = document.getElementById("timer");
-
-    if (!timer || !state.session) return;
-
-    const remaining = remainingSeconds();
-
-    timer.textContent = formatTime(remaining);
-
-    timer.classList.toggle(
-      "warning",
-      remaining <= 120 && remaining > 30
-    );
-
-    timer.classList.toggle(
-      "danger",
-      remaining <= 30
-    );
-
-    if (remaining <= 0 && !state.finishing) {
-      finishTest("timeout");
-    }
-  }
-
-  function startClock() {
-    clearInterval(state.clockTimer);
-
-    updateTimer();
-
-    state.clockTimer = setInterval(() => {
-      updateTimer();
-    }, 500);
-  }
-
-  function stopClock() {
-    clearInterval(state.clockTimer);
-    state.clockTimer = null;
-  }
-
-  function getQuestionText(question) {
-    if (!question) return "";
-
-    if (typeof question.text === "string") {
-      return question.text;
-    }
-
-    if (question.text) {
-      return (
-        question.text[state.lang] ||
-        question.text.uz ||
-        question.text.en ||
-        Object.values(question.text)[0] ||
-        ""
-      );
-    }
-
-    return question.q || "";
-  }
-
-  function getQuestionOptions(question) {
-    if (!question) return [];
-
-    if (Array.isArray(question.options)) {
-      return question.options;
-    }
-
-    if (Array.isArray(question.a)) {
-      return question.a;
-    }
-
-    if (question.a && typeof question.a === "object") {
-      return (
-        question.a[state.lang] ||
-        question.a.uz ||
-        question.a.en ||
-        Object.values(question.a)[0] ||
-        []
-      );
-    }
-
-    if (Array.isArray(question.opts)) {
-      return question.opts;
-    }
-
-    if (question.opts && typeof question.opts === "object") {
-      return (
-        question.opts[state.lang] ||
-        question.opts.uz ||
-        question.opts.en ||
-        Object.values(question.opts)[0] ||
-        []
-      );
-    }
-
-    return [];
-  }
-
-  function getVisual(question) {
-    return (
-      question?.visual ||
-      question?.svg ||
-      question?.image ||
-      ""
-    );
-  }
+  /* ==========================================================
+     HOME
+     ========================================================== */
 
   function renderHome() {
     stopClock();
 
-    const startBtn = document.getElementById("startBtn");
-    const rankingBtn = document.getElementById("rankingBtn");
+    const start =
+      document.getElementById("startBtn");
 
-    if (startBtn) {
-      startBtn.textContent = t("start");
+    const ranking =
+      document.getElementById("rankingBtn");
+
+    if (start) {
+      start.textContent = t("start");
     }
 
-    if (rankingBtn) {
-      rankingBtn.textContent = t("ranking");
+    if (ranking) {
+      ranking.textContent = t("ranking");
     }
 
     showScreen("homeScreen");
 
-    const active = loadActiveSession();
-
-    if (active) {
+    if (loadSession()) {
       toast(t("session"));
     }
   }
 
+  /* ==========================================================
+     START
+     ----------------------------------------------------------
+     Only ONE server request here.
+     The server creates an attempt_id.
+     ========================================================== */
+
   async function startTest() {
     if (state.busy) return;
 
-    const existing = loadActiveSession();
+    const saved = loadSession();
 
-    if (existing) {
-      state.session = existing;
-
+    if (saved) {
       if (
-        Array.isArray(existing.questions) &&
-        existing.questions.length === QUESTION_COUNT &&
-        existing.index < QUESTION_COUNT &&
-        existing.deadline > now()
+        saved.deadline > now() &&
+        saved.index >= 0 &&
+        saved.index < QUESTION_COUNT
       ) {
+        state.session = saved;
         renderQuestion();
         return;
       }
 
-      clearActiveSession();
+      clearSession();
+    }
+
+    if (!online()) {
+      toast(t("cannotStart"));
+      return;
     }
 
     state.busy = true;
-
-    setLoader(true);
+    loader(true);
 
     try {
-      /*
-       * IMPORTANT:
-       * Only one request is made to obtain the test package/start attempt.
-       * Answers are NOT sent to the server individually.
-       */
-      const data = await api("/api/test/package", {
-        method: "POST",
-        body: JSON.stringify({
-          language: state.lang
-        })
-      });
-
-      const questions =
-        data.questions ||
-        data.items ||
-        data.package?.questions;
-
-      if (!Array.isArray(questions) || questions.length !== QUESTION_COUNT) {
-        throw new Error("INVALID_QUESTION_PACKAGE");
-      }
+      const data = await api(
+        "/api/session/start",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            language: state.lang
+          })
+        }
+      );
 
       const attemptId =
         data.attempt_id ||
         data.attemptId ||
         uuid();
 
-      const serverSeconds = Number(
-        data.time_limit ||
-        data.timeLimit ||
-        TOTAL_SECONDS
-      );
-
-      const duration =
-        Number.isFinite(serverSeconds) &&
-        serverSeconds > 0
-          ? serverSeconds
-          : TOTAL_SECONDS;
-
-      state.package = data;
-
       state.session = {
-        version: 3,
+        version: 4,
+
         attemptId,
-        questions,
+
         index: 0,
-        answers: Array(QUESTION_COUNT).fill(null),
+
+        answers:
+          Array(QUESTION_COUNT).fill(null),
+
         startedAt: now(),
-        deadline: now() + duration * 1000,
-        duration,
+
+        deadline:
+          now() +
+          TOTAL_SECONDS * 1000,
+
+        duration: TOTAL_SECONDS,
+
         language: state.lang,
+
         completed: false
       };
 
-      saveActiveSession();
+      saveSession();
 
       renderQuestion();
+
     } catch (error) {
-      /*
-       * Compatibility fallback:
-       * Some backend versions use /api/session/start instead of
-       * /api/test/package.
-       */
+      console.error("START:", error);
+
       if (
-        error.status === 404 ||
-        error.code === "NOT_FOUND"
+        error.status === 402 ||
+        error.code === "PAID_RETEST"
       ) {
-        try {
-          const data = await api("/api/session/start", {
-            method: "POST",
-            body: JSON.stringify({
-              language: state.lang
-            })
-          });
-
-          const questions =
-            data.questions ||
-            data.items ||
-            data.package?.questions;
-
-          if (
-            !Array.isArray(questions) ||
-            questions.length !== QUESTION_COUNT
-          ) {
-            throw new Error("INVALID_QUESTION_PACKAGE");
-          }
-
-          const attemptId =
-            data.attempt_id ||
-            data.attemptId ||
-            uuid();
-
-          const duration =
-            Number(
-              data.time_limit ||
-              data.timeLimit ||
-              TOTAL_SECONDS
-            ) || TOTAL_SECONDS;
-
-          state.package = data;
-
-          state.session = {
-            version: 3,
-            attemptId,
-            questions,
-            index: Number(data.index || 0),
-            answers: Array.isArray(data.answers)
-              ? data.answers.slice(0, QUESTION_COUNT)
-              : Array(QUESTION_COUNT).fill(null),
-            startedAt: now(),
-            deadline: now() + duration * 1000,
-            duration,
-            language: state.lang,
-            completed: false
-          };
-
-          while (
-            state.session.answers.length <
-            QUESTION_COUNT
-          ) {
-            state.session.answers.push(null);
-          }
-
-          saveActiveSession();
-          renderQuestion();
-
-          return;
-        } catch (fallbackError) {
-          handleStartError(fallbackError);
-          return;
-        }
+        openPayment();
+      } else {
+        toast(t("cannotStart"));
       }
-
-      handleStartError(error);
     } finally {
       state.busy = false;
-      setLoader(false);
+      loader(false);
     }
   }
 
-  function handleStartError(error) {
-    console.error("START TEST:", error);
+  /* ==========================================================
+     QUESTION
+     ========================================================== */
 
-    if (
-      error.status === 402 ||
-      error.code === "PAID_RETEST"
-    ) {
-      openPaymentModal();
-      return;
+  function questionText(q) {
+    if (!q) return "";
+
+    if (typeof q.text === "string") {
+      return q.text;
     }
 
-    toast(t("cannotStart"));
+    return (
+      q.text?.[state.lang] ||
+      q.text?.uz ||
+      q.text?.en ||
+      ""
+    );
+  }
+
+  function questionOptions(q) {
+    if (!q) return [];
+
+    return (
+      q.options?.[state.lang] ||
+      q.options?.uz ||
+      q.options ||
+      []
+    );
   }
 
   function renderQuestion() {
@@ -807,143 +1014,164 @@
       return;
     }
 
-    const q = s.questions[s.index];
+    const q =
+      QUESTIONS[s.index];
 
     if (!q) {
       toast(t("error"));
       return;
     }
 
-    const number = s.index + 1;
-    const text = getQuestionText(q);
-    const options = getQuestionOptions(q);
-    const visual = getVisual(q);
+    const number =
+      s.index + 1;
 
-    const questionNumber =
-      document.getElementById("questionNumber");
+    const qText =
+      questionText(q);
 
-    const progressFill =
-      document.getElementById("progressFill");
+    const options =
+      questionOptions(q);
+
+    const numberEl =
+      document.getElementById(
+        "questionNumber"
+      );
+
+    const progress =
+      document.getElementById(
+        "progressFill"
+      );
 
     const category =
-      document.getElementById("questionCategory");
+      document.getElementById(
+        "questionCategory"
+      );
 
-    const questionText =
-      document.getElementById("questionText");
+    const text =
+      document.getElementById(
+        "questionText"
+      );
 
     const puzzle =
-      document.getElementById("puzzle");
+      document.getElementById(
+        "puzzle"
+      );
 
     const answers =
-      document.getElementById("answers");
+      document.getElementById(
+        "answers"
+      );
 
-    const nextBtn =
-      document.getElementById("nextBtn");
+    const next =
+      document.getElementById(
+        "nextBtn"
+      );
 
-    if (questionNumber) {
-      questionNumber.textContent =
-        `${number} / ${QUESTION_COUNT}`;
+    if (numberEl) {
+      numberEl.textContent =
+        `${String(number).padStart(2, "0")} / ${QUESTION_COUNT}`;
     }
 
-    if (progressFill) {
-      progressFill.style.width =
-        `${((number - 1) / QUESTION_COUNT) * 100}%`;
+    if (progress) {
+      progress.style.width =
+        `${(number / QUESTION_COUNT) * 100}%`;
     }
 
     if (category) {
-      category.textContent = t("question");
+      category.textContent =
+        t("puzzle");
     }
 
-    if (questionText) {
-      questionText.innerHTML = esc(text).replace(
-        /\n/g,
-        "<br>"
-      );
+    if (text) {
+      text.innerHTML =
+        esc(qText).replace(
+          /\n/g,
+          "<br>"
+        );
     }
 
     if (puzzle) {
-      if (visual) {
-        puzzle.innerHTML = visual;
-        puzzle.classList.remove("hidden");
+      if (q.visual) {
+        puzzle.innerHTML =
+          q.visual;
+
+        puzzle.classList.remove(
+          "hidden"
+        );
       } else {
         puzzle.innerHTML = "";
-        puzzle.classList.add("hidden");
+        puzzle.classList.add(
+          "hidden"
+        );
       }
     }
 
     if (answers) {
-      answers.innerHTML = options
-        .map((option, index) => {
-          const selected =
-            Number(s.answers[s.index]) === index;
+      answers.innerHTML =
+        options
+          .map(
+            (option, index) => {
 
-          let content = option;
+              const selected =
+                s.answers[s.index] === index;
 
-          if (
-            typeof option === "object" &&
-            option !== null
-          ) {
-            content =
-              option.html ||
-              option.svg ||
-              option.text ||
-              option.label ||
-              "";
-          }
+              return `
+                <button
+                  type="button"
+                  class="answer${selected ? " selected" : ""}"
+                  data-answer="${index}"
+                  aria-label="${LETTERS[index]}"
+                >
+                  <span class="answer-letter">
+                    ${LETTERS[index]}
+                  </span>
 
-          const safeContent =
-            typeof content === "string" &&
-            /<svg|<div|<span|<img|<path|<circle|<rect/i.test(
-              content
-            )
-              ? content
-              : esc(content);
-
-          return `
-            <button
-              type="button"
-              class="answer${selected ? " selected" : ""}"
-              data-answer="${index}"
-              aria-label="${esc(
-                `${LETTERS[index]} ${String(
-                  typeof content === "string"
-                    ? content.replace(/<[^>]*>/g, "")
-                    : ""
-                )}`
-              )}"
-            >
-              <span class="answer-visual">
-                ${safeContent}
-              </span>
-            </button>
-          `;
-        })
-        .join("");
+                  <span class="answer-text">
+                    ${esc(option)}
+                  </span>
+                </button>
+              `;
+            }
+          )
+          .join("");
 
       answers
-        .querySelectorAll("[data-answer]")
+        .querySelectorAll(
+          "[data-answer]"
+        )
         .forEach(button => {
+
           button.addEventListener(
             "click",
-            () => chooseAnswer(
-              Number(button.dataset.answer)
-            ),
-            { passive: true }
+            () => {
+              chooseAnswer(
+                Number(
+                  button.dataset.answer
+                )
+              );
+            }
           );
+
         });
     }
 
-    if (nextBtn) {
-      nextBtn.textContent =
+    if (next) {
+      next.textContent =
         number === QUESTION_COUNT
           ? t("finish")
           : t("next");
 
-      nextBtn.disabled =
-        !Number.isInteger(s.answers[s.index]);
+      next.disabled =
+        !Number.isInteger(
+          s.answers[s.index]
+        );
 
-      nextBtn.onclick = () => {
-        if (!Number.isInteger(s.answers[s.index])) {
+      next.onclick = () => {
+
+        if (
+          !Number.isInteger(
+            s.answers[s.index]
+          )
+        ) {
           return;
         }
 
@@ -952,55 +1180,63 @@
     }
 
     showScreen("testScreen");
+
     startClock();
     updateTimer();
   }
 
-  function chooseAnswer(answerIndex) {
+  /* ==========================================================
+     ANSWER
+     ----------------------------------------------------------
+     ZERO NETWORK REQUESTS.
+     ========================================================== */
+
+  function chooseAnswer(index) {
     if (
-      state.busy ||
       !state.session ||
       state.finishing
     ) {
       return;
     }
 
-    const index = state.session.index;
-
     if (
+      !Number.isInteger(index) ||
       index < 0 ||
-      index >= QUESTION_COUNT
+      index > 3
     ) {
       return;
     }
 
-    if (
-      !Number.isInteger(answerIndex) ||
-      answerIndex < 0 ||
-      answerIndex > 3
-    ) {
-      return;
-    }
+    const qIndex =
+      state.session.index;
 
-    state.session.answers[index] = answerIndex;
+    state.session.answers[qIndex] =
+      index;
 
-    saveActiveSession();
+    saveSession();
 
-    const answers =
-      document.querySelectorAll("[data-answer]");
+    document
+      .querySelectorAll(
+        "[data-answer]"
+      )
+      .forEach(button => {
 
-    answers.forEach(button => {
-      button.classList.toggle(
-        "selected",
-        Number(button.dataset.answer) === answerIndex
+        button.classList.toggle(
+          "selected",
+          Number(
+            button.dataset.answer
+          ) === index
+        );
+
+      });
+
+    const next =
+      document.getElementById(
+        "nextBtn"
       );
-    });
 
-    const nextBtn =
-      document.getElementById("nextBtn");
-
-    if (nextBtn) {
-      nextBtn.disabled = false;
+    if (next) {
+      next.disabled = false;
     }
   }
 
@@ -1012,50 +1248,153 @@
       return;
     }
 
-    const index = state.session.index;
+    const index =
+      state.session.index;
 
     if (
-      !Number.isInteger(state.session.answers[index])
+      !Number.isInteger(
+        state.session.answers[index]
+      )
     ) {
       return;
     }
 
-    if (index >= QUESTION_COUNT - 1) {
+    if (
+      index ===
+      QUESTION_COUNT - 1
+    ) {
       finishTest("completed");
       return;
     }
 
-    state.session.index += 1;
+    state.session.index++;
 
-    saveActiveSession();
+    saveSession();
 
     renderQuestion();
   }
 
-  function buildFinishPayload() {
+  /* ==========================================================
+     TIMER
+     ========================================================== */
+
+  function remainingSeconds() {
     if (!state.session) {
-      throw new Error("NO_SESSION");
+      return TOTAL_SECONDS;
     }
 
-    const answers = state.session.answers.map(
-      (answer, index) => ({
-        questionId:
-          state.session.questions[index]?.id ??
-          String(index + 1),
+    return Math.max(
+      0,
+      Math.ceil(
+        (
+          state.session.deadline -
+          now()
+        ) / 1000
+      )
+    );
+  }
 
-        answerIndex:
-          Number.isInteger(answer)
-            ? answer
-            : null
-      })
+  function elapsedSeconds() {
+    if (!state.session) return 0;
+
+    return Math.max(
+      0,
+      Math.floor(
+        (
+          now() -
+          state.session.startedAt
+        ) / 1000
+      )
+    );
+  }
+
+  function updateTimer() {
+    const el =
+      document.getElementById(
+        "timer"
+      );
+
+    if (!el || !state.session) {
+      return;
+    }
+
+    const remaining =
+      remainingSeconds();
+
+    el.textContent =
+      formatTime(remaining);
+
+    el.classList.toggle(
+      "warning",
+      remaining <= 120 &&
+      remaining > 30
     );
 
+    el.classList.toggle(
+      "danger",
+      remaining <= 30
+    );
+
+    if (
+      remaining <= 0 &&
+      !state.finishing
+    ) {
+      finishTest("timeout");
+    }
+  }
+
+  function startClock() {
+    stopClock();
+
+    updateTimer();
+
+    state.clock =
+      setInterval(
+        updateTimer,
+        500
+      );
+  }
+
+  function stopClock() {
+    if (state.clock) {
+      clearInterval(
+        state.clock
+      );
+
+      state.clock = null;
+    }
+  }
+
+  /* ==========================================================
+     FINAL PAYLOAD
+     ========================================================== */
+
+  function buildPayload(reason) {
+    if (!state.session) {
+      throw new Error(
+        "NO_SESSION"
+      );
+    }
+
     return {
-      attempt_id: state.session.attemptId,
+      attempt_id:
+        state.session.attemptId,
 
-      answers,
+      answers:
+        state.session.answers.map(
+          (answer, index) => ({
+            question_id:
+              QUESTIONS[index].id,
 
-      language: state.session.language,
+            answer_index:
+              Number.isInteger(answer)
+                ? answer
+                : null
+          })
+        ),
+
+      language:
+        state.session.language,
 
       elapsed:
         Math.min(
@@ -1063,12 +1402,23 @@
           elapsedSeconds()
         ),
 
+      finish_reason:
+        reason,
+
       finished_at:
         new Date().toISOString()
     };
   }
 
-  async function finishTest(reason = "completed") {
+  /* ==========================================================
+     FINISH
+     ----------------------------------------------------------
+     ONE network request.
+     ========================================================== */
+
+  async function finishTest(
+    reason = "completed"
+  ) {
     if (
       state.finishing ||
       !state.session
@@ -1081,25 +1431,27 @@
 
     stopClock();
 
-    const payload = buildFinishPayload();
+    const payload =
+      buildPayload(reason);
 
-    /*
-     * Never submit an incomplete test silently.
-     * Timeout may finish it, but all answer positions remain explicit.
-     */
-    payload.finish_reason = reason;
-
-    if (!isOnline()) {
+    /* Offline = don't even try network. */
+    if (!online()) {
       queueResult(payload);
-      clearActiveSession();
+
+      clearSession();
 
       state.result = {
         iq: "—",
-        correct: payload.answers.filter(
-          x => Number.isInteger(x.answerIndex)
-        ).length,
-        elapsed: payload.elapsed,
-        rank: "—",
+        correct:
+          payload.answers.filter(
+            x =>
+              Number.isInteger(
+                x.answer_index
+              )
+          ).length,
+        elapsed:
+          payload.elapsed,
+        rank: null,
         pending: true
       };
 
@@ -1107,142 +1459,197 @@
       state.busy = false;
 
       renderResult();
+
       return;
     }
 
-    try {
-      showSendingState();
+    showChecking();
 
-      const result = await api(
-        "/api/session/finish",
-        {
-          method: "POST",
-          body: JSON.stringify(payload)
-        }
+    try {
+
+      /*
+       * THE ONLY RESULT REQUEST.
+       */
+      const data =
+        await api(
+          "/api/session/finish",
+          {
+            method: "POST",
+            body:
+              JSON.stringify(
+                payload
+              )
+          }
+        );
+
+      state.result =
+        normalizeResult(data);
+
+      clearSession();
+
+      renderResult();
+
+    } catch (error) {
+
+      console.error(
+        "FINISH:",
+        error
       );
 
       /*
-       * Server is authoritative.
-       * Client never calculates the IQ score.
-       */
-      state.result = normalizeResult(result);
-
-      clearActiveSession();
-
-      renderResult();
-    } catch (error) {
-      console.error("FINISH TEST:", error);
-
-      /*
-       * Network errors are queued.
-       * This prevents losing the completed test.
+       * Network failure:
+       * never lose completed test.
        */
       if (
-        !isOnline() ||
-        error.name === "AbortError" ||
-        error instanceof TypeError
+        error.name ===
+          "AbortError" ||
+        error instanceof TypeError ||
+        !online()
       ) {
+
         queueResult(payload);
 
-        clearActiveSession();
+        clearSession();
 
         state.result = {
           iq: "—",
-          correct: payload.answers.filter(
-            x => Number.isInteger(x.answerIndex)
-          ).length,
-          elapsed: payload.elapsed,
-          rank: "—",
+          correct:
+            payload.answers.filter(
+              x =>
+                Number.isInteger(
+                  x.answer_index
+                )
+            ).length,
+          elapsed:
+            payload.elapsed,
+          rank: null,
           pending: true
         };
 
         renderResult();
+
       } else {
-        toast(t("cannotFinish"));
+
+        /*
+         * Server deliberately rejected
+         * the payload. Don't pretend it succeeded.
+         */
+        toast(
+          t("cannotFinish")
+        );
+
+        state.finishing =
+          false;
+
+        state.busy =
+          false;
+
+        return;
       }
+
     } finally {
-      state.finishing = false;
-      state.busy = false;
+      state.finishing =
+        false;
+
+      state.busy =
+        false;
     }
   }
 
-  function showSendingState() {
-    const status =
-      document.getElementById("syncStatus");
+  function showChecking() {
+    const el =
+      document.getElementById(
+        "syncStatus"
+      );
 
-    if (status) {
-      status.textContent = t("sending");
-      status.className =
-        "sync-status pending";
-    }
+    if (!el) return;
+
+    el.textContent =
+      t("checking");
+
+    el.className =
+      "sync-status pending";
   }
 
   function normalizeResult(data) {
-    const source =
+    const r =
       data?.result ||
-      data?.data ||
       data ||
       {};
 
     return {
       iq:
-        source.iq ??
-        source.iq_score ??
-        source.score ??
+        r.iq ??
+        r.iq_score ??
         "—",
 
       correct:
-        source.correct ??
-        source.correct_count ??
+        r.correct ??
+        r.correct_count ??
         0,
 
       elapsed:
-        source.elapsed ??
-        source.time ??
+        r.elapsed ??
         0,
 
       rank:
-        source.rank ??
-        source.position ??
+        r.rank ??
         null,
 
-      synced: true
+      pending: false
     };
   }
+
+  /* ==========================================================
+     RESULT
+     ========================================================== */
 
   function renderResult() {
     stopClock();
 
-    const result = state.result || {};
+    const result =
+      state.result || {};
 
     const score =
-      document.getElementById("score");
+      document.getElementById(
+        "score"
+      );
 
-    const correctCount =
-      document.getElementById("correctCount");
+    const correct =
+      document.getElementById(
+        "correctCount"
+      );
 
-    const resultTime =
-      document.getElementById("resultTime");
+    const time =
+      document.getElementById(
+        "resultTime"
+      );
 
     const rank =
-      document.getElementById("rank");
+      document.getElementById(
+        "rank"
+      );
 
-    const syncStatus =
-      document.getElementById("syncStatus");
+    const sync =
+      document.getElementById(
+        "syncStatus"
+      );
 
     if (score) {
       score.textContent =
         result.iq ?? "—";
     }
 
-    if (correctCount) {
-      correctCount.textContent =
+    if (correct) {
+      correct.textContent =
         `${result.correct ?? 0}/${QUESTION_COUNT}`;
     }
 
-    if (resultTime) {
-      resultTime.textContent =
-        formatTime(result.elapsed ?? 0);
+    if (time) {
+      time.textContent =
+        formatTime(
+          result.elapsed ?? 0
+        );
     }
 
     if (rank) {
@@ -1252,651 +1659,851 @@
           : "—";
     }
 
-    if (syncStatus) {
+    if (sync) {
       if (result.pending) {
-        syncStatus.textContent = t("pending");
-        syncStatus.className =
+
+        sync.textContent =
+          t("pending");
+
+        sync.className =
           "sync-status pending";
+
       } else {
-        syncStatus.textContent = t("synced");
-        syncStatus.className =
+
+        sync.textContent =
+          t("synced");
+
+        sync.className =
           "sync-status success";
       }
     }
 
-    /*
-     * Score ring:
-     * This is visual only.
-     * It does NOT calculate the actual score.
-     */
+    /* Visual score ring only. */
     const scoreNumber =
       Number(result.iq);
 
     const screen =
-      document.getElementById("resultScreen");
+      document.getElementById(
+        "resultScreen"
+      );
 
     if (
       screen &&
-      Number.isFinite(scoreNumber)
+      Number.isFinite(
+        scoreNumber
+      )
     ) {
-      const normalized =
+
+      const progress =
         Math.max(
           0,
           Math.min(
             1,
-            (scoreNumber - 70) / 108
+            (
+              scoreNumber - 70
+            ) / 108
           )
         );
 
       screen.style.setProperty(
         "--score-progress",
-        `${normalized * 360}deg`
+        `${progress * 360}deg`
       );
     }
 
-    showScreen("resultScreen");
+    showScreen(
+      "resultScreen"
+    );
   }
 
+  /* ==========================================================
+     OFFLINE QUEUE SYNC
+     ========================================================== */
+
+  async function syncQueue() {
+    if (!online()) return;
+
+    const queue =
+      getQueue();
+
+    if (!queue.length) {
+      return;
+    }
+
+    const remaining = [];
+
+    for (
+      const payload of queue
+    ) {
+
+      try {
+
+        await api(
+          "/api/session/finish",
+          {
+            method: "POST",
+            body:
+              JSON.stringify(
+                payload
+              )
+          }
+        );
+
+      } catch (error) {
+
+        /*
+         * Keep only failed payloads.
+         * Successful ones are removed.
+         */
+        remaining.push(
+          payload
+        );
+      }
+    }
+
+    setQueue(
+      remaining
+    );
+  }
+
+  /* ==========================================================
+     RANKING
+     ========================================================== */
+
   async function openRanking() {
-    showScreen("rankingScreen");
+    showScreen(
+      "rankingScreen"
+    );
 
     const loading =
-      document.getElementById("rankingLoading");
+      document.getElementById(
+        "rankingLoading"
+      );
 
     const list =
-      document.getElementById("rankingList");
+      document.getElementById(
+        "rankingList"
+      );
 
     const empty =
-      document.getElementById("rankingEmpty");
+      document.getElementById(
+        "rankingEmpty"
+      );
 
     const error =
-      document.getElementById("rankingError");
+      document.getElementById(
+        "rankingError"
+      );
 
-    if (loading) loading.classList.remove("hidden");
-    if (list) list.innerHTML = "";
-    if (empty) empty.classList.add("hidden");
-    if (error) error.classList.add("hidden");
+    loading?.classList.remove(
+      "hidden"
+    );
+
+    if (list) {
+      list.innerHTML = "";
+    }
+
+    empty?.classList.add(
+      "hidden"
+    );
+
+    error?.classList.add(
+      "hidden"
+    );
 
     try {
+
       const data =
-        await api("/api/ranking");
+        await api(
+          "/api/ranking"
+        );
 
       const items =
         data.items ||
-        data.ranking ||
         [];
 
-      if (!Array.isArray(items) || !items.length) {
-        if (empty) empty.classList.remove("hidden");
+      if (!items.length) {
+
+        empty?.classList.remove(
+          "hidden"
+        );
+
         return;
       }
 
       if (!list) return;
 
-      list.innerHTML = items
-        .map((item, index) => {
-          const position =
-            item.rank ??
-            item.position ??
-            index + 1;
+      list.innerHTML =
+        items.map(
+          (item, index) => {
 
-          const name =
-            item.first_name ||
-            item.name ||
-            item.username ||
-            "User";
+            const position =
+              item.rank ??
+              item.position ??
+              index + 1;
 
-          const score =
-            item.best_score ??
-            item.iq ??
-            item.score ??
-            "—";
+            const name =
+              item.first_name ||
+              item.username ||
+              "User";
 
-          return `
-            <div class="ranking-item">
-              <div class="ranking-position">
-                ${esc(position)}
-              </div>
+            const score =
+              item.best_score ??
+              item.iq ??
+              "—";
 
-              <div class="ranking-user">
-                <div class="ranking-name">
-                  ${esc(name)}
+            return `
+              <div class="ranking-item">
+
+                <div class="ranking-position">
+                  ${esc(position)}
                 </div>
 
-                <div class="ranking-meta">
-                  ${t("score")}
+                <div class="ranking-user">
+                  <div class="ranking-name">
+                    ${esc(name)}
+                  </div>
+
+                  <div class="ranking-meta">
+                    IQ
+                  </div>
                 </div>
-              </div>
 
-              <div class="ranking-score">
-                ${esc(score)}
-              </div>
-            </div>
-          `;
-        })
-        .join("");
-    } catch (e) {
-      console.error("RANKING:", e);
+                <div class="ranking-score">
+                  ${esc(score)}
+                </div>
 
-      if (error) {
-        error.classList.remove("hidden");
-      }
+              </div>
+            `;
+          }
+        ).join("");
+
+    } catch (errorObject) {
+
+      console.error(
+        "RANKING:",
+        errorObject
+      );
+
+      error?.classList.remove(
+        "hidden"
+      );
+
     } finally {
-      if (loading) {
-        loading.classList.add("hidden");
-      }
+
+      loading?.classList.add(
+        "hidden"
+      );
     }
   }
+
+  /* ==========================================================
+     PROFILE
+     ========================================================== */
 
   async function openProfile() {
-    /*
-     * The current index.html does not contain a dedicated profile
-     * screen, so profile data is represented through a toast for now.
-     * This deliberately avoids creating DOM elements that do not exist.
-     */
     try {
+
       const data =
-        await api("/api/profile");
-
-      const score =
-        data.best_score ??
-        data.iq ??
-        "—";
-
-      const attempts =
-        data.attempts ??
-        0;
+        await api(
+          "/api/profile"
+        );
 
       toast(
-        `${t("best")}: ${score} • ${t("tests")}: ${attempts}`
+        `${t("score")}: ${
+          data.best_score ?? "—"
+        } • ${
+          t("correct")
+        }: ${
+          data.attempts ?? 0
+        }`
       );
-    } catch (e) {
-      toast(t("noData"));
+
+    } catch {
+
+      toast(
+        t("noData")
+      );
     }
   }
 
-  function openPaymentModal() {
-    const modal =
-      document.getElementById("paymentModal");
+  /* ==========================================================
+     PAYMENT
+     ----------------------------------------------------------
+     payment.js owns actual payment UI.
+     ========================================================== */
 
-    if (!modal) {
-      toast(t("paid"));
+  function openPayment() {
+
+    if (
+      window.IQPayment?.open
+    ) {
+
+      window.IQPayment.open();
+
       return;
     }
 
-    modal.classList.remove("hidden");
+    const modal =
+      document.getElementById(
+        "paymentModal"
+      );
 
-    loadPaymentInfo().catch(
-      e => console.error("PAYMENT:", e)
+    modal?.classList.remove(
+      "hidden"
     );
   }
 
-  function closePaymentModal() {
-    const modal =
-      document.getElementById("paymentModal");
+  /* ==========================================================
+     SHARE
+     ========================================================== */
 
-    modal?.classList.add("hidden");
-  }
-
-  async function loadPaymentInfo() {
-    try {
-      const data =
-        await api("/api/payment/create", {
-          method: "POST",
-          body: JSON.stringify({})
-        });
-
-      const amount =
-        data.amount ??
-        data.price ??
-        data.price_uzs;
-
-      const amountEl =
-        document.getElementById("paymentAmount");
-
-      if (amountEl && amount != null) {
-        amountEl.textContent =
-          `${Number(amount).toLocaleString("uz-UZ")} so‘m`;
-      }
-
-      const cards =
-        document.getElementById("paymentCards");
-
-      if (cards && Array.isArray(data.cards)) {
-        cards.innerHTML = data.cards
-          .map(card => `
-            <div class="payment-card">
-              <div class="payment-card-title">
-                ${esc(card.bank || "Karta")}
-              </div>
-
-              <div class="payment-card-number">
-                ${esc(card.number || card.card_number || "")}
-              </div>
-
-              <div class="payment-card-title">
-                ${esc(card.holder || "")}
-              </div>
-            </div>
-          `)
-          .join("");
-      }
-
-      if (data.payment_id) {
-        const openBot =
-          document.getElementById(
-            "paymentOpenBotBtn"
-          );
-
-        if (openBot) {
-          openBot.dataset.paymentId =
-            String(data.payment_id);
-        }
-      }
-    } catch (e) {
-      /*
-       * Payment creation is intentionally not retried
-       * infinitely. payment.js can handle the provider-specific flow.
-       */
-      console.warn("Payment info unavailable:", e);
-    }
-  }
-
-  function openBotPayment() {
-    const button =
-      document.getElementById(
-        "paymentOpenBotBtn"
-      );
-
-    const paymentId =
-      button?.dataset?.paymentId;
-
-    if (!paymentId) {
-      toast(t("error"));
+  function shareResult() {
+    if (!state.result) {
       return;
     }
 
-    const url =
-      `https://t.me/${encodeURIComponent(
-        window.IQ_BOT_USERNAME || "iq_test_bot"
-      )}?start=pay_${encodeURIComponent(paymentId)}`;
-
-    try {
-      if (tg?.openTelegramLink) {
-        tg.openTelegramLink(url);
-      } else {
-        window.location.href = url;
-      }
-    } catch {
-      window.location.href = url;
-    }
-  }
-
-  function shareResult() {
-    const result = state.result;
-
-    if (!result) return;
-
     const text =
       `🧠 IQ TEST\n` +
-      `IQ: ${result.iq ?? "—"}\n` +
-      `${result.correct ?? 0}/${QUESTION_COUNT}`;
+      `IQ: ${
+        state.result.iq ?? "—"
+      }\n` +
+      `${
+        state.result.correct ?? 0
+      }/${QUESTION_COUNT}`;
 
     const url =
       `${location.origin}${location.pathname}`;
 
     const shareUrl =
-      `https://t.me/share/url?url=${encodeURIComponent(
-        url
-      )}&text=${encodeURIComponent(text)}`;
+      `https://t.me/share/url?url=${
+        encodeURIComponent(url)
+      }&text=${
+        encodeURIComponent(text)
+      }`;
 
     try {
-      if (tg?.openTelegramLink) {
-        tg.openTelegramLink(shareUrl);
-      } else if (navigator.share) {
+
+      if (
+        tg?.openTelegramLink
+      ) {
+
+        tg.openTelegramLink(
+          shareUrl
+        );
+
+      } else if (
+        navigator.share
+      ) {
+
         navigator.share({
           title: "IQ TEST",
           text,
           url
-        }).catch(() => {});
-      } else if (navigator.clipboard) {
+        }).catch(
+          () => {}
+        );
+
+      } else if (
         navigator.clipboard
-          .writeText(`${text}\n${url}`)
-          .then(() => toast("Natija nusxalandi"))
-          .catch(() => {});
+      ) {
+
+        navigator.clipboard
+          .writeText(
+            `${text}\n${url}`
+          )
+          .then(
+            () =>
+              toast(
+                "Natija nusxalandi"
+              )
+          )
+          .catch(
+            () => {}
+          );
       }
+
     } catch (e) {
-      console.error("SHARE:", e);
+      console.error(
+        "SHARE:",
+        e
+      );
     }
   }
 
+  /* ==========================================================
+     CERTIFICATE
+     ========================================================== */
+
   function showCertificate() {
-    /*
-     * Certificate endpoint belongs to the server.
-     * Keep it separate from test scoring.
-     */
-    window.open(
-      `${API}/api/certificate`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+
+    fetch(
+      "/api/certificate",
+      {
+        headers: {
+          "X-Telegram-Init-Data":
+            initData()
+        }
+      }
+    )
+      .then(async response => {
+
+        if (!response.ok) {
+
+          const data =
+            await response
+              .json()
+              .catch(
+                () => ({})
+              );
+
+          toast(
+            data.detail ||
+            "Certificate error"
+          );
+
+          return;
+        }
+
+        const blob =
+          await response.blob();
+
+        const url =
+          URL.createObjectURL(
+            blob
+          );
+
+        window.open(
+          url,
+          "_blank"
+        );
+      })
+      .catch(
+        () =>
+          toast(
+            t("error")
+          )
+      );
   }
 
+  /* ==========================================================
+     ZAKO
+     ========================================================== */
+
   function openZako() {
+
     const url =
       "https://t.me/zako_tbot";
 
     try {
-      if (tg?.openTelegramLink) {
-        tg.openTelegramLink(url);
+
+      if (
+        tg?.openTelegramLink
+      ) {
+        tg.openTelegramLink(
+          url
+        );
       } else {
-        window.location.href = url;
+        location.href =
+          url;
       }
+
     } catch {
-      window.location.href = url;
+      location.href =
+        url;
     }
   }
 
-  function setupQuitModal() {
-    const quitBtn =
-      document.getElementById("quitBtn");
+  /* ==========================================================
+     QUIT
+     ========================================================== */
+
+  function setupQuit() {
+
+    const quit =
+      document.getElementById(
+        "quitBtn"
+      );
 
     const modal =
-      document.getElementById("quitModal");
+      document.getElementById(
+        "quitModal"
+      );
 
     const stay =
-      document.getElementById("quitStayBtn");
+      document.getElementById(
+        "quitStayBtn"
+      );
 
-    const confirm =
-      document.getElementById("quitConfirmBtn");
+    const leave =
+      document.getElementById(
+        "quitConfirmBtn"
+      );
 
-    quitBtn?.addEventListener("click", () => {
-      modal?.classList.remove("hidden");
-    });
+    quit?.addEventListener(
+      "click",
+      () => {
+        modal?.classList.remove(
+          "hidden"
+        );
+      }
+    );
 
-    stay?.addEventListener("click", () => {
-      modal?.classList.add("hidden");
-    });
+    stay?.addEventListener(
+      "click",
+      () => {
+        modal?.classList.add(
+          "hidden"
+        );
+      }
+    );
 
-    confirm?.addEventListener("click", () => {
-      modal?.classList.add("hidden");
+    leave?.addEventListener(
+      "click",
+      () => {
 
-      saveActiveSession();
-      stopClock();
+        modal?.classList.add(
+          "hidden"
+        );
 
-      renderHome();
-    });
+        saveSession();
+
+        stopClock();
+
+        renderHome();
+      }
+    );
   }
 
-  function setupErrorModal() {
-    const modal =
-      document.getElementById("errorModal");
-
-    const close =
-      document.getElementById("errorCloseBtn");
-
-    close?.addEventListener("click", () => {
-      modal?.classList.add("hidden");
-    });
-  }
+  /* ==========================================================
+     BUTTONS
+     ========================================================== */
 
   function setupButtons() {
+
     document
-      .getElementById("startBtn")
+      .getElementById(
+        "startBtn"
+      )
       ?.addEventListener(
         "click",
         startTest
       );
 
     document
-      .getElementById("rankingBtn")
+      .getElementById(
+        "rankingBtn"
+      )
       ?.addEventListener(
         "click",
         openRanking
       );
 
     document
-      .getElementById("retestBtn")
+      .getElementById(
+        "retestBtn"
+      )
       ?.addEventListener(
         "click",
-        openPaymentModal
+        openPayment
       );
 
     document
-      .getElementById("resultRankingBtn")
+      .getElementById(
+        "resultRankingBtn"
+      )
       ?.addEventListener(
         "click",
         openRanking
       );
 
     document
-      .getElementById("homeBtn")
+      .getElementById(
+        "homeBtn"
+      )
       ?.addEventListener(
         "click",
         renderHome
       );
 
     document
-      .getElementById("shareBtn")
+      .getElementById(
+        "shareBtn"
+      )
       ?.addEventListener(
         "click",
         shareResult
       );
 
     document
-      .getElementById("certificateBtn")
+      .getElementById(
+        "certificateBtn"
+      )
       ?.addEventListener(
         "click",
         showCertificate
       );
 
     document
-      .getElementById("zakoBtn")
+      .getElementById(
+        "zakoBtn"
+      )
       ?.addEventListener(
         "click",
         openZako
       );
 
     document
-      .getElementById("paymentCloseBtn")
+      .getElementById(
+        "paymentCloseBtn"
+      )
       ?.addEventListener(
         "click",
-        closePaymentModal
+        () =>
+          window.IQPayment?.close?.()
       );
 
     document
-      .getElementById("paymentOpenBotBtn")
-      ?.addEventListener(
-        "click",
-        openBotPayment
-      );
-
-    document
-      .getElementById("rankingRetryBtn")
+      .getElementById(
+        "rankingRetryBtn"
+      )
       ?.addEventListener(
         "click",
         openRanking
       );
   }
 
-  function setupOnlineSync() {
+  /* ==========================================================
+     ONLINE / OFFLINE
+     ========================================================== */
+
+  function setupNetwork() {
+
     window.addEventListener(
       "online",
       async () => {
-        updateOfflineUI();
+
+        offlineUI();
 
         await syncQueue();
 
-        if (getQueue().length === 0) {
-          const status =
-            document.getElementById(
-              "syncStatus"
-            );
-
-          if (
-            status &&
-            state.result?.pending
-          ) {
-            status.textContent = t("synced");
-            status.className =
-              "sync-status success";
-          }
-        }
-      },
-      { passive: true }
+        /*
+         * If there was a pending result,
+         * reload ranking/result only after
+         * successful queue synchronization.
+         */
+      }
     );
 
     window.addEventListener(
       "offline",
-      updateOfflineUI,
-      { passive: true }
+      offlineUI
     );
   }
 
-  function setupAutosave() {
-    clearInterval(state.saveTimer);
+  /* ==========================================================
+     AUTOSAVE
+     ========================================================== */
 
-    state.saveTimer = setInterval(() => {
-      if (state.session) {
-        saveActiveSession();
-      }
-    }, 2000);
+  function setupAutosave() {
+
+    clearInterval(
+      state.autosave
+    );
+
+    state.autosave =
+      setInterval(
+        () => {
+
+          if (
+            state.session
+          ) {
+            saveSession();
+          }
+
+        },
+        1500
+      );
   }
 
-  function setupVisibilityProtection() {
+  function setupVisibility() {
+
     document.addEventListener(
       "visibilitychange",
       () => {
-        if (document.visibilityState === "hidden") {
-          saveActiveSession();
+
+        if (
+          document.visibilityState ===
+          "hidden"
+        ) {
+          saveSession();
         }
-      },
-      { passive: true }
+
+      }
     );
 
     window.addEventListener(
       "pagehide",
-      () => {
-        saveActiveSession();
-      },
-      { passive: true }
+      saveSession
     );
   }
 
+  /* ==========================================================
+     TELEGRAM BACK BUTTON
+     ========================================================== */
+
   function setupBackButton() {
-    if (!tg?.BackButton) return;
 
-    tg.BackButton.onClick(() => {
-      const active =
-        document.querySelector(
-          ".screen.active"
-        );
+    if (!tg?.BackButton) {
+      return;
+    }
 
-      if (
-        active?.id === "testScreen"
-      ) {
-        document
-          .getElementById("quitModal")
-          ?.classList.remove("hidden");
+    tg.BackButton.onClick(
+      () => {
 
-        return;
+        const active =
+          document.querySelector(
+            ".screen.active"
+          );
+
+        if (
+          active?.id ===
+          "testScreen"
+        ) {
+
+          document
+            .getElementById(
+              "quitModal"
+            )
+            ?.classList.remove(
+              "hidden"
+            );
+
+          return;
+        }
+
+        renderHome();
       }
-
-      renderHome();
-    });
+    );
   }
 
-  function restoreSession() {
-    const saved =
-      loadActiveSession();
+  /* ==========================================================
+     RESTORE
+     ========================================================== */
 
-    if (!saved) return false;
+  function restore() {
+
+    const saved =
+      loadSession();
+
+    if (!saved) {
+      return false;
+    }
 
     if (
       saved.deadline <= now()
     ) {
-      /*
-       * Expired session:
-       * finish locally and queue it if necessary.
-       */
-      state.session = saved;
 
-      finishTest("timeout");
+      state.session =
+        saved;
+
+      finishTest(
+        "timeout"
+      );
 
       return true;
     }
 
-    state.session = saved;
+    state.session =
+      saved;
 
     return true;
   }
 
-  
+  /* ==========================================================
+     BOOT
+     ========================================================== */
+
   function boot() {
-  try {
+
     telegramReady();
-    updateOfflineUI();
+
+    offlineUI();
 
     setupButtons();
-    setupQuitModal();
-    setupErrorModal();
-    setupOnlineSync();
+
+    setupQuit();
+
+    setupNetwork();
+
     setupAutosave();
-    setupVisibilityProtection();
+
+    setupVisibility();
+
     setupBackButton();
 
-    const restored = restoreSession();
+    const restored =
+      restore();
 
     if (restored) {
+
       if (
         state.session &&
-        state.session.index < QUESTION_COUNT
+        state.session.index <
+          QUESTION_COUNT
       ) {
         renderQuestion();
       }
 
-      setLoader(false);
       return;
     }
 
-    showScreen("homeScreen");
-    setLoader(false);
-
-  } catch (error) {
-    console.error("IQ TEST BOOT ERROR:", error);
-
-    setLoader(false);
-    showScreen("homeScreen");
-
-    toast(t("error"));
+    showScreen(
+      "homeScreen"
+    );
   }
-}
 
   /*
-   * Sync previously completed offline attempts.
-   * It is deliberately fire-and-forget so it never blocks startup.
+   * Previous offline results are synchronized
+   * in the background.
    */
   syncQueue().catch(
-    e => console.warn("Initial queue sync:", e)
+    error =>
+      console.warn(
+        "Initial sync:",
+        error
+      )
   );
 
   boot();
 
-  /*
-   * Expose only a tiny controlled surface for payment.js
-   * and debugging/integration.
-   */
-  window.IQTestApp = Object.freeze({
-    startTest,
-    finishTest,
-    openPaymentModal,
-    closePaymentModal,
-    syncQueue,
-    getState: () => ({
-      index: state.session?.index ?? null,
-      hasSession: Boolean(state.session),
-      online: isOnline()
-    })
-  });
+  /* ==========================================================
+     PUBLIC API
+     ========================================================== */
+
+  window.IQTestApp =
+    Object.freeze({
+      startTest,
+      finishTest,
+      openPayment,
+      syncQueue,
+
+      getState: () => ({
+        index:
+          state.session?.index ??
+          null,
+
+        hasSession:
+          Boolean(
+            state.session
+          ),
+
+        online:
+          online(),
+
+        queued:
+          getQueue().length
+      })
+    });
 
 })();
