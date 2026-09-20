@@ -1,40 +1,55 @@
+
+import os
 import asyncio
+import secrets
+import string
+import json
 import hashlib
 import hmac
-import json
-import os
-from datetime import datetime, timezone
-from io import BytesIO
+import time
+from urllib.parse import parse_qsl, unquote
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from datetime import datetime, timedelta, timezone
 
 import asyncpg
-import uvicorn
-from aiogram import Bot, Dispatcher
-from aiogram.filters import Command, CommandStart
-from aiogram.types import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    MenuButtonWebApp,
-    Message,
-    Update,
-    CallbackQuery,
-    WebAppInfo,
-)
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+import uvicorn
+
+from aiogram import Bot, Dispatcher, F, Router
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import (
+    Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
+    KeyboardButton, ReplyKeyboardMarkup, WebAppInfo, BufferedInputFile
+)
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+
 from PIL import Image, ImageDraw, ImageFont
 
-
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-DATABASE_URL = os.environ.get("DATABASE_URL")
-ZAKO_URL = os.environ.get("ZAKO_URL", "https://t.me/zako_tbot")
-WEBAPP_URL = os.environ.get("WEBAPP_URL")
-PORT = int(os.environ.get("PORT", "10000"))
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "")
+BOT_USERNAME = os.getenv("BOT_USERNAME", "iqtest_ubot")
+ADMIN_IDS = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
 
 BASE_DIR = Path(__file__).resolve().parent
 WEBAPP_DIR = BASE_DIR / "webapp"
+PORT = int(os.getenv("PORT", "10000"))
+
+# The frontend currently contains exactly 18 IQ questions. The backend is the
+# source of truth for scoring so a client cannot submit a forged raw_score.
+IQ_QUESTION_COUNT = 18
+IQ_CORRECT_ANSWERS = (
+    0, 0, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 0, 1, 1, 1, 2, 1
+)
+IQ_WEIGHTS = (1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7)
+IQ_MAX_RAW = sum(IQ_WEIGHTS)
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
@@ -42,810 +57,794 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is missing")
 if not WEBAPP_URL:
     raise RuntimeError("WEBAPP_URL is missing")
-if not WEBAPP_URL.startswith("https://"):
-    raise RuntimeError("WEBAPP_URL must start with https://")
-if not WEBAPP_DIR.exists():
+
+bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher(storage=MemoryStorage())
+router = Router()
+dp.include_router(router)
+
+app = FastAPI(title="IQTestPro")
+
+if not WEBAPP_DIR.is_dir():
     raise RuntimeError(f"webapp directory not found: {WEBAPP_DIR}")
 
-QUESTIONS_COUNT = 18
-QUIZ_VERSION = 3
-# Must stay in the same order as the frontend question bank.
-# Each value is the zero-based option index (A=0, B=1, C=2, D=3).
-CORRECT_ANSWERS = (1, 2, 0, 2, 2, 1, 0, 0, 2, 2, 1, 2, 1, 2, 3, 1, 2, 2)
-WEIGHTS = (1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7)
-MAX_RAW = sum(WEIGHTS)
+# Canonical Mini App path. Use an absolute filesystem path so Render does not
+# depend on its current working directory.
+app.mount(
+    "/webapp",
+    StaticFiles(directory=str(WEBAPP_DIR), html=True),
+    name="webapp",
+)
+
+# Compatibility path for older frontend/payment code.
+app.mount(
+    "/static",
+    StaticFiles(directory=str(WEBAPP_DIR)),
+    name="static",
+)
 
 pool: asyncpg.Pool | None = None
-bot: Bot | None = None
-BOT_USERNAME = ""
-dp = Dispatcher()
-app = FastAPI(title="IQ TEST BOT")
-app.mount("/static", StaticFiles(directory=str(WEBAPP_DIR)), name="static")
 
+LANGS = {"uz": "🇺🇿 O‘zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
 
-def clean_db_url(url: str) -> str:
-    parts = urlsplit(url)
-    query = [
-        (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-        if k.lower() not in {"sslmode", "channel_binding"}
-    ]
-    return urlunsplit((parts.scheme, parts.netloc, parts.path,
-                       urlencode(query), parts.fragment))
+PRODUCT_DEFAULTS = {
+    "iq": ("🧠 IQ test", True, 10000),
+    "eq": ("🎭 EQ", False, 0),
+    "pq": ("⏳ Prokrastinatsiya", False, 0),
+    "full": ("⭐ To‘liq tahlil", False, 0),
+    "iq_retry": ("🔁 IQ qayta topshirish", True, 5000),
+    "eq_retry": ("🔁 EQ qayta topshirish", True, 5000),
+    "pq_retry": ("🔁 PQ qayta topshirish", True, 5000),
+    "battle": ("⚔️ Do‘st bilan Battle", True, 7500),
+}
 
-
-def now_utc() -> datetime:
+def now():
     return datetime.now(timezone.utc)
 
-
-def webhook_url() -> str:
-    parts = urlsplit(WEBAPP_URL)
-    return f"{parts.scheme}://{parts.netloc}/telegram/webhook"
-
-
-WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
-
-# Admin: username-based fallback plus optional numeric ID env.
-# Set ADMIN_USER_ID later if you want an ID-only lock; no env change is required now.
-ADMIN_USERNAME = "omono_v"
-ADMIN_USER_ID = int(os.environ.get("ADMIN_USER_ID", "0") or 0)
-
-PAYMENT_MODE_RETEST = "first_free_retest_paid"
-PAYMENT_MODE_RESULT = "result_paid"
-PAYMENT_MODE_FREE = "all_free"
-VALID_PAYMENT_MODES = {PAYMENT_MODE_RETEST, PAYMENT_MODE_RESULT, PAYMENT_MODE_FREE}
-
-admin_state: dict[int, str] = {}
-admin_temp: dict[int, dict] = {}
-
-
-async def init_db() -> None:
+async def db():
     global pool
-    pool = await asyncpg.create_pool(
-        clean_db_url(DATABASE_URL),
-        min_size=1,
-        max_size=5,
-        ssl="require",
-        command_timeout=30,
-    )
-    async with pool.acquire() as conn:
-        # ------------------------------------------------------------------
-        # SAFE LEGACY DATABASE MIGRATION
-        #
-        # Older versions of this project used telegram_id as the users
-        # primary-key column. The current code uses user_id everywhere.
-        # CREATE TABLE IF NOT EXISTS cannot change an existing table, so a
-        # previous database can otherwise make startup fail with
-        # UndefinedColumnError. Rename compatible legacy columns before any
-        # foreign keys or new tables are created. Existing rows are preserved.
-        # ------------------------------------------------------------------
-        async def table_exists(table_name: str) -> bool:
-            return bool(await conn.fetchval(
-                "SELECT to_regclass($1) IS NOT NULL", table_name
-            ))
+    if pool is None:
+        pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5, command_timeout=30)
+    return pool
 
-        async def columns(table_name: str) -> set[str]:
-            rows = await conn.fetch(
-                """
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_schema='public' AND table_name=$1
-                """,
-                table_name,
-            )
-            return {str(row["column_name"]) for row in rows}
-
-        async def rename_legacy_column(table_name: str, old: str, new: str) -> None:
-            if not await table_exists(table_name):
-                return
-            cols = await columns(table_name)
-            if old in cols and new not in cols:
-                await conn.execute(
-                    f'ALTER TABLE "{table_name}" RENAME COLUMN "{old}" TO "{new}"'
-                )
-                print(f"DB migration: {table_name}.{old} -> {new}")
-
-        # The old database schema used telegram_id in these tables.
-        # Rename only when the new column does not already exist.
-        await rename_legacy_column("users", "telegram_id", "user_id")
-        await rename_legacy_column("test_sessions", "telegram_id", "user_id")
-        await rename_legacy_column("attempts", "telegram_id", "user_id")
-        await rename_legacy_column("payments", "telegram_id", "user_id")
-
-        # Older payment-card versions called the card owner field `owner_name`.
-        await rename_legacy_column("payment_cards", "owner_name", "holder")
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id BIGINT PRIMARY KEY,
-                first_name TEXT NOT NULL DEFAULT '',
-                last_name TEXT NOT NULL DEFAULT '',
-                username TEXT NOT NULL DEFAULT '',
-                language TEXT NOT NULL DEFAULT 'uz',
-                attempts INTEGER NOT NULL DEFAULT 0,
-                best_score INTEGER,
-                best_raw INTEGER,
-                best_time INTEGER,
-                referrals INTEGER NOT NULL DEFAULT 0,
-                cert_claimed BOOLEAN NOT NULL DEFAULT FALSE,
-                referred_by BIGINT,
-                referral_counted BOOLEAN NOT NULL DEFAULT FALSE,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
+async def init_db():
+    p = await db()
+    async with p.acquire() as c:
+        await c.execute("""
+        CREATE TABLE IF NOT EXISTS users(
+            id BIGINT PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            language TEXT DEFAULT 'uz',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            last_seen TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS settings(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS products(
+            code TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            enabled BOOLEAN DEFAULT TRUE,
+            price INTEGER DEFAULT 0,
+            retry_days INTEGER DEFAULT 5
+        );
+        CREATE TABLE IF NOT EXISTS test_results(
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT REFERENCES users(id),
+            test_type TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            raw_score INTEGER,
+            total INTEGER,
+            profile JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS payments(
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT REFERENCES users(id),
+            product_code TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            status TEXT DEFAULT 'waiting_receipt',
+            receipt_file_id TEXT,
+            receipt_kind TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            approved_at TIMESTAMPTZ,
+            rejected_at TIMESTAMPTZ
+        );
+        ALTER TABLE payments ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ;
+        ALTER TABLE payments ADD COLUMN IF NOT EXISTS reviewed_by BIGINT;
+        CREATE TABLE IF NOT EXISTS certificates(
+            code TEXT PRIMARY KEY,
+            user_id BIGINT REFERENCES users(id),
+            cert_type TEXT NOT NULL,
+            data JSONB NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS battles(
+            id BIGSERIAL PRIMARY KEY,
+            code TEXT UNIQUE NOT NULL,
+            player1 BIGINT REFERENCES users(id),
+            player2 BIGINT REFERENCES users(id),
+            status TEXT DEFAULT 'waiting',
+            result JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS battle_payments(
+            battle_id BIGINT REFERENCES battles(id) ON DELETE CASCADE,
+            user_id BIGINT REFERENCES users(id),
+            payment_id BIGINT REFERENCES payments(id),
+            PRIMARY KEY(battle_id,user_id)
+        );
+        CREATE TABLE IF NOT EXISTS progress(
+            user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+            test_type TEXT NOT NULL,
+            answers JSONB DEFAULT '[]',
+            current_index INTEGER DEFAULT 0,
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY(user_id,test_type)
+        );
         """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS test_sessions (
-                user_id BIGINT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
-                current_index INTEGER NOT NULL DEFAULT 0,
-                answers JSONB NOT NULL DEFAULT '[]'::jsonb,
-                raw_score INTEGER NOT NULL DEFAULT 0,
-                correct INTEGER NOT NULL DEFAULT 0,
-                language TEXT NOT NULL DEFAULT 'uz',
-                started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                completed BOOLEAN NOT NULL DEFAULT FALSE,
-                result_iq INTEGER,
-                result_raw INTEGER,
-                result_correct INTEGER,
-                result_elapsed INTEGER,
-                finished_at TIMESTAMPTZ
-            );
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS attempts (
-                id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-                raw_score INTEGER NOT NULL,
-                iq_score INTEGER NOT NULL,
-                correct INTEGER NOT NULL,
-                elapsed INTEGER NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-        """)
-        await conn.execute("""
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '';
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT '';
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'uz';
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS best_score INTEGER;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS best_raw INTEGER;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS best_time INTEGER;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS referrals INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_claimed BOOLEAN NOT NULL DEFAULT FALSE;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_counted BOOLEAN NOT NULL DEFAULT FALSE;
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS current_index INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '[]'::jsonb;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS raw_score INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS correct INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'uz';
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW();
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS completed BOOLEAN NOT NULL DEFAULT FALSE;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_iq INTEGER;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_raw INTEGER;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_correct INTEGER;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_elapsed INTEGER;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS quiz_version INTEGER NOT NULL DEFAULT 1;
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS app_settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-
-            CREATE TABLE IF NOT EXISTS payment_cards (
-                id BIGSERIAL PRIMARY KEY,
-                card_number TEXT NOT NULL,
-                holder TEXT NOT NULL DEFAULT '',
-                active BOOLEAN NOT NULL DEFAULT TRUE,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-
-            CREATE TABLE IF NOT EXISTS payments (
-                id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-                amount INTEGER NOT NULL,
-                purpose TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                proof_file_id TEXT,
-                proof_message_id BIGINT,
-                reviewer_id BIGINT,
-                consumed BOOLEAN NOT NULL DEFAULT FALSE,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                reviewed_at TIMESTAMPTZ
-            );
-
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_unlocked BOOLEAN NOT NULL DEFAULT FALSE;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS result_counted BOOLEAN NOT NULL DEFAULT FALSE;
-            ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS payment_id BIGINT;
+        for code, (title, enabled, price) in PRODUCT_DEFAULTS.items():
+            await c.execute("""
+                INSERT INTO products(code,title,enabled,price)
+                VALUES($1,$2,$3,$4)
+                ON CONFLICT(code) DO NOTHING
+            """, code, title, enabled, price)
+        await c.execute("""
+            INSERT INTO settings(key,value) VALUES
+            ('card_number','9860350148428500'),
+            ('card_holder','Omonov M. A.'),
+            ('click_info','Click orqali kartaga o‘tkazma qilishingiz mumkin.'),
+            ('support','@admin'),
+            ('iq_first_test_free','1')
+            ON CONFLICT(key) DO NOTHING
         """)
 
-        await conn.execute("""
-            INSERT INTO app_settings (key, value)
-            VALUES
-                ('price_uzs', '3000'),
-                ('payment_mode', 'first_free_retest_paid')
-            ON CONFLICT (key) DO NOTHING;
-        """)
+async def upsert_user(tg):
+    p = await db()
+    await p.execute("""
+        INSERT INTO users(id,username,first_name,last_name,last_seen)
+        VALUES($1,$2,$3,$4,NOW())
+        ON CONFLICT(id) DO UPDATE SET
+          username=EXCLUDED.username,
+          first_name=EXCLUDED.first_name,
+          last_name=EXCLUDED.last_name,
+          last_seen=NOW()
+    """, tg.id, tg.username, tg.first_name, tg.last_name)
 
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_users_best_score
-            ON users(best_score DESC NULLS LAST);
-            CREATE INDEX IF NOT EXISTS idx_attempts_user_id
-            ON attempts(user_id);
-        """)
-    print("Database initialized successfully.")
+async def get_setting(key, default=""):
+    p = await db()
+    row = await p.fetchrow("SELECT value FROM settings WHERE key=$1", key)
+    return row["value"] if row else default
 
+async def set_setting(key, value):
+    p = await db()
+    await p.execute("""
+        INSERT INTO settings(key,value) VALUES($1,$2)
+        ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value
+    """, key, str(value))
 
-async def upsert_user(tg_user: dict, referral_id: int | None = None) -> None:
-    assert pool is not None
-    uid = int(tg_user["id"])
-    if referral_id == uid:
-        referral_id = None
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO users (user_id, first_name, last_name, username, referred_by)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (user_id) DO UPDATE SET
-                first_name = EXCLUDED.first_name,
-                last_name = EXCLUDED.last_name,
-                username = EXCLUDED.username,
-                referred_by = COALESCE(users.referred_by, EXCLUDED.referred_by),
-                updated_at = NOW()
-        """, uid, tg_user.get("first_name", "") or "",
-             tg_user.get("last_name", "") or "",
-             tg_user.get("username", "") or "", referral_id)
+async def product(code):
+    p = await db()
+    return await p.fetchrow("SELECT * FROM products WHERE code=$1", code)
 
+def main_menu(lang="uz"):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton(text="🧠 IQ · EQ · PQ testini ishlash", web_app=WebAppInfo(url=WEBAPP_URL)))
+    kb.row(KeyboardButton(text="📜 Sertifikatim"), KeyboardButton(text="🏆 Reyting"))
+    kb.row(KeyboardButton(text="💰 Pul ishlash"), KeyboardButton(text="ℹ️ Narx va yordam"))
+    kb.row(KeyboardButton(text="🌐 Til"))
+    return kb.as_markup(resize_keyboard=True)
 
-async def get_user(uid: int):
-    assert pool is not None
-    async with pool.acquire() as conn:
-        return await conn.fetchrow("SELECT * FROM users WHERE user_id=$1", uid)
+def lang_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=LANGS["uz"], callback_data="lang:uz")],
+        [InlineKeyboardButton(text=LANGS["ru"], callback_data="lang:ru")],
+        [InlineKeyboardButton(text=LANGS["en"], callback_data="lang:en")],
+    ])
 
-
-async def count_referral(user_id: int) -> None:
-    assert pool is not None
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            row = await conn.fetchrow("""
-                SELECT referred_by, referral_counted FROM users
-                WHERE user_id=$1 FOR UPDATE
-            """, user_id)
-            if not row or row["referred_by"] is None or row["referred_by"] == user_id:
-                return
-            if row["referral_counted"]:
-                return
-            exists = await conn.fetchval(
-                "SELECT 1 FROM users WHERE user_id=$1", row["referred_by"]
-            )
-            if not exists:
-                return
-            await conn.execute("""
-                UPDATE users SET referral_counted=TRUE, updated_at=NOW()
-                WHERE user_id=$1
-            """, user_id)
-            await conn.execute("""
-                UPDATE users SET referrals=referrals+1, updated_at=NOW()
-                WHERE user_id=$1
-            """, row["referred_by"])
-
-
-def sanitize_answers(raw_answers) -> list[int]:
-    if isinstance(raw_answers, str):
-        try:
-            raw_answers = json.loads(raw_answers)
-        except Exception:
-            raw_answers = []
-    if not isinstance(raw_answers, list):
-        return []
-    clean: list[int] = []
-    for value in raw_answers:
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            break
-        if not 0 <= value < 4:
-            break
-        clean.append(value)
-        if len(clean) >= QUESTIONS_COUNT:
-            break
-    return clean
-
-
-def score_answers(answers: list[int]) -> tuple[int, int]:
-    correct = sum(
-        1 for i, answer in enumerate(answers)
-        if i < QUESTIONS_COUNT and answer == CORRECT_ANSWERS[i]
-    )
-    raw = sum(
-        WEIGHTS[i] for i, answer in enumerate(answers)
-        if i < QUESTIONS_COUNT and answer == CORRECT_ANSWERS[i]
-    )
-    return raw, correct
-
-
-async def repair_session(conn, row):
-    answers = sanitize_answers(row["answers"])
-    raw, correct = score_answers(answers)
-    expected_index = len(answers)
-    changed = (
-        int(row["current_index"]) != expected_index
-        or int(row["raw_score"] or 0) != raw
-        or int(row["correct"] or 0) != correct
-        or list(row["answers"] or []) != answers
-    )
-    if changed:
-        row = await conn.fetchrow("""
-            UPDATE test_sessions
-            SET current_index=$2,
-                answers=$3::jsonb,
-                raw_score=$4,
-                correct=$5,
-                last_activity=NOW()
-            WHERE user_id=$1
-            RETURNING *
-        """, row["user_id"], expected_index, json.dumps(answers), raw, correct)
-        print(
-            f"Session repaired: user={row['user_id']} "
-            f"index={expected_index} answers={len(answers)}"
-        )
-    return row
-
-
-async def get_setting(key: str, default: str = "") -> str:
-    assert pool is not None
-    async with pool.acquire() as conn:
-        value = await conn.fetchval("SELECT value FROM app_settings WHERE key=$1", key)
-        return str(value) if value is not None else default
-
-
-async def set_setting(key: str, value: str) -> None:
-    assert pool is not None
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO app_settings(key, value, updated_at)
-            VALUES($1, $2, NOW())
-            ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()
-        """, key, str(value))
-
-
-async def get_price() -> int:
-    raw = await get_setting("price_uzs", "3000")
-    try:
-        value = int(raw)
-    except ValueError:
-        value = 3000
-    return max(0, value)
-
-
-async def get_payment_mode() -> str:
-    mode = await get_setting("payment_mode", PAYMENT_MODE_RETEST)
-    return mode if mode in VALID_PAYMENT_MODES else PAYMENT_MODE_RETEST
-
-
-async def active_cards() -> list[dict]:
-    assert pool is not None
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT id, card_number, holder
-            FROM payment_cards
-            WHERE active=TRUE
-            ORDER BY id
-        """)
-    return [dict(r) for r in rows]
-
-
-def is_admin_user(user) -> bool:
-    if not user:
-        return False
-    if ADMIN_USER_ID and int(user.id) == ADMIN_USER_ID:
-        return True
-    return (user.username or "").lower() == ADMIN_USERNAME.lower()
-
-
-async def remember_admin_chat(user_id: int) -> None:
-    await set_setting("admin_chat_id", str(user_id))
-
-
-async def get_admin_chat_id() -> int | None:
-    raw = await get_setting("admin_chat_id", "0")
-    try:
-        value = int(raw)
-    except ValueError:
-        return None
-    return value or None
-
-
-def payment_mode_label(mode: str) -> str:
-    return {
-        PAYMENT_MODE_RETEST: "1️⃣ Birinchi test bepul → keyingi testlar pullik",
-        PAYMENT_MODE_RESULT: "2️⃣ Test bepul → natijani ko‘rish pullik",
-        PAYMENT_MODE_FREE: "3️⃣ Hammasi bepul",
-    }.get(mode, mode)
-
-
-async def create_payment(uid: int, purpose: str) -> dict:
-    if purpose not in {"retest", "result"}:
-        raise HTTPException(status_code=400, detail="INVALID_PAYMENT_PURPOSE")
-    assert pool is not None
-    price = await get_price()
-    if price <= 0:
-        raise HTTPException(status_code=400, detail="PAYMENTS_DISABLED")
-    cards = await active_cards()
-    if not cards:
-        raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            existing = await conn.fetchrow("""
-                SELECT id, amount, purpose, status
-                FROM payments
-                WHERE user_id=$1 AND purpose=$2 AND status='pending' AND consumed=FALSE
-                ORDER BY id DESC LIMIT 1
-                FOR UPDATE
-            """, uid, purpose)
-            if existing:
-                payment_id = int(existing["id"])
-                amount = int(existing["amount"])
-            else:
-                row = await conn.fetchrow("""
-                    INSERT INTO payments(user_id, amount, purpose)
-                    VALUES($1,$2,$3) RETURNING id, amount
-                """, uid, price, purpose)
-                payment_id = int(row["id"])
-                amount = int(row["amount"])
-    return {"payment_id": payment_id, "amount": amount, "cards": cards}
-
-
-async def payment_status(uid: int, payment_id: int) -> dict:
-    assert pool is not None
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("""
-            SELECT id, amount, purpose, status, consumed
-            FROM payments WHERE id=$1 AND user_id=$2
-        """, payment_id, uid)
-    if not row:
-        raise HTTPException(status_code=404, detail="PAYMENT_NOT_FOUND")
-    return {"payment_id": int(row["id"]), "amount": int(row["amount"]),
-            "purpose": row["purpose"], "status": row["status"],
-            "consumed": bool(row["consumed"])}
-
-
-async def consume_approved_retest_payment(conn, uid: int) -> int | None:
-    row = await conn.fetchrow("""
-        SELECT id, amount FROM payments
-        WHERE user_id=$1 AND purpose='retest' AND status='approved' AND consumed=FALSE
-        ORDER BY id ASC LIMIT 1 FOR UPDATE
-    """, uid)
-    if not row:
-        return None
-    await conn.execute("UPDATE payments SET consumed=TRUE WHERE id=$1", row["id"])
-    return int(row["id"])
-
-
-async def unlock_result_payment(conn, uid: int, payment_id: int) -> None:
-    payment = await conn.fetchrow("""
-        SELECT * FROM payments WHERE id=$1 AND user_id=$2 FOR UPDATE
-    """, payment_id, uid)
-    if not payment or payment["status"] != "approved":
-        raise HTTPException(status_code=409, detail="PAYMENT_NOT_APPROVED")
-    session = await conn.fetchrow("""
-        SELECT * FROM test_sessions
-        WHERE user_id=$1 AND completed=TRUE AND result_counted=FALSE
-        ORDER BY finished_at DESC NULLS LAST LIMIT 1 FOR UPDATE
-    """, uid)
-    if not session:
-        raise HTTPException(status_code=409, detail="RESULT_NOT_FOUND")
-    if payment["consumed"]:
+@router.message(CommandStart())
+async def start(message: Message):
+    await upsert_user(message.from_user)
+    p = await db()
+    row = await p.fetchrow("SELECT language FROM users WHERE id=$1", message.from_user.id)
+    if not row or not row["language"]:
+        await message.answer("🌐 Tilni tanlang / Выберите язык / Choose a language:", reply_markup=lang_kb())
         return
-    iq = int(session["result_iq"])
-    raw = int(session["result_raw"])
-    correct = int(session["result_correct"])
-    elapsed = int(session["result_elapsed"])
-    await conn.execute("""
-        INSERT INTO attempts(user_id, raw_score, iq_score, correct, elapsed)
-        VALUES($1,$2,$3,$4,$5)
-    """, uid, raw, iq, correct, elapsed)
-    await conn.execute("""
-        UPDATE users SET
-            attempts=attempts+1,
-            best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
-            best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
-            best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
-            updated_at=NOW() WHERE user_id=$1
-    """, uid, iq, raw, elapsed)
-    await conn.execute("""
-        UPDATE test_sessions SET result_unlocked=TRUE, result_counted=TRUE, payment_id=$2, last_activity=NOW()
-        WHERE user_id=$1 AND completed=TRUE AND result_counted=FALSE
-    """, uid, payment_id)
-    await conn.execute("UPDATE payments SET consumed=TRUE WHERE id=$1", payment_id)
+    await message.answer(
+        f"👋 Salom, <b>{message.from_user.first_name or 'do‘st'}!</b>\n\n"
+        "🧠 <b>IQTestPro</b> — IQ, EQ va prokrastinatsiya testlari\n\n"
+        "🧠 IQ — mantiqiy fikrlash darajangiz\n"
+        "🎭 EQ — hissiy intellektingiz\n"
+        "⏳ Prokrastinatsiya — ishni keyinga surish odatingiz\n\n"
+        "⭐ Uchalasini topshirsangiz — to‘liq shaxsiy tahlil ochiladi\n"
+        "📜 Sertifikat shu yerga PNG fayl bo‘lib keladi.\n\n"
+        "👇 Boshlash uchun tugmani bosing",
+        reply_markup=main_menu()
+    )
 
+@router.callback_query(F.data.startswith("lang:"))
+async def language(callback: CallbackQuery):
+    lang = callback.data.split(":")[1]
+    p = await db()
+    await p.execute("UPDATE users SET language=$1 WHERE id=$2", lang, callback.from_user.id)
+    await callback.message.edit_text("✅ Til saqlandi.")
+    await callback.message.answer(
+        "👋 Xush kelibsiz!\n\n🧠 IQTestPro testlarini boshlashingiz mumkin.",
+        reply_markup=main_menu(lang)
+    )
+    await callback.answer()
 
-async def create_or_get_session(uid: int, language: str):
-    """Create exactly one active quiz session per user.
+@router.message(F.text == "ℹ️ Narx va yordam")
+async def prices(message: Message):
+    p = await db()
+    rows = await p.fetch("SELECT * FROM products ORDER BY code")
+    labels = {r["code"]: r for r in rows}
+    def line(code, text, free_text=None):
+        r = labels.get(code)
+        if not r or not r["enabled"] or r["price"] == 0:
+            return text + (f" — {free_text}" if free_text else " — tekin")
+        return f"{text} — {r['price']:,}".replace(",", " ") + " so‘m"
+    support = await get_setting("support", "@admin")
+    text = (
+        "ℹ️ <b>NARX VA YORDAM</b>\n\n"
+        f"{line('iq','🧠 IQ test')}\n"
+        f"{line('eq','🎭 EQ','IQ dan keyin tekin')}\n"
+        f"{line('pq','⏳ Prokrastinatsiya','EQ dan keyin tekin')}\n"
+        f"{line('full','⭐ To‘liq tahlil','uchalasidan keyin tekin')}\n\n"
+        f"{line('iq_retry','🔁 IQ ni 2-marta ishlash')}\n"
+        f"{line('eq_retry','🔁 EQ / PQ ni qayta ishlash','5 kundan keyin tekin')}\n"
+        f"{line('battle','⚔️ Do‘st bilan battle')}\n\n"
+        "💳 To‘lov Click yoki karta orqali\n"
+        "⏱ To‘lov 1–2 daqiqada tasdiqlanadi\n"
+        "🏆 Tasdiqlangach natija o‘zi ochiladi\n"
+        "📜 Sertifikat shu botga PNG fayl bo‘lib keladi\n\n"
+        "🔑 Sertifikat kodingizni (IQ-XXXXX) shu yerga yozsangiz — topib beramiz\n\n"
+        f"👤 <b>QO‘LLAB-QUVVATLASH</b>\n💬 {support}"
+    )
+    await message.answer(text)
 
-    The advisory lock is important: two near-simultaneous Mini App start
-    requests must never race into the users' test_sessions primary key.
-    """
-    assert pool is not None
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            await conn.execute("SELECT pg_advisory_xact_lock($1::bigint)", uid)
+@router.message(F.text == "🌐 Til")
+async def change_language(message: Message):
+    await message.answer("🌐 Tilni tanlang:", reply_markup=lang_kb())
 
-            user = await conn.fetchrow(
-                "SELECT attempts FROM users WHERE user_id=$1 FOR UPDATE", uid
-            )
-            if not user:
-                raise HTTPException(status_code=401, detail="USER_NOT_FOUND")
+@router.message(F.text == "🏆 Reyting")
+async def ranking(message: Message):
+    p = await db()
+    rows = await p.fetch("""
+      SELECT u.first_name,u.username,r.score
+      FROM test_results r JOIN users u ON u.id=r.user_id
+      WHERE r.test_type='iq'
+      AND r.id IN (SELECT MAX(id) FROM test_results WHERE test_type='iq' GROUP BY user_id)
+      ORDER BY r.score DESC, r.created_at ASC LIMIT 30
+    """)
+    lines = ["🏆 <b>IQ REYTING — TOP 30</b>\n"]
+    for i,r in enumerate(rows,1):
+        name = r["first_name"] or r["username"] or "Foydalanuvchi"
+        lines.append(f"{i}. {name} — <b>{r['score']}</b>")
+    await message.answer("\n".join(lines) if len(lines)>1 else "🏆 Hali reyting shakllanmagan.")
 
-            active = await conn.fetchrow("""
-                SELECT * FROM test_sessions
-                WHERE user_id=$1 AND completed=FALSE
-                FOR UPDATE
-            """, uid)
+@router.message(F.text == "📜 Sertifikatim")
+async def cert_search_help(message: Message):
+    await message.answer("🔑 Sertifikat kodingizni yuboring.\nMasalan: <code>IQ-A1B2C3</code>")
 
-            if active:
-                if int(active.get("quiz_version") or 1) != QUIZ_VERSION:
-                    # Never score an old question bank with the new answer key.
-                    await conn.execute("DELETE FROM test_sessions WHERE user_id=$1", uid)
-                    active = None
-                else:
-                    active = await repair_session(conn, active)
-                if active:
-                    answer_count = len(sanitize_answers(active["answers"]))
-
-                    if answer_count >= QUESTIONS_COUNT:
-                        # A fully answered legacy session is finalized once.
-                        raw, correct = score_answers(sanitize_answers(active["answers"]))
-                        iq = calculate_iq(raw)
-                        elapsed = max(0, round((now_utc() - active["started_at"]).total_seconds()))
-
-                        if not bool(active["result_counted"]):
-                            await conn.execute("""
-                                INSERT INTO attempts(user_id, raw_score, iq_score, correct, elapsed)
-                                VALUES($1,$2,$3,$4,$5)
-                            """, uid, raw, iq, correct, elapsed)
-                            await conn.execute("""
-                                UPDATE users SET
-                                    attempts=attempts+1,
-                                    best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
-                                    best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
-                                    best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
-                                    updated_at=NOW()
-                                WHERE user_id=$1
-                            """, uid, iq, raw, elapsed)
-
-                        await conn.execute("DELETE FROM test_sessions WHERE user_id=$1", uid)
-                        user = await conn.fetchrow(
-                            "SELECT attempts FROM users WHERE user_id=$1 FOR UPDATE", uid
-                        )
-                    else:
-                        # Do not kill a quiz just because the user took a while.
-                        # The frontend now solves locally and syncs once at finish.
-                        age = (now_utc() - active["last_activity"]).total_seconds()
-                        if age <= 86400:
-                            return active, False
-                        await conn.execute("DELETE FROM test_sessions WHERE user_id=$1", uid)
-
-            mode = await get_payment_mode()
-            payment_id = None
-            if mode == PAYMENT_MODE_RETEST and int(user["attempts"]) >= 1:
-                payment_id = await consume_approved_retest_payment(conn, uid)
-                if payment_id is None:
-                    price = await get_price()
-                    raise HTTPException(
-                        status_code=402,
-                        detail="PAID_RETEST",
-                        headers={"X-Payment-Price": str(price)},
-                    )
-
-            row = await conn.fetchrow("""
-                INSERT INTO test_sessions
-                    (user_id, language, started_at, last_activity, payment_id, quiz_version)
-                VALUES ($1, $2, NOW(), NOW(), $3, $4)
-                RETURNING *
-            """, uid, language, payment_id, QUIZ_VERSION)
-            return row, True
-
-
-async def save_answer(uid: int, question_index: int, selected: int):
-    """Legacy single-answer endpoint. Kept for compatibility; the new UI does
-    not call it during the quiz, so a slow connection cannot interrupt play."""
-    assert pool is not None
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            row = await conn.fetchrow("""
-                SELECT * FROM test_sessions
-                WHERE user_id=$1 AND completed=FALSE
-                FOR UPDATE
-            """, uid)
-            if not row:
-                raise HTTPException(status_code=409, detail="SESSION_EXPIRED")
-            row = await repair_session(conn, row)
-            current_index = int(row["current_index"])
-            if question_index != current_index:
-                raise HTTPException(status_code=409, detail="OUT_OF_ORDER")
-            if not 0 <= selected < 4:
-                raise HTTPException(status_code=400, detail="INVALID_ANSWER")
-            if current_index >= QUESTIONS_COUNT:
-                raise HTTPException(status_code=409, detail="SESSION_COMPLETE")
-
-            answers = sanitize_answers(row["answers"])
-            answers.append(selected)
-            raw, correct = score_answers(answers)
-            await conn.execute("""
-                UPDATE test_sessions
-                SET current_index=$2, answers=$3::jsonb, raw_score=$4,
-                    correct=$5, last_activity=NOW()
-                WHERE user_id=$1
-            """, uid, current_index + 1, json.dumps(answers), raw, correct)
-            return current_index + 1
-
-
-async def sync_session_answers(uid: int, answers: list[int]) -> int:
-    """Commit the whole locally completed quiz in one request."""
-    assert pool is not None
-    clean = sanitize_answers(answers)
-    if len(clean) != QUESTIONS_COUNT:
-        raise HTTPException(status_code=409, detail="INCOMPLETE")
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            await conn.execute("SELECT pg_advisory_xact_lock($1::bigint)", uid)
-            row = await conn.fetchrow("""
-                SELECT * FROM test_sessions
-                WHERE user_id=$1 AND completed=FALSE
-                FOR UPDATE
-            """, uid)
-            if not row:
-                raise HTTPException(status_code=409, detail="SESSION_EXPIRED")
-
-            raw, correct = score_answers(clean)
-            await conn.execute("""
-                UPDATE test_sessions
-                SET current_index=$2, answers=$3::jsonb, raw_score=$4,
-                    correct=$5, last_activity=NOW()
-                WHERE user_id=$1
-            """, uid, QUESTIONS_COUNT, json.dumps(clean), raw, correct)
-            return QUESTIONS_COUNT
-
-
-def calculate_iq(raw: int) -> int:
-    raw = max(0, min(int(raw), MAX_RAW))
-    return round(40 + (raw / MAX_RAW) * 120)
-
-
-async def finish_session(uid: int):
-    assert pool is not None
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            await conn.execute("SELECT pg_advisory_xact_lock($1::bigint)", uid)
-            row = await conn.fetchrow(
-                "SELECT * FROM test_sessions WHERE user_id=$1 FOR UPDATE", uid
-            )
-            if not row:
-                raise HTTPException(status_code=409, detail="SESSION_EXPIRED")
-
-            if row["completed"]:
-                if not bool(row["result_counted"]):
-                    mode = await get_payment_mode()
-                    if mode == PAYMENT_MODE_RESULT:
-                        payment_id = row["payment_id"]
-                        if payment_id:
-                            payment = await conn.fetchrow("SELECT status, consumed FROM payments WHERE id=$1 AND user_id=$2", payment_id, uid)
-                            if payment and payment["status"] == "approved" and not payment["consumed"]:
-                                await unlock_result_payment(conn, uid, int(payment_id))
-                            else:
-                                raise HTTPException(status_code=402, detail="PAYMENT_REQUIRED")
-                        else:
-                            price = await get_price()
-                            cards = await active_cards()
-                            if not cards:
-                                raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
-                            payment = await conn.fetchrow("""
-                                INSERT INTO payments(user_id, amount, purpose) VALUES($1,$2,'result') RETURNING id
-                            """, uid, price)
-                            payment_id = int(payment["id"])
-                            await conn.execute("UPDATE test_sessions SET payment_id=$2 WHERE user_id=$1", uid, payment_id)
-                            raise HTTPException(status_code=402, detail="PAYMENT_REQUIRED")
-                return (int(row["result_iq"]), int(row["result_raw"]), int(row["result_correct"]), int(row["result_elapsed"]))
-
-            row = await repair_session(conn, row)
-            answers = sanitize_answers(row["answers"])
-            if len(answers) != QUESTIONS_COUNT or int(row["current_index"]) != QUESTIONS_COUNT:
-                raise HTTPException(status_code=409, detail="INCOMPLETE")
-
-            raw, correct = score_answers(answers)
-            iq = calculate_iq(raw)
-            elapsed = max(0, round((now_utc() - row["started_at"]).total_seconds()))
-            mode = await get_payment_mode()
-
-            if mode == PAYMENT_MODE_RESULT:
-                price = await get_price()
-                cards = await active_cards()
-                if not cards:
-                    raise HTTPException(status_code=503, detail="NO_PAYMENT_CARD")
-                payment = await conn.fetchrow("""
-                    INSERT INTO payments(user_id, amount, purpose) VALUES($1,$2,'result') RETURNING id
-                """, uid, price)
-                payment_id = int(payment["id"])
-                await conn.execute("""
-                    UPDATE test_sessions SET completed=TRUE, result_iq=$2, result_raw=$3, result_correct=$4, result_elapsed=$5, payment_id=$6, result_unlocked=FALSE, result_counted=FALSE, finished_at=NOW(), last_activity=NOW()
-                    WHERE user_id=$1
-                """, uid, iq, raw, correct, elapsed, payment_id)
-                raise HTTPException(status_code=402, detail="PAYMENT_REQUIRED")
-
-            await conn.execute("""
-                INSERT INTO attempts (user_id, raw_score, iq_score, correct, elapsed)
-                VALUES ($1, $2, $3, $4, $5)
-            """, uid, raw, iq, correct, elapsed)
-
-            await conn.execute("""
-                UPDATE users SET
-                    attempts=attempts+1,
-                    best_score=CASE WHEN best_score IS NULL OR $2>best_score THEN $2 ELSE best_score END,
-                    best_raw=CASE WHEN best_score IS NULL OR $2>best_score THEN $3 ELSE best_raw END,
-                    best_time=CASE WHEN best_score IS NULL OR $2>best_score OR ($2=best_score AND (best_time IS NULL OR $4<best_time)) THEN $4 ELSE best_time END,
-                    updated_at=NOW() WHERE user_id=$1
-            """, uid, iq, raw, elapsed)
-
-            await conn.execute("""
-                UPDATE test_sessions SET completed=TRUE, result_iq=$2, result_raw=$3, result_correct=$4, result_elapsed=$5, result_unlocked=TRUE, result_counted=TRUE, finished_at=NOW(), last_activity=NOW()
-                WHERE user_id=$1
-            """, uid, iq, raw, correct, elapsed)
-            return iq, raw, correct, elapsed
-
-
-async def get_rank(uid: int):
-    assert pool is not None
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT best_score,best_time FROM users WHERE user_id=$1", uid
-        )
-        if not row or row["best_score"] is None:
-            return None
-        rank = await conn.fetchval("""
-            SELECT COUNT(*)+1 FROM users
-            WHERE best_score IS NOT NULL AND (
-                best_score>$1 OR (
-                    best_score=$1 AND COALESCE(best_time,2147483647)
-                    < COALESCE($2::INTEGER,2147483647)
-                )
-            )
-        """, row["best_score"], row["best_time"])
-        return int(rank)
-
-
-def validate_init_data(init_data: str) -> dict:
-    if not init_data:
-        raise HTTPException(status_code=401, detail="INVALID_INIT_DATA")
+@router.message(F.text.regexp(r"^(IQ|BT)-[A-Z0-9]{6}$"))
+async def cert_lookup(message: Message):
+    code = message.text.strip().upper()
+    p = await db()
+    row = await p.fetchrow("SELECT data FROM certificates WHERE code=$1", code)
+    if not row:
+        await message.answer("❌ Bunday sertifikat topilmadi.")
+        return
     try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True))
-        received_hash = pairs.pop("hash", None)
+        data = row["data"]
+        path = make_certificate(data.get("name","Foydalanuvchi"), int(data.get("iq",0)), code)
+        await message.answer_document(
+            BufferedInputFile(open(path, "rb").read(), filename=f"{code}.png"),
+            caption=f"📜 <b>Sertifikat topildi</b>\n\n🔑 <code>{code}</code>"
+        )
+    except Exception:
+        await message.answer(f"✅ Sertifikat topildi.\n\nKod: <code>{code}</code>")
+
+@router.message(F.text == "💰 Pul ishlash")
+async def referral(message: Message):
+    me = await bot.me()
+    link = f"https://t.me/{me.username}?start=ref_{message.from_user.id}"
+    await message.answer(
+        "💰 <b>PUL ISHLASH</b>\n\n"
+        "Do‘stlaringizni taklif qiling va referral tizimida ishtirok eting.\n\n"
+        f"🔗 Sizning linkingiz:\n<code>{link}</code>\n\n"
+        "📊 Statistika keyinroq shu bo‘limda ko‘rsatiladi."
+    )
+
+# ---------- Payment ----------
+
+async def create_payment(user_id, product_code, amount=None):
+    p = await db()
+    r = await p.fetchrow("SELECT price FROM products WHERE code=$1", product_code)
+    if not r:
+        raise ValueError("Unknown product")
+    price = amount if amount is not None else r["price"]
+    return await p.fetchval("""
+      INSERT INTO payments(user_id,product_code,amount)
+      VALUES($1,$2,$3) RETURNING id
+    """, user_id, product_code, price)
+
+async def send_payment_message(user_id, payment_id, product_code, amount):
+    card = await get_setting("card_number")
+    holder = await get_setting("card_holder")
+    click = await get_setting("click_info")
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Karta raqamini nusxalash", callback_data=f"copycard:{payment_id}")],
+        [InlineKeyboardButton(text="📤 Chek yuborish", callback_data=f"receipt:{payment_id}")],
+    ])
+    await bot.send_message(
+        user_id,
+        "💳 <b>IQ TEST UCHUN TO‘LOV</b>\n\n"
+        f"💰 <b>Summa:</b> {amount:,}".replace(",", " ") + " so‘m\n\n"
+        f"💳 <b>Karta:</b>\n<code>{card}</code>\n\n"
+        f"👤 <b>Karta egasi:</b> {holder}\n\n"
+        f"📱 {click}\n\n"
+        "To‘lovni amalga oshirgach, chekni shu botga yuboring.",
+        reply_markup=kb
+    )
+
+@router.callback_query(F.data.startswith("copycard:"))
+async def copy_card(callback: CallbackQuery):
+    card = await get_setting("card_number")
+    await callback.message.answer(f"📋 Karta raqami:\n<code>{card}</code>\n\nNusxalab to‘lovni amalga oshiring.")
+    await callback.answer("Karta raqami yuborildi")
+
+@router.callback_query(F.data.startswith("receipt:"))
+async def receipt_start(callback: CallbackQuery):
+    pid = int(callback.data.split(":")[1])
+    p = await db()
+    row = await p.fetchrow("SELECT * FROM payments WHERE id=$1 AND user_id=$2", pid, callback.from_user.id)
+    if not row:
+        await callback.answer("To‘lov topilmadi", show_alert=True)
+        return
+    await callback.message.answer("📸 To‘lov chekini rasm yoki fayl ko‘rinishida yuboring.")
+    await callback.answer()
+
+@router.message(F.photo)
+async def photo_receipt(message: Message):
+    p = await db()
+    row = await p.fetchrow("""
+      SELECT * FROM payments WHERE user_id=$1 AND status='waiting_receipt'
+      ORDER BY id DESC LIMIT 1
+    """, message.from_user.id)
+    if not row:
+        return
+    file_id = message.photo[-1].file_id
+    await p.execute("""
+      UPDATE payments SET receipt_file_id=$1,receipt_kind='photo' WHERE id=$2
+    """, file_id, row["id"])
+    await notify_admin_payment(row["id"], message.from_user.id, file_id, "photo")
+    await message.answer("✅ Chekingiz qabul qilindi.\n\n⏳ Admin tomonidan tekshirilmoqda.")
+
+@router.message(F.document)
+async def document_receipt(message: Message):
+    p = await db()
+    row = await p.fetchrow("""
+      SELECT * FROM payments WHERE user_id=$1 AND status='waiting_receipt'
+      ORDER BY id DESC LIMIT 1
+    """, message.from_user.id)
+    if not row:
+        return
+    file_id = message.document.file_id
+    await p.execute("""
+      UPDATE payments SET receipt_file_id=$1,receipt_kind='document' WHERE id=$2
+    """, file_id, row["id"])
+    await notify_admin_payment(row["id"], message.from_user.id, file_id, "document")
+    await message.answer("✅ Chekingiz qabul qilindi.\n\n⏳ Admin tomonidan tekshirilmoqda.")
+
+async def notify_admin_payment(payment_id, user_id, file_id, kind):
+    if not ADMIN_IDS:
+        return
+    p = await db()
+    row = await p.fetchrow("""
+      SELECT p.*,u.username,u.first_name,u.last_name
+      FROM payments p JOIN users u ON u.id=p.user_id WHERE p.id=$1
+    """, payment_id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ To‘lov tushgan", callback_data=f"payok:{payment_id}")],
+        [InlineKeyboardButton(text="❌ To‘lov tushmagan", callback_data=f"payno:{payment_id}")],
+    ])
+    caption = (
+        "💳 <b>YANGI TO‘LOV</b>\n\n"
+        f"👤 {row['first_name'] or ''} {row['last_name'] or ''}\n"
+        f"🆔 <code>{user_id}</code>\n"
+        f"💰 {row['amount']:,} so‘m\n"
+        f"📦 {row['product_code']}\n"
+        f"🕐 {row['created_at']}\n"
+    ).replace(",", " ")
+    for admin in ADMIN_IDS:
+        try:
+            if kind == "photo":
+                await bot.send_photo(admin, file_id, caption=caption, reply_markup=kb)
+            else:
+                await bot.send_document(admin, file_id, caption=caption, reply_markup=kb)
+        except Exception:
+            pass
+
+async def unlock_product(user_id, product_code):
+    # Unlock is represented by an approved payment. Test endpoint checks this.
+    return True
+
+@router.callback_query(F.data.startswith("payok:"))
+async def pay_ok(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Ruxsat yo‘q", show_alert=True)
+        return
+    pid = int(callback.data.split(":")[1])
+    p = await db()
+    row = await p.fetchrow("SELECT * FROM payments WHERE id=$1", pid)
+    if not row or row["status"] != "waiting_receipt":
+        await callback.answer("Bu to‘lov allaqachon ko‘rib chiqilgan.", show_alert=True)
+        return
+    await p.execute("UPDATE payments SET status='approved',approved_at=NOW() WHERE id=$1", pid)
+    if row["product_code"] == "battle":
+        bpay = await p.fetchrow("SELECT battle_id FROM battle_payments WHERE payment_id=$1", pid)
+        if bpay:
+            b = await p.fetchrow("SELECT * FROM battles WHERE id=$1", bpay["battle_id"])
+            if b and b["player1"] and b["player2"]:
+                await p.execute("UPDATE battles SET status='ready' WHERE id=$1", b["id"])
+                await bot.send_message(row["user_id"],
+                    f"✅ <b>Battle to‘lovi tasdiqlandi!</b>\n\n⚔️ Battle kodi: <code>{b['code']}</code>\n"
+                    "Endi IQ testini boshlang.", reply_markup=main_menu())
+            else:
+                await bot.send_message(row["user_id"],
+                    "✅ <b>Battle to‘lovi tasdiqlandi!</b>\n\n⚔️ Do‘stingiz qo‘shilishini kuting.", reply_markup=main_menu())
+        else:
+            await bot.send_message(row["user_id"], "✅ Battle to‘lovi tasdiqlandi.", reply_markup=main_menu())
+    else:
+        await bot.send_message(
+            row["user_id"],
+            "✅ <b>To‘lov tasdiqlandi!</b>\n\n"
+            "🧠 Sizning pullik imkoniyatingiz ochildi. Mini App'ga qaytib davom eting.",
+            reply_markup=main_menu()
+        )
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Tasdiqlandi")
+
+@router.callback_query(F.data.startswith("payno:"))
+async def pay_no(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Ruxsat yo‘q", show_alert=True)
+        return
+    pid = int(callback.data.split(":")[1])
+    p = await db()
+    row = await p.fetchrow("SELECT * FROM payments WHERE id=$1", pid)
+    if not row or row["status"] != "waiting_receipt":
+        await callback.answer("Bu to‘lov allaqachon ko‘rib chiqilgan.", show_alert=True)
+        return
+    await p.execute("UPDATE payments SET status='rejected',rejected_at=NOW() WHERE id=$1", pid)
+    await bot.send_message(row["user_id"],
+        "❌ <b>To‘lov tasdiqlanmadi.</b>\n\n"
+        "Iltimos, to‘lovni tekshirib, yangi chek yuboring.")
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Rad etildi")
+
+# ---------- Admin ----------
+
+def admin_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👤 Users", callback_data="adm:users")],
+        [InlineKeyboardButton(text="💳 To‘lovlar", callback_data="adm:payments")],
+        [InlineKeyboardButton(text="💰 Mahsulotlar", callback_data="adm:products")],
+        [InlineKeyboardButton(text="🎁 IQ birinchi test", callback_data="adm:iqfree")],
+        [InlineKeyboardButton(text="📊 Statistika", callback_data="adm:stats")],
+        [InlineKeyboardButton(text="📢 Barchaga xabar", callback_data="adm:broadcast_all")],
+        [InlineKeyboardButton(text="💳 Sotib olganlarga xabar", callback_data="adm:broadcast_buyers")],
+    ])
+
+@router.message(Command("admin"))
+async def admin(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    await message.answer("⚙️ <b>ADMIN PANEL</b>", reply_markup=admin_kb())
+
+@router.callback_query(F.data == "adm:stats")
+async def admin_stats(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    p = await db()
+    users = await p.fetchval("SELECT COUNT(*) FROM users")
+    results = await p.fetchval("SELECT COUNT(*) FROM test_results")
+    paid = await p.fetchval("SELECT COUNT(*) FROM payments WHERE status='approved'")
+    revenue = await p.fetchval("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='approved'")
+    await callback.message.edit_text(
+        f"📊 <b>STATISTIKA</b>\n\n👥 Users: {users}\n🧠 Testlar: {results}\n"
+        f"💳 To‘lovlar: {paid}\n💰 Daromad: {revenue:,} so‘m".replace(",", " "),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga",callback_data="adm:back")]])
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "adm:iqfree")
+async def admin_iq_free(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+    current = await get_setting("iq_first_test_free", "1") == "1"
+    await set_setting("iq_first_test_free", "0" if current else "1")
+    state = "🟢 YOQILGAN — birinchi IQ testi bepul" if not current else "🔴 O‘CHIRILGAN — birinchi IQ testi ham pullik"
+    await callback.answer("Sozlama yangilandi")
+    await callback.message.edit_text(
+        f"🎁 <b>IQ birinchi test</b>\n\n{state}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga", callback_data="adm:back")]])
+    )
+
+
+@router.callback_query(F.data == "adm:products")
+async def admin_products(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    p = await db()
+    rows = await p.fetch("SELECT * FROM products ORDER BY code")
+    b = InlineKeyboardBuilder()
+    text = "💰 <b>MAHSULOTLAR</b>\n\n"
+    for r in rows:
+        status = "🟢" if r["enabled"] else "🔴"
+        text += f"{status} {r['title']} — {r['price']:,} so‘m\n".replace(",", " ")
+        b.button(text=f"{r['title']}", callback_data=f"prod:{r['code']}")
+    b.adjust(1)
+    b.row(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="adm:back"))
+    await callback.message.edit_text(text, reply_markup=b.as_markup())
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("prod:"))
+async def admin_product_detail(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    code = callback.data.split(":")[1]
+    r = await product(code)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🟢/🔴 Bepul/Pullik", callback_data=f"toggleprod:{code}")],
+        [InlineKeyboardButton(text="💰 Narxni o‘zgartirish", callback_data=f"setprice:{code}")],
+        [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="adm:products")]
+    ])
+    await callback.message.edit_text(
+        f"<b>{r['title']}</b>\n\nHolat: {'🟢 Pullik' if r['enabled'] and r['price']>0 else '🆓 Bepul'}\n"
+        f"Narx: {r['price']:,} so‘m".replace(",", " "),
+        reply_markup=kb
+    )
+    await callback.answer()
+
+class AdminState(StatesGroup):
+    waiting_price = State()
+    waiting_broadcast = State()
+    waiting_user_id = State()
+    waiting_user_message = State()
+
+@router.callback_query(F.data.startswith("toggleprod:"))
+async def toggle_product(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    code = callback.data.split(":")[1]
+    r = await product(code)
+    p = await db()
+    if r["price"] > 0:
+        await p.execute("UPDATE products SET price=0 WHERE code=$1", code)
+    else:
+        default = PRODUCT_DEFAULTS.get(code, ("",True,1000))[2]
+        await p.execute("UPDATE products SET price=$1 WHERE code=$2", default, code)
+    await callback.answer("Yangilandi")
+    await admin_products(callback)
+
+@router.callback_query(F.data.startswith("setprice:"))
+async def set_price(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    code = callback.data.split(":")[1]
+    await state.set_state(AdminState.waiting_price)
+    await state.update_data(product_code=code)
+    await callback.message.answer("💰 Yangi narxni so‘mda yuboring. Bepul qilish uchun 0 yozing.")
+    await callback.answer()
+
+@router.message(AdminState.waiting_price)
+async def receive_price(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    if not message.text.isdigit():
+        await message.answer("Faqat son yuboring.")
+        return
+    data = await state.get_data()
+    price = int(message.text)
+    p = await db()
+    await p.execute("UPDATE products SET price=$1 WHERE code=$2", price, data["product_code"])
+    await state.clear()
+    await message.answer("✅ Narx yangilandi.")
+
+@router.callback_query(F.data == "adm:users")
+async def admin_users(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    p = await db()
+    count = await p.fetchval("SELECT COUNT(*) FROM users")
+    await callback.message.edit_text(
+        f"👤 <b>USERS</b>\n\nJami: {count}\n\n"
+        "Alohida userga xabar yuborish uchun:\n<code>/msg USER_ID matn</code>",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Userga xabar",callback_data="adm:user_message")],
+            [InlineKeyboardButton(text="📢 Barchaga xabar",callback_data="adm:broadcast_all")],
+            [InlineKeyboardButton(text="💳 Sotib olganlarga xabar",callback_data="adm:broadcast_buyers")],
+            [InlineKeyboardButton(text="⬅️ Orqaga",callback_data="adm:back")]
+        ])
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "adm:user_message")
+async def admin_user_message_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await state.set_state(AdminState.waiting_user_id)
+    await callback.message.answer("👤 User ID yuboring.")
+    await callback.answer()
+
+@router.message(AdminState.waiting_user_id)
+async def admin_user_id_receive(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    if not (message.text or "").isdigit():
+        await message.answer("Faqat Telegram User ID raqamini yuboring.")
+        return
+    await state.update_data(target_user_id=int(message.text))
+    await state.set_state(AdminState.waiting_user_message)
+    await message.answer("💬 Endi yuboriladigan xabarni yuboring.")
+
+@router.message(AdminState.waiting_user_message)
+async def admin_user_message_receive(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    data = await state.get_data()
+    try:
+        await message.copy_to(data["target_user_id"])
+        await message.answer("✅ Xabar yuborildi.")
+    except Exception as e:
+        await message.answer(f"❌ Yuborilmadi: {e}")
+    await state.clear()
+
+@router.message(Command("msg"))
+async def admin_msg(message: Message):
+    if message.from_user.id not in ADMIN_IDS: return
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3:
+        await message.answer("Format: /msg USER_ID xabar")
+        return
+    try: uid = int(parts[1])
+    except:
+        await message.answer("USER_ID noto‘g‘ri")
+        return
+    try:
+        await bot.send_message(uid, parts[2])
+        await message.answer("✅ Xabar yuborildi.")
+    except Exception as e:
+        await message.answer(f"❌ Yuborilmadi: {e}")
+
+@router.callback_query(F.data.in_({"adm:broadcast_all","adm:broadcast_buyers"}))
+async def broadcast_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS: return
+    kind = "buyers" if callback.data.endswith("buyers") else "all"
+    await state.set_state(AdminState.waiting_broadcast)
+    await state.update_data(kind=kind)
+    await callback.message.answer("📢 Yuboriladigan xabarni yuboring. Matn, rasm yoki video bo‘lishi mumkin.")
+    await callback.answer()
+
+@router.message(AdminState.waiting_broadcast)
+async def broadcast_receive(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS: return
+    data = await state.get_data()
+    p = await db()
+    if data["kind"] == "buyers":
+        ids = await p.fetch("SELECT DISTINCT user_id FROM payments WHERE status='approved'")
+    else:
+        ids = await p.fetch("SELECT id FROM users")
+    ok = fail = 0
+    for r in ids:
+        try:
+            await message.copy_to(r["user_id"])
+            ok += 1
+        except:
+            fail += 1
+        await asyncio.sleep(0.04)
+    await state.clear()
+    await message.answer(f"📢 Tugadi.\n✅ {ok}\n❌ {fail}")
+
+@router.callback_query(F.data == "adm:payments")
+async def admin_payments(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    p = await db()
+    rows = await p.fetch("""
+      SELECT id,user_id,product_code,amount,status,created_at
+      FROM payments ORDER BY id DESC LIMIT 20
+    """)
+    text = "💳 <b>SO‘NGGI TO‘LOVLAR</b>\n\n"
+    for r in rows:
+        text += f"#{r['id']} | {r['user_id']} | {r['amount']:,} | {r['status']}\n".replace(",", " ")
+    await callback.message.edit_text(text or "To‘lovlar yo‘q.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga",callback_data="adm:back")]]))
+    await callback.answer()
+
+@router.callback_query(F.data == "adm:back")
+async def admin_back(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS: return
+    await callback.message.edit_text("⚙️ <b>ADMIN PANEL</b>", reply_markup=admin_kb())
+    await callback.answer()
+
+# ---------- Certificate ----------
+
+def font(size, bold=False):
+    paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size=size)
+    return ImageFont.load_default()
+
+def make_certificate(name, iq, code, battle=False, opponent=None, opponent_iq=None):
+    W,H=1600,1000
+    img=Image.new("RGB",(W,H),(9,12,25))
+    d=ImageDraw.Draw(img)
+    # luxury frame
+    for off in (18,28,40):
+        d.rounded_rectangle((off,off,W-off,H-off), radius=24, outline=(194,151,61), width=2)
+    d.ellipse((70,70,310,310), fill=(20,24,48), outline=(180,110,255), width=5)
+    d.text((92,125),"IQ",font=font(100,True),fill=(210,170,70))
+    title = "BATTLE G‘OLIBI" if battle else "SERTIFIKAT"
+    d.text((W//2,90), title, anchor="ma", font=font(78,True), fill=(245,214,140))
+    d.text((W//2,180), "IQTestPro.uz", anchor="ma", font=font(30), fill=(190,195,215))
+    if battle:
+        d.text((W//2,275), "⚔", anchor="ma", font=font(80,True), fill=(180,110,255))
+        d.text((W//2,380), name, anchor="ma", font=font(62,True), fill=(245,245,250))
+        d.text((W//2,465), "Do‘sti ustidan IQ Battle’da g‘alaba qozondi", anchor="ma", font=font(34), fill=(205,210,225))
+        d.text((W//2,565), f"{iq}  —  {opponent_iq}", anchor="ma", font=font(100,True), fill=(190,120,255))
+        d.text((W//2,680), "🏆 G‘ALABA", anchor="ma", font=font(58,True), fill=(245,214,140))
+    else:
+        d.text((W//2,285), "Ushbu sertifikat bilan", anchor="ma", font=font(30), fill=(190,195,215))
+        d.text((W//2,360), name, anchor="ma", font=font(62,True), fill=(245,245,250))
+        d.text((W//2,470), "IQ", anchor="ma", font=font(38,True), fill=(245,214,140))
+        d.text((W//2,560), str(iq), anchor="ma", font=font(130,True), fill=(255,255,255))
+        label = "Yuqori natija" if iq >= 110 else "Yaxshi natija"
+        d.text((W//2,710), label, anchor="ma", font=font(35,True), fill=(190,120,255))
+    d.text((W//2,850), f"Sertifikat kodi: {code}", anchor="ma", font=font(25), fill=(170,175,195))
+    d.text((W//2,910), "Aql — imkoniyat. Harakat — natija.", anchor="ma", font=font(27), fill=(210,210,220))
+    path=f"/tmp/{code}.png"
+    img.save(path)
+    return path
+
+async def create_iq_certificate(user_id, name, iq):
+    code="IQ-"+''.join(secrets.choice(string.ascii_uppercase+string.digits) for _ in range(6))
+    p=await db()
+    await p.execute("INSERT INTO certificates(code,user_id,cert_type,data) VALUES($1,$2,'iq',$3::jsonb)",
+                    code,user_id,json.dumps({"name":name,"iq":iq}))
+    return code
+
+# ---------- Web API ----------
+
+def validate_init_data(init_data: str):
+    """Validate Telegram Mini App initData according to Telegram's HMAC scheme."""
+    if not init_data:
+        raise HTTPException(401, "Telegram initData required")
+
+    try:
+        pairs = parse_qsl(init_data, keep_blank_values=True)
+        data = dict(pairs)
+        received_hash = data.pop("hash", None)
         if not received_hash:
             raise ValueError("hash missing")
-        auth_date = int(pairs.get("auth_date", "0"))
-        current_time = int(now_utc().timestamp())
-        if auth_date <= 0 or current_time - auth_date > 86400:
-            raise ValueError("auth date invalid or expired")
-        if auth_date - current_time > 60:
-            raise ValueError("future auth date")
-        check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
-        secret = hmac.new(
+
+        # auth_date is required and is intentionally bounded to reduce replay risk.
+        auth_date = int(data.get("auth_date", "0"))
+        current = int(time.time())
+        if auth_date <= 0 or current - auth_date > 86400 or auth_date - current > 60:
+            raise ValueError("auth_date invalid or expired")
+
+        check_string = "\n".join(
+            f"{key}={value}" for key, value in sorted(data.items())
+        )
+        secret_key = hmac.new(
             b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256
         ).digest()
         calculated = hmac.new(
-            secret, check.encode("utf-8"), hashlib.sha256
+            secret_key, check_string.encode("utf-8"), hashlib.sha256
         ).hexdigest()
         if not hmac.compare_digest(calculated, received_hash):
             raise ValueError("hash mismatch")
-        raw_user = pairs.get("user")
+
+        raw_user = data.get("user")
         if not raw_user:
             raise ValueError("user missing")
         user = json.loads(raw_user)
@@ -855,716 +854,370 @@ def validate_init_data(init_data: str) -> dict:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail="INVALID_INIT_DATA") from exc
+        raise HTTPException(401, "Invalid Telegram initData") from exc
 
+async def api_user(x_telegram_init_data: str = Header(default="")):
+    tg=validate_init_data(x_telegram_init_data)
+    p=await db()
+    await upsert_user(type("TG",(),{
+        "id":tg["id"],"username":tg.get("username"),"first_name":tg.get("first_name"),
+        "last_name":tg.get("last_name")
+    })())
+    return tg
 
-async def api_user(request: Request) -> dict:
-    return validate_init_data(
-        request.headers.get("X-Telegram-Init-Data", "")
-    )
-
-
-@app.api_route("/", methods=["GET", "HEAD"])
+@app.get("/")
 async def root():
-    return {"status": "ok", "service": "IQ TEST BOT"}
-
-
-@app.get("/health")
-async def health():
-    if pool is None:
-        raise HTTPException(status_code=503, detail="DATABASE_NOT_READY")
-    async with pool.acquire() as conn:
-        await conn.fetchval("SELECT 1")
-    return {"status": "ok"}
+    return FileResponse(WEBAPP_DIR / "index.html", media_type="text/html")
 
 
 @app.get("/app")
 async def app_page():
-    index_path = WEBAPP_DIR / "index.html"
-    html = index_path.read_text(encoding="utf-8")
-    payment_script = '<script src="/static/payment.js?v=20260918-1"></script>'
-    if "/static/payment.js" not in html:
-        if "</body>" in html:
-            html = html.replace("</body>", payment_script + "</body>")
-        else:
-            html += payment_script
-    return HTMLResponse(content=html)
+    """Canonical Mini App entry point used by WEBAPP_URL."""
+    return FileResponse(WEBAPP_DIR / "index.html", media_type="text/html")
 
+@app.get("/api/me")
+async def api_me(x_telegram_init_data: str = Header(default="")):
+    tg=await api_user(x_telegram_init_data)
+    p=await db()
+    results=await p.fetch("SELECT test_type,score,created_at FROM test_results WHERE user_id=$1 ORDER BY id DESC",tg["id"])
+    return {"user":tg,"results":[dict(r) for r in results]}
 
 @app.get("/api/config")
-async def api_config():
+async def api_config(x_telegram_init_data: str = Header(default="")):
+    tg=await api_user(x_telegram_init_data)
+    p=await db()
+    rows=await p.fetch("SELECT code,title,enabled,price,retry_days FROM products")
     return {
+        "products": [dict(r) for r in rows],
         "bot_username": BOT_USERNAME,
-        "zako_url": ZAKO_URL,
-        "price_uzs": await get_price(),
-        "payment_mode": await get_payment_mode(),
+        "iq_first_test_free": await get_setting("iq_first_test_free", "1") == "1",
+        "iq_question_count": IQ_QUESTION_COUNT,
     }
 
+async def has_access(user_id, product_code):
+    """Server-side product access rules.
 
-@app.post("/api/session/start")
-async def api_start(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    language = body.get("language", "uz")
-    if language not in {"uz", "ru", "en"}:
-        language = "uz"
-
-    await upsert_user(tg_user)
-    await count_referral(uid)
-    row, created = await create_or_get_session(uid, language)
-    elapsed = max(0, round((now_utc() - row["started_at"]).total_seconds()))
-    user = await get_user(uid)
-    return {
-        "user_id": uid,
-        "created": created,
-        "index": int(row["current_index"]),
-        "answers": list(row["answers"] or []),
-        "elapsed": elapsed,
-        "attempts": int(user["attempts"]),
-        "price_uzs": await get_price(),
-        "payment_mode": await get_payment_mode(),
-    }
-
-
-@app.post("/api/session/answer")
-async def api_answer(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    try:
-        body = await request.json()
-        index = int(body.get("index", -1))
-        selected = int(body.get("selected", -1))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="INVALID_ANSWER") from exc
-    new_index = await save_answer(uid, index, selected)
-    return {"ok": True, "index": new_index}
-
-
-@app.post("/api/session/sync")
-async def api_sync(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    try:
-        body = await request.json()
-        answers = body.get("answers", [])
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="INVALID_SYNC") from exc
-    if not isinstance(answers, list):
-        raise HTTPException(status_code=400, detail="INVALID_SYNC")
-    index = await sync_session_answers(uid, answers)
-    return {"ok": True, "index": index}
-
-
-@app.post("/api/session/finish")
-async def api_finish(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    iq, raw, correct, elapsed = await finish_session(uid)
-    return {
-        "iq": iq, "raw": raw, "correct": correct,
-        "elapsed": elapsed, "rank": await get_rank(uid)
-    }
-
-
-@app.post("/api/payment/create")
-async def api_payment_create(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    purpose = body.get("purpose", "retest")
-    result = await create_payment(uid, purpose)
-    return result
-
-
-@app.get("/api/payment/{payment_id}")
-async def api_payment_get(payment_id: int, request: Request):
-    tg_user = await api_user(request)
-    return await payment_status(int(tg_user["id"]), payment_id)
-
-
-@app.post("/api/payment/result/unlock")
-async def api_payment_result_unlock(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    try:
-        body = await request.json()
-        payment_id = int(body.get("payment_id"))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="INVALID_PAYMENT") from exc
-    assert pool is not None
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            await unlock_result_payment(conn, uid, payment_id)
-            row = await conn.fetchrow("SELECT result_iq,result_raw,result_correct,result_elapsed FROM test_sessions WHERE user_id=$1 AND completed=TRUE ORDER BY finished_at DESC NULLS LAST LIMIT 1", uid)
-    return {"ok": True, "iq": int(row["result_iq"]), "raw": int(row["result_raw"]), "correct": int(row["result_correct"]), "elapsed": int(row["result_elapsed"]), "rank": await get_rank(uid)}
-
-
-@app.get("/api/profile")
-async def api_profile(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    await upsert_user(tg_user)
-    user = await get_user(uid)
-    if not user:
-        raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
-    return {
-        "first_name": user["first_name"],
-        "last_name": user["last_name"],
-        "username": user["username"],
-        "attempts": int(user["attempts"]),
-        "best_score": user["best_score"],
-        "best_time": user["best_time"],
-        "referrals": int(user["referrals"]),
-        "rank": await get_rank(uid),
-    }
-
-
-@app.get("/api/ranking")
-async def api_ranking(request: Request):
-    await api_user(request)
-    assert pool is not None
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT first_name,username,best_score,best_time
-            FROM users
-            WHERE best_score IS NOT NULL
-            ORDER BY best_score DESC,best_time ASC NULLS LAST,created_at ASC
-            LIMIT 50
-        """)
-    return {"items": [
-        {
-            "first_name": r["first_name"],
-            "username": r["username"],
-            "best_score": r["best_score"],
-            "best_time": r["best_time"],
-        } for r in rows
-    ]}
-
-
-def load_font(size: int, bold: bool = False):
-    paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"
-        if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
-
-
-def make_certificate_png(name: str, iq: int) -> bytes:
-    width, height = 1400, 900
-    image = Image.new("RGB", (width, height), "#0b0d16")
-    draw = ImageDraw.Draw(image)
-
-    def center(text: str, y: int, font, fill="#ffffff"):
-        box = draw.textbbox((0, 0), text, font=font)
-        draw.text(((width - (box[2]-box[0])) / 2, y), text,
-                  font=font, fill=fill)
-
-    draw.rounded_rectangle((35,35,width-35,height-35),
-                           radius=36, outline="#8b6cff", width=4)
-    draw.rounded_rectangle((58,58,width-58,height-58),
-                           radius=28, outline="#2b3040", width=2)
-    center("IQ TEST", 115, load_font(64, True), "#b8a8ff")
-    center("IQ TEST CERTIFICATE", 215, load_font(30, True), "#aeb5c6")
-    center(str(iq), 290, load_font(150, True))
-    center("IQ SCORE", 470, load_font(30, True), "#b8a8ff")
-    center(name[:32] or "User", 545, load_font(46, True))
-    center("IQ TEST natijasi", 640, load_font(25), "#aeb5c6")
-    center(now_utc().strftime("%Y-%m-%d"), 700, load_font(22), "#777f91")
-    output = BytesIO()
-    image.save(output, format="PNG", optimize=True)
-    return output.getvalue()
-
-
-@app.get("/api/certificate")
-async def api_certificate(request: Request):
-    tg_user = await api_user(request)
-    uid = int(tg_user["id"])
-    user = await get_user(uid)
-    if not user or user["best_score"] is None:
-        raise HTTPException(status_code=404, detail="NO_RESULT")
-    if int(user["referrals"]) < 2:
-        raise HTTPException(status_code=403, detail="REFERRALS_REQUIRED")
-    if not user["cert_claimed"]:
-        assert pool is not None
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE users SET cert_claimed=TRUE,updated_at=NOW() WHERE user_id=$1",
-                uid,
+    IQ: the first completed IQ attempt is free while `iq_first_test_free=1`.
+    Subsequent IQ attempts require an approved `iq_retry` payment.
+    EQ/PQ are unlocked after the previous test result exists.
+    """
+    p = await db()
+    if product_code == "iq":
+        first_free = await get_setting("iq_first_test_free", "1") == "1"
+        if first_free:
+            attempts = await p.fetchval(
+                "SELECT COUNT(*) FROM test_results WHERE user_id=$1 AND test_type='iq'",
+                user_id,
             )
-    data = make_certificate_png(user["first_name"] or "User",
-                                int(user["best_score"]))
-    return Response(
-        content=data,
-        media_type="image/png",
-        headers={"Content-Disposition":
-                 'inline; filename="zako-iq-certificate.png"'},
+            if int(attempts or 0) == 0:
+                return True
+        return bool(await p.fetchval(
+            """SELECT EXISTS(
+                SELECT 1 FROM payments
+                WHERE user_id=$1 AND product_code='iq_retry'
+                  AND status='approved' AND consumed_at IS NULL
+            )""",
+            user_id,
+        ))
+
+    if product_code == "eq":
+        return bool(await p.fetchval(
+            "SELECT EXISTS(SELECT 1 FROM test_results WHERE user_id=$1 AND test_type='iq')",
+            user_id,
+        ))
+
+    if product_code == "pq":
+        return bool(await p.fetchval(
+            "SELECT EXISTS(SELECT 1 FROM test_results WHERE user_id=$1 AND test_type='eq')",
+            user_id,
+        ))
+
+    if product_code == "full":
+        return all([
+            bool(await p.fetchval("SELECT EXISTS(SELECT 1 FROM test_results WHERE user_id=$1 AND test_type='iq')", user_id)),
+            bool(await p.fetchval("SELECT EXISTS(SELECT 1 FROM test_results WHERE user_id=$1 AND test_type='eq')", user_id)),
+            bool(await p.fetchval("SELECT EXISTS(SELECT 1 FROM test_results WHERE user_id=$1 AND test_type='pq')", user_id)),
+        ])
+
+    r = await p.fetchrow("SELECT price,enabled FROM products WHERE code=$1", product_code)
+    if not r or not r["enabled"]:
+        return False
+    if r["price"] == 0:
+        return True
+    return bool(await p.fetchval(
+        "SELECT EXISTS(SELECT 1 FROM payments WHERE user_id=$1 AND product_code=$2 AND status='approved')",
+        user_id, product_code,
+    ))
+
+@app.post("/api/payment/start")
+async def api_payment_start(payload: dict, x_telegram_init_data: str = Header(default="")):
+    tg = await api_user(x_telegram_init_data)
+    requested = str(payload.get("product_code", "iq")).strip()
+
+    # The UI can request `iq` after the first attempt; internally that means
+    # an IQ retest payment, so one approved payment cannot unlock unlimited attempts.
+    code = "iq_retry" if requested == "iq" else requested
+
+    r = await product(code)
+    if not r or not r["enabled"]:
+        raise HTTPException(400, "Product unavailable")
+    if r["price"] == 0:
+        return {"free": True, "payment_id": None, "product_code": code}
+
+    pid = await create_payment(tg["id"], code, r["price"])
+    await send_payment_message(tg["id"], pid, code, r["price"])
+    return {"free": False, "payment_id": pid, "product_code": code}
+
+
+@app.get("/api/access/{product_code}")
+async def api_access(product_code: str, x_telegram_init_data: str = Header(default="")):
+    tg = await api_user(x_telegram_init_data)
+    return {"allowed": await has_access(tg["id"], product_code)}
+
+@app.get("/api/payment/status/{payment_id}")
+async def api_payment_status(payment_id: int, x_telegram_init_data: str = Header(default="")):
+    tg = await api_user(x_telegram_init_data)
+    p = await db()
+    row = await p.fetchrow(
+        "SELECT id,status,product_code,amount FROM payments WHERE id=$1 AND user_id=$2",
+        payment_id, tg["id"]
     )
+    if not row:
+        raise HTTPException(404, "Payment not found")
+    return dict(row)
 
+@app.post("/api/test/submit")
+async def api_test_submit(payload: dict, x_telegram_init_data: str = Header(default="")):
+    tg = await api_user(x_telegram_init_data)
+    test_type = str(payload.get("test_type", "iq")).lower().strip()
+    answers = payload.get("answers", [])
+    profile = payload.get("profile", {})
+    battle_id = payload.get("battle_id")
 
-def admin_panel_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Kartalar", callback_data="adm_cards")],
-        [InlineKeyboardButton(text="💰 Narxni o‘zgartirish", callback_data="adm_price")],
-        [InlineKeyboardButton(text="⚙️ To‘lov rejimi", callback_data="adm_mode")],
-        [InlineKeyboardButton(text="📋 To‘lovlar", callback_data="adm_payments")],
-        [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
-    ])
+    if not isinstance(answers, list):
+        raise HTTPException(400, "Invalid answers")
 
-
-def admin_cards_keyboard(cards):
-    rows = [[InlineKeyboardButton(text="➕ Karta qo‘shish", callback_data="adm_card_add")]]
-    for card in cards:
-        rows.append([InlineKeyboardButton(text=f"🗑 {card['card_number']} — {card['holder'] or 'Ism yo‘q'}", callback_data=f"adm_card_del:{card['id']}")])
-    rows.append([InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def admin_mode_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1️⃣ Birinchi bepul / keyingi pullik", callback_data="adm_mode:first_free_retest_paid")],
-        [InlineKeyboardButton(text="2️⃣ Test bepul / natija pullik", callback_data="adm_mode:result_paid")],
-        [InlineKeyboardButton(text="3️⃣ Hammasi bepul", callback_data="adm_mode:all_free")],
-        [InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")],
-    ])
-
-
-async def admin_text() -> str:
-    price = await get_price()
-    mode = await get_payment_mode()
-    cards = await active_cards()
-    return (
-        "👑 <b>IQ TEST ADMIN PANEL</b>\n\n"
-        f"💰 Narx: <b>{price:,} so‘m</b>\n"
-        f"⚙️ Rejim: <b>{payment_mode_label(mode)}</b>\n"
-        f"💳 Faol kartalar: <b>{len(cards)}</b>\n\n"
-        "Kerakli bo‘limni tanlang."
-    )
-
-
-async def send_payment_instructions(message: Message, payment_id: int):
-    assert pool is not None
-    async with pool.acquire() as conn:
-        payment = await conn.fetchrow("""
-            SELECT id, amount, purpose, status, user_id
-            FROM payments WHERE id=$1 AND user_id=$2
-        """, payment_id, message.from_user.id)
-    if not payment or payment["status"] != "pending":
-        await message.answer("❌ Bu to‘lov topilmadi yoki allaqachon yopilgan.")
-        return
-    cards = await active_cards()
-    if not cards:
-        await message.answer("❌ Hozircha to‘lov kartasi sozlanmagan. Admin bilan bog‘laning.")
-        return
-    lines = [
-        f"💳 <b>To‘lov #{payment_id}</b>",
-        f"💰 Summa: <b>{int(payment['amount']):,} so‘m</b>",
-        "",
-        "<b>Kartalar:</b>",
-    ]
-    for card in cards:
-        lines.append(f"• <code>{card['card_number']}</code> — {card['holder'] or ''}")
-    lines += [
-        "",
-        "To‘lovni amalga oshirgach, <b>chek/skrinshotni shu chatga yuboring</b>.",
-        "Admin tekshiradi va tasdiqlagach test/natija ochiladi.",
-    ]
-    await message.answer("\n".join(lines), parse_mode="HTML")
-
-
-async def notify_admins_payment(payment_id: int, user_id: int, proof_file_id: str):
-    if bot is None:
-        return
-    admin_chat_id = await get_admin_chat_id()
-    if not admin_chat_id:
-        print("Payment proof received but admin_chat_id is not configured. Open /admin first.")
-        return
-    user = await get_user(user_id)
-    name = ((user["first_name"] or "") + " " + (user["last_name"] or "")).strip() if user else "User"
-    username = user["username"] if user else ""
-    assert pool is not None
-    async with pool.acquire() as conn:
-        payment = await conn.fetchrow("SELECT amount,purpose FROM payments WHERE id=$1", payment_id)
-    amount = int(payment["amount"]) if payment else await get_price()
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"pay_ok:{payment_id}"),
-         InlineKeyboardButton(text="❌ Rad etish", callback_data=f"pay_no:{payment_id}")]
-    ])
-    caption = (
-        f"💳 <b>Yangi to‘lov</b>\n\n"
-        f"ID: <code>{payment_id}</code>\n"
-        f"User: <b>{name}</b>\n"
-        f"Username: @{username or '-'}\n"
-        f"User ID: <code>{user_id}</code>\n"
-        f"Summa: <b>{amount:,} so‘m</b>"
-    )
     try:
-        await bot.send_photo(admin_chat_id, proof_file_id, caption=caption, parse_mode="HTML", reply_markup=kb)
-    except Exception as exc:
-        print(f"Admin payment notification failed: {exc}")
+        answers = [int(x) for x in answers]
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, "Invalid answers") from exc
 
+    if test_type not in {"iq", "eq", "pq"}:
+        raise HTTPException(400, "Unknown test type")
 
-def bot_keyboard(is_admin: bool = False):
-    rows = [[
-        InlineKeyboardButton(
-            text="🧠 IQ TESTNI BOSHLASH",
-            web_app=WebAppInfo(url=WEBAPP_URL),
+    expected_total = IQ_QUESTION_COUNT if test_type == "iq" else 12
+    if len(answers) != expected_total:
+        raise HTTPException(409, f"Test incomplete: expected {expected_total} answers")
+    if any(x < 0 or x > 3 for x in answers):
+        raise HTTPException(400, "Invalid answer option")
+
+    if test_type == "iq":
+        if not await has_access(tg["id"], "iq"):
+            raise HTTPException(402, "Payment required")
+        raw = sum(
+            IQ_WEIGHTS[i]
+            for i, answer in enumerate(answers)
+            if answer == IQ_CORRECT_ANSWERS[i]
         )
-    ]]
-    if is_admin:
-        rows.append([InlineKeyboardButton(text="👑 ADMIN PANEL", callback_data="adm_home")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-@dp.message(CommandStart())
-async def start(message: Message):
-    if not message.from_user:
-        return
-    referral_id = None
-    parts = (message.text or "").split(maxsplit=1)
-    payload = parts[1] if len(parts) == 2 else ""
-    if payload.startswith("pay_"):
-        try:
-            payment_id = int(payload[4:])
-            await upsert_user({
-                "id": message.from_user.id,
-                "first_name": message.from_user.first_name or "",
-                "last_name": message.from_user.last_name or "",
-                "username": message.from_user.username or "",
-            })
-            await send_payment_instructions(message, payment_id)
-            return
-        except ValueError:
-            pass
-
-    if payload.startswith("ref_"):
-        try:
-            referral_id = int(payload[4:])
-        except ValueError:
-            referral_id = None
-
-    tg_user = {
-        "id": message.from_user.id,
-        "first_name": message.from_user.first_name or "",
-        "last_name": message.from_user.last_name or "",
-        "username": message.from_user.username or "",
-    }
-    await upsert_user(tg_user, referral_id)
-    await message.answer(
-        "🧠 <b>IQ TEST BOT</b>\n\n"
-        "18 ta original mantiqiy puzzle orqali o‘zingizni sinab ko‘ring.\n\n"
-        "• Birinchi test — bepul\n"
-        "• Natija va reyting\n"
-        "• Sertifikat\n"
-        "• UZ / RU / EN\n\n"
-        "Test Mini App ichida ishlaydi.",
-        reply_markup=bot_keyboard(is_admin_user(message.from_user)),
-        parse_mode="HTML",
-    )
-
-
-@dp.message(Command("admin"))
-async def admin_command(message: Message):
-    if not is_admin_user(message.from_user):
-        await message.answer("⛔ Sizda admin huquqi yo‘q.")
-        return
-    await remember_admin_chat(message.from_user.id)
-    await message.answer(await admin_text(), parse_mode="HTML", reply_markup=admin_panel_keyboard())
-
-
-@dp.callback_query(lambda c: c.data == "adm_home")
-async def admin_home_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True)
-        return
-    await remember_admin_chat(callback.from_user.id)
-    await callback.message.edit_text(await admin_text(), parse_mode="HTML", reply_markup=admin_panel_keyboard())
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data == "adm_cards")
-async def admin_cards_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    cards = await active_cards()
-    text = "💳 <b>Kartalar</b>\n\n" + ("\n".join(f"#{c['id']}  <code>{c['card_number']}</code> — {c['holder'] or '-'}" for c in cards) if cards else "Hali karta qo‘shilmagan.")
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=admin_cards_keyboard(cards))
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data == "adm_card_add")
-async def admin_card_add_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    admin_state[callback.from_user.id] = "card_add"
-    await callback.message.answer("💳 Karta ma’lumotini shu formatda yuboring:\n\n<code>8600123456789012 | ISM FAMILIYA</code>", parse_mode="HTML")
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data and c.data.startswith("adm_card_del:"))
-async def admin_card_delete_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    card_id = int(callback.data.split(":",1)[1])
-    assert pool is not None
-    async with pool.acquire() as conn:
-        await conn.execute("UPDATE payment_cards SET active=FALSE WHERE id=$1", card_id)
-    await callback.answer("Karta o‘chirildi")
-    cards = await active_cards()
-    await callback.message.edit_text("💳 <b>Kartalar</b>", parse_mode="HTML", reply_markup=admin_cards_keyboard(cards))
-
-
-@dp.callback_query(lambda c: c.data == "adm_price")
-async def admin_price_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    admin_state[callback.from_user.id] = "price"
-    await callback.message.answer(f"💰 Yangi narxni faqat son bilan yuboring. Hozirgi: <b>{await get_price():,} so‘m</b>", parse_mode="HTML")
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data == "adm_mode")
-async def admin_mode_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    await callback.message.edit_text("⚙️ <b>To‘lov rejimi</b>\n\nQaysi modelni ishlatamiz?", parse_mode="HTML", reply_markup=admin_mode_keyboard())
-    await callback.answer()
-
-
-@dp.callback_query(lambda c: c.data and c.data.startswith("adm_mode:"))
-async def admin_mode_set_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    mode = callback.data.split(":",1)[1]
-    if mode not in VALID_PAYMENT_MODES:
-        await callback.answer("Noto‘g‘ri rejim", show_alert=True); return
-    await set_setting("payment_mode", mode)
-    await callback.answer("Rejim saqlandi")
-    await callback.message.edit_text(await admin_text(), parse_mode="HTML", reply_markup=admin_panel_keyboard())
-
-
-@dp.callback_query(lambda c: c.data == "adm_payments")
-async def admin_payments_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    assert pool is not None
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT p.id,p.user_id,p.amount,p.purpose,p.status,p.created_at,u.first_name,u.username
-            FROM payments p JOIN users u ON u.user_id=p.user_id
-            WHERE p.status='pending' ORDER BY p.id DESC LIMIT 20
-        """)
-    if not rows:
-        text = "📋 <b>Kutilayotgan to‘lovlar</b>\n\nHozircha yo‘q."
+        correct = sum(
+            answer == IQ_CORRECT_ANSWERS[i]
+            for i, answer in enumerate(answers)
+        )
+        # Product score, not a clinical/standardized IQ.
+        score = max(40, min(160, round(40 + (raw / IQ_MAX_RAW) * 120)))
+        total = IQ_QUESTION_COUNT
+    elif test_type == "eq":
+        if not await has_access(tg["id"], "eq"):
+            raise HTTPException(403, "EQ is locked until IQ is completed")
+        # EQ answer choices are scored by the frontend's 0..3 behavioral scale.
+        raw = sum(max(0, 3 - a) for a in answers)
+        correct = sum(1 for a in answers if a == 0)
+        total = len(answers)
+        score = max(40, min(160, round(70 + (raw / max(total * 3, 1)) * 70)))
     else:
-        text = "📋 <b>Kutilayotgan to‘lovlar</b>\n\n" + "\n".join(f"#{r['id']} • {r['amount']:,} so‘m • {r['first_name'] or '-'} • @{r['username'] or '-'}" for r in rows)
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")]]))
-    await callback.answer()
+        if not await has_access(tg["id"], "pq"):
+            raise HTTPException(403, "PQ is locked until EQ is completed")
+        raw = sum(max(0, 3 - a) for a in answers)
+        correct = sum(1 for a in answers if a == 0)
+        total = len(answers)
+        score = max(40, min(160, round(70 + (raw / max(total * 3, 1)) * 70)))
 
+    p = await db()
+    await p.execute(
+        """INSERT INTO test_results(user_id,test_type,score,raw_score,total,profile)
+           VALUES($1,$2,$3,$4,$5,$6::jsonb)""",
+        tg["id"], test_type, score, raw, total, json.dumps(profile if isinstance(profile, dict) else {}),
+    )
 
-@dp.callback_query(lambda c: c.data == "adm_stats")
-async def admin_stats_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    assert pool is not None
-    async with pool.acquire() as conn:
-        users = await conn.fetchval("SELECT COUNT(*) FROM users")
-        attempts = await conn.fetchval("SELECT COUNT(*) FROM attempts")
-        pending = await conn.fetchval("SELECT COUNT(*) FROM payments WHERE status='pending'")
-        approved = await conn.fetchval("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='approved'")
-    text = f"📊 <b>Statistika</b>\n\n👥 Users: <b>{users}</b>\n🧠 Yakunlangan testlar: <b>{attempts}</b>\n⏳ Kutilayotgan to‘lovlar: <b>{pending}</b>\n💰 Tasdiqlangan to‘lovlar: <b>{approved:,} so‘m</b>"
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Admin panel", callback_data="adm_home")]]))
-    await callback.answer()
+    if test_type == "iq":
+        # Consume exactly one approved retest payment. The first IQ attempt is
+        # free; later attempts each need their own approved payment.
+        await p.execute(
+            """UPDATE payments SET consumed_at=NOW()
+               WHERE id=(
+                   SELECT id FROM payments
+                   WHERE user_id=$1 AND product_code='iq_retry'
+                     AND status='approved' AND consumed_at IS NULL
+                   ORDER BY approved_at DESC NULLS LAST, id DESC
+                   LIMIT 1
+               )""",
+            tg["id"],
+        )
 
-
-@dp.callback_query(lambda c: c.data and c.data.startswith("pay_ok:"))
-async def payment_approve_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    payment_id = int(callback.data.split(":",1)[1])
-    assert pool is not None
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT * FROM payments WHERE id=$1 FOR UPDATE", payment_id)
-        if not row:
-            await callback.answer("To‘lov topilmadi", show_alert=True); return
-        await conn.execute("UPDATE payments SET status='approved', reviewer_id=$2, reviewed_at=NOW() WHERE id=$1", payment_id, callback.from_user.id)
-        user_id = int(row["user_id"])
-    try:
-        if bot is not None:
-            await bot.send_message(user_id, "✅ <b>To‘lov tasdiqlandi.</b> Mini App'ga qaytib davom eting.", parse_mode="HTML")
-    except Exception:
-        pass
-    await callback.answer("To‘lov tasdiqlandi")
-    await callback.message.edit_caption((callback.message.caption or "") + "\n\n✅ <b>TASDIQLANDI</b>", parse_mode="HTML")
-
-
-@dp.callback_query(lambda c: c.data and c.data.startswith("pay_no:"))
-async def payment_reject_callback(callback: CallbackQuery):
-    if not is_admin_user(callback.from_user):
-        await callback.answer("Ruxsat yo‘q", show_alert=True); return
-    await remember_admin_chat(callback.from_user.id)
-    payment_id = int(callback.data.split(":",1)[1])
-    assert pool is not None
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT user_id FROM payments WHERE id=$1", payment_id)
-        if not row:
-            await callback.answer("To‘lov topilmadi", show_alert=True); return
-        await conn.execute("UPDATE payments SET status='rejected', reviewer_id=$2, reviewed_at=NOW() WHERE id=$1", payment_id, callback.from_user.id)
-        user_id = int(row["user_id"])
-    try:
-        if bot is not None:
-            await bot.send_message(user_id, "❌ <b>To‘lov rad etildi.</b> Chekni tekshirib, qayta yuboring.", parse_mode="HTML")
-    except Exception:
-        pass
-    await callback.answer("To‘lov rad etildi")
-    await callback.message.edit_caption((callback.message.caption or "") + "\n\n❌ <b>RAD ETILDI</b>", parse_mode="HTML")
-
-
-@dp.message(lambda m: m.from_user is not None and is_admin_user(m.from_user) and m.from_user.id in admin_state)
-async def admin_text_input(message: Message):
-    uid = message.from_user.id
-    state_name = admin_state.get(uid)
-    text = (message.text or "").strip()
-    if state_name == "price":
+    cert_code = None
+    if test_type == "iq":
+        cert_code = await create_iq_certificate(
+            tg["id"],
+            profile.get("fullName") if isinstance(profile, dict) else None or tg.get("first_name") or "Foydalanuvchi",
+            score,
+        )
         try:
-            price = int(text.replace(" ", ""))
-            if price < 0 or price > 100000000:
-                raise ValueError
-        except ValueError:
-            await message.answer("❌ Narx noto‘g‘ri. Masalan: <code>5000</code>", parse_mode="HTML")
-            return
-        await set_setting("price_uzs", str(price))
-        admin_state.pop(uid, None)
-        await message.answer(f"✅ Narx saqlandi: <b>{price:,} so‘m</b>", parse_mode="HTML", reply_markup=admin_panel_keyboard())
-        return
-    if state_name == "card_add":
-        parts = [x.strip() for x in text.split("|", 1)]
-        card_number = parts[0].replace(" ", "") if parts else ""
-        holder = parts[1].strip() if len(parts) == 2 else ""
-        if (
-            len(parts) != 2
-            or not card_number.isdigit()
-            or len(card_number) < 8
-            or len(card_number) > 32
-            or not holder
-        ):
-            await message.answer("❌ Format noto‘g‘ri. Masalan: <code>8600123456789012 | ISM FAMILIYA</code>", parse_mode="HTML")
-            return
-        assert pool is not None
-        async with pool.acquire() as conn:
-            exists = await conn.fetchval("SELECT 1 FROM payment_cards WHERE card_number=$1 AND active=TRUE", card_number)
-            if exists:
-                await message.answer("❌ Bu karta allaqachon qo‘shilgan.")
-                return
-            await conn.execute("INSERT INTO payment_cards(card_number, holder) VALUES($1,$2)", card_number, holder)
-        admin_state.pop(uid, None)
-        await message.answer("✅ Karta qo‘shildi.", reply_markup=admin_panel_keyboard())
+            name = profile.get("fullName") if isinstance(profile, dict) else None or tg.get("first_name") or "Foydalanuvchi"
+            cert_path = make_certificate(name, score, cert_code)
+            with open(cert_path, "rb") as fh:
+                await bot.send_document(
+                    tg["id"],
+                    BufferedInputFile(fh.read(), filename=f"{cert_code}.png"),
+                    caption=f"📜 <b>IQ sertifikatingiz tayyor!</b>\n\n🔑 Kod: <code>{cert_code}</code>",
+                )
+        except Exception as exc:
+            print(f"Certificate delivery warning: {exc}")
+
+    battle_finished = False
+    if battle_id and test_type == "iq":
+        b = await p.fetchrow("SELECT * FROM battles WHERE id=$1", int(battle_id))
+        if b and tg["id"] in (b["player1"], b["player2"]) and b["status"] == "ready":
+            r1 = await p.fetchrow(
+                """SELECT score,created_at FROM test_results
+                   WHERE user_id=$1 AND test_type='iq' AND created_at >= $2
+                   ORDER BY id DESC LIMIT 1""",
+                b["player1"], b["created_at"],
+            )
+            r2 = await p.fetchrow(
+                """SELECT score,created_at FROM test_results
+                   WHERE user_id=$1 AND test_type='iq' AND created_at >= $2
+                   ORDER BY id DESC LIMIT 1""",
+                b["player2"], b["created_at"],
+            )
+            if r1 and r2:
+                winner = b["player1"] if r1["score"] > r2["score"] else b["player2"] if r2["score"] > r1["score"] else None
+                result = {"player1": r1["score"], "player2": r2["score"], "winner": winner}
+                await p.execute(
+                    "UPDATE battles SET status='finished',result=$1::jsonb WHERE id=$2",
+                    json.dumps(result), b["id"],
+                )
+                battle_finished = True
+                for uid, myscore, oppscore, oppid in [
+                    (b["player1"], r1["score"], r2["score"], b["player2"]),
+                    (b["player2"], r2["score"], r1["score"], b["player1"]),
+                ]:
+                    if winner == uid:
+                        await bot.send_message(uid, f"⚔️ <b>BATTLE YAKUNLANDI!</b>\n\n🧠 Siz: <b>{myscore}</b>\n🧠 Do‘stingiz: <b>{oppscore}</b>\n\n🏆 <b>SIZ G‘OLIB BO‘LDINGIZ!</b>")
+                        try:
+                            opponent = await p.fetchrow("SELECT first_name FROM users WHERE id=$1", oppid)
+                            opponent_name = opponent["first_name"] if opponent else "Do‘st"
+                            vcode = "BT-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+                            await p.execute(
+                                "INSERT INTO certificates(code,user_id,cert_type,data) VALUES($1,$2,'battle',$3::jsonb)",
+                                vcode, uid, json.dumps({"name": name, "iq": myscore, "opponent": opponent_name, "opponent_iq": oppscore}),
+                            )
+                            path = make_certificate(name, myscore, vcode, True, opponent_name, oppscore)
+                            with open(path, "rb") as fh:
+                                await bot.send_document(
+                                    uid,
+                                    BufferedInputFile(fh.read(), filename=f"{vcode}.png"),
+                                    caption=f"🏆 Battle g‘alaba sertifikati\n🔑 <code>{vcode}</code>",
+                                )
+                        except Exception as exc:
+                            print(f"Battle certificate warning: {exc}")
+                    elif winner is None:
+                        await bot.send_message(uid, f"🤝 <b>BATTLE DURANG!</b>\n\nSiz: <b>{myscore}</b>\nDo‘stingiz: <b>{oppscore}</b>")
+                    else:
+                        await bot.send_message(uid, f"⚔️ <b>BATTLE YAKUNLANDI!</b>\n\nSiz: <b>{myscore}</b>\nDo‘stingiz: <b>{oppscore}</b>\n\n🏆 G‘olib: do‘stingiz.")
+
+    return {
+        "score": score,
+        "raw_score": raw,
+        "correct": correct,
+        "total": total,
+        "certificate_code": cert_code,
+        "battle_finished": battle_finished,
+    }
+
+@app.get("/api/counter")
+async def api_counter(x_telegram_init_data: str = Header(default="")):
+    await api_user(x_telegram_init_data)
+    p=await db()
+    # privacy-safe approximate active count, no fake rolling growth
+    count=await p.fetchval("SELECT COUNT(*) FROM users WHERE last_seen > NOW()-INTERVAL '10 minutes'")
+    return {"active":max(1,int(count or 1))}
+
+# ---------- Battle ----------
+
+@router.callback_query(F.data.startswith("battle:"))
+async def battle_callback(callback: CallbackQuery):
+    # reserved for later UI callbacks; core battle APIs are below
+    await callback.answer()
 
 
-@dp.message(lambda m: m.from_user is not None and m.photo is not None)
-async def payment_proof_photo(message: Message):
-    if not message.from_user:
-        return
-    assert pool is not None
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("""
-            SELECT id, amount, purpose FROM payments
-            WHERE user_id=$1 AND status='pending' AND consumed=FALSE
-            ORDER BY id DESC LIMIT 1
-        """, message.from_user.id)
-        if not row:
-            return
-        file_id = message.photo[-1].file_id
-        await conn.execute(
-            "UPDATE payments SET proof_file_id=$2, proof_message_id=$3 WHERE id=$1",
-            row["id"], file_id, message.message_id
-        )
-    await message.answer("✅ Chek qabul qilindi. Admin tekshiradi.")
-    await notify_admins_payment(int(row["id"]), message.from_user.id, file_id)
+@app.post("/api/battle/create")
+async def battle_create(payload: dict, x_telegram_init_data: str = Header(default="")):
+    tg=await api_user(x_telegram_init_data)
+    p=await db()
+    code=''.join(secrets.choice(string.digits) for _ in range(4))
+    bid=await p.fetchval("INSERT INTO battles(code,player1) VALUES($1,$2) RETURNING id",code,tg["id"])
+    r=await product("battle")
+    if r["price"]>0:
+        pid=await create_payment(tg["id"],"battle",r["price"])
+        await p.execute("INSERT INTO battle_payments(battle_id,user_id,payment_id) VALUES($1,$2,$3)",bid,tg["id"],pid)
+        await send_payment_message(tg["id"],pid,"battle",r["price"])
+        return {"payment_required":True,"payment_id":pid,"battle_id":bid,"code":code}
+    await p.execute("UPDATE battles SET status='ready' WHERE id=$1",bid)
+    return {"payment_required":False,"battle_id":bid,"code":code}
 
+@app.post("/api/battle/join")
+async def battle_join(payload: dict, x_telegram_init_data: str = Header(default="")):
+    tg=await api_user(x_telegram_init_data)
+    code=str(payload.get("code","")).strip()
+    p=await db()
+    b=await p.fetchrow("SELECT * FROM battles WHERE code=$1",code)
+    if not b: raise HTTPException(404,"Battle code not found")
+    if b["player1"]==tg["id"]: return {"battle_id":b["id"],"status":b["status"],"code":code}
+    if b["player2"] and b["player2"]!=tg["id"]: raise HTTPException(409,"Battle full")
+    await p.execute("UPDATE battles SET player2=$1 WHERE id=$2",tg["id"],b["id"])
+    r=await product("battle")
+    if r["price"]>0:
+        pid=await create_payment(tg["id"],"battle",r["price"])
+        await p.execute("INSERT INTO battle_payments(battle_id,user_id,payment_id) VALUES($1,$2,$3)",b["id"],tg["id"],pid)
+        await send_payment_message(tg["id"],pid,"battle",r["price"])
+        return {"payment_required":True,"payment_id":pid,"battle_id":b["id"],"code":code}
+    await p.execute("UPDATE battles SET status='ready' WHERE id=$1",b["id"])
+    return {"payment_required":False,"battle_id":b["id"],"status":"ready","code":code}
 
-async def configure_bot():
-    assert bot is not None
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(
-            text="🧠 IQ TEST",
-            web_app=WebAppInfo(url=WEBAPP_URL),
-        )
-    )
-    await bot.set_webhook(
-        url=webhook_url(),
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=False,
-        allowed_updates=dp.resolve_used_update_types(),
-    )
-    info = await bot.get_webhook_info()
-    print(f"Webhook configured: {info.url}")
+@app.get("/api/battle/{battle_id}")
+async def battle_state(battle_id:int,x_telegram_init_data:str=Header(default="")):
+    tg=await api_user(x_telegram_init_data)
+    p=await db()
+    b=await p.fetchrow("SELECT * FROM battles WHERE id=$1",battle_id)
+    if not b or tg["id"] not in (b["player1"],b["player2"]): raise HTTPException(404,"Battle not found")
+    return {"id":b["id"],"code":b["code"],"player1":b["player1"],"player2":b["player2"],"status":b["status"],"result":b["result"]}
 
+# ---------- lifecycle ----------
 
-@app.post("/telegram/webhook")
-async def telegram_webhook(request: Request):
-    global bot
-    if bot is None:
-        raise HTTPException(status_code=503, detail="BOT_NOT_READY")
-    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not hmac.compare_digest(secret, WEBHOOK_SECRET):
-        raise HTTPException(status_code=403, detail="FORBIDDEN")
-    try:
-        data = await request.json()
-        update = Update.model_validate(data, context={"bot": bot})
-        await dp.feed_update(bot, update)
-        return {"ok": True}
-    except Exception as exc:
-        print(f"Webhook update error: {type(exc).__name__}: {exc}")
-        raise HTTPException(status_code=500, detail="WEBHOOK_ERROR") from exc
+@app.get("/health")
+async def health():
+    return {"ok":True,"service":"iqtestpro"}
 
-
-async def run_web():
-    config = uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
-
+async def bot_runner():
+    await init_db()
+    await bot.delete_webhook(drop_pending_updates=False)
+    await dp.start_polling(bot)
 
 async def main():
-    global bot, BOT_USERNAME
     await init_db()
-    bot = Bot(BOT_TOKEN)
-    me = await bot.get_me()
-    BOT_USERNAME = me.username or ""
-    print(f"Bot started: @{BOT_USERNAME}")
-    await configure_bot()
+    config=uvicorn.Config(app,host="0.0.0.0",port=PORT,log_level="info")
+    server=uvicorn.Server(config)
+    await asyncio.gather(server.serve(),bot_runner())
 
-    try:
-        await run_web()
-    finally:
-        try:
-            await bot.delete_webhook(drop_pending_updates=False)
-        except Exception as exc:
-            print(f"Webhook cleanup warning: {exc}")
-        await bot.session.close()
-        if pool is not None:
-            await pool.close()
-
-
-if __name__ == "__main__":
+if __name__=="__main__":
     asyncio.run(main())
