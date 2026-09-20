@@ -1,5 +1,0 @@
-aiogram>=3.24,<4
-Pillow>=11,<12
-fastapi>=0.116,<1
-uvicorn[standard]>=0.35,<1
-asyncpg>=0.30,<1
