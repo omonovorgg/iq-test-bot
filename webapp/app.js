@@ -1,1926 +1,2241 @@
-"use strict";
-
 (() => {
-  const tg = window.Telegram?.WebApp || null;
-  const COUNT = 18;
-  const LETTERS = ["A", "B", "C", "D"];
+    "use strict";
 
-  const state = {
-    lang: localStorage.getItem("iq_lang") || "uz",
-    session: null,
-    result: null,
-    busy: false,
-    finishing: false,
-    startedAt: 0,
-    timer: null
-  };
+    const tg = window.Telegram?.WebApp || null;
 
-  /*
-   * =========================================================
-   * IQ TEST — 18 QUESTIONS
-   * =========================================================
-   */
+    if (tg) {
+        tg.ready();
+        tg.expand();
 
-  const QUESTIONS = [
-    [
-      "Ketma-ketlik: 4, 7, 13, 25, 49, ?",
-      ["73", "97", "98", "101"],
-      1
-    ],
-    [
-      "Ketma-ketlik: 2, 5, 11, 23, 47, ?",
-      ["91", "93", "95", "97"],
-      2
-    ],
-    [
-      "Ketma-ketlik: 3, 8, 15, 24, 35, ?",
-      ["48", "49", "50", "51"],
-      0
-    ],
-    [
-      "Ketma-ketlik: 2, 6, 12, 20, 30, ?",
-      ["38", "40", "42", "44"],
-      2
-    ],
-    [
-      "Ketma-ketlik: 1, 2, 6, 24, 120, ?",
-      ["480", "600", "720", "840"],
-      2
-    ],
-    [
-      "Harflar ketma-ketligi: A, C, F, J, O, ?",
-      ["T", "U", "V", "W"],
-      1
-    ],
-    [
-      "Barcha K lar L. Ba’zi L lar M. Qaysi gap albatta to‘g‘ri?",
-      [
-        "Barcha K lar L",
-        "Ba’zi K lar M",
-        "Hech bir K M emas",
-        "Barcha M lar K"
-      ],
-      0
-    ],
-    [
-      "A, B, C, D, E bir qatorda turadi. A — B dan oldin. C — D dan darhol keyin. E birinchi emas. Qaysi tartib mumkin?",
-      [
-        "D-C-A-E-B",
-        "A-C-D-E-B",
-        "B-A-D-E-C",
-        "E-D-C-B-A"
-      ],
-      0
-    ],
-    [
-      "Har bir qatorda 3-son = 1-son + 2-son: 2,5,7 / 4,9,13 / 6,13, ?",
-      ["17", "18", "19", "20"],
-      2
-    ],
-    [
-      "Ketma-ketlik: 1, 4, 10, 22, 46, ?",
-      ["90", "92", "94", "96"],
-      2
-    ],
-    [
-      "Ketma-ketlik: 2, 3, 6, 11, 18, 27, ?",
-      ["36", "38", "40", "42"],
-      1
-    ],
-    [
-      "Soat 3:40 ni ko‘rsatmoqda. Soat va minut strelkalari orasidagi kichik burchak necha daraja?",
-      ["110°", "120°", "130°", "140°"],
-      2
-    ],
-    [
-      "Ba’zi rassomlar muhandis. Barcha muhandislar kitobxon. Qaysi xulosa albatta to‘g‘ri?",
-      [
-        "Barcha rassomlar kitobxon",
-        "Ba’zi rassomlar kitobxon",
-        "Hech bir rassom kitobxon emas",
-        "Barcha kitobxonlar muhandis"
-      ],
-      1
-    ],
-    [
-      "Ketma-ketlik: 2, 9, 28, 65, 126, ?",
-      ["181", "205", "217", "225"],
-      2
-    ],
-    [
-      "Kubning qarama-qarshi tomonlari A-D, B-E va C-F. Qaysi tomon A bilan bitta qirrani bo‘lisha olmaydi?",
-      ["B", "C", "E", "D"],
-      3
-    ],
-    [
-      "A: “B yolg‘on gapiryapti.” B: “C yolg‘on gapiryapti.” C: “A va B bir xil turdagi odamlar.” Faqat bittasi rost gapirsa, kim?",
-      ["A", "B", "C", "Hech biri"],
-      1
-    ],
-    [
-      "4 xonali koddagi barcha raqamlar turlicha. Birinchi raqam 0 bo‘lishi mumkin emas. Nechta kod mavjud?",
-      ["4032", "4320", "4536", "5040"],
-      2
-    ],
-    [
-      "Ketma-ketlik: 1, 2, 6, 15, 31, 56, ?",
-      ["84", "88", "92", "96"],
-      2
-    ]
-  ];
-
-  const TEXT = {
-    uz: {
-      start: "TESTNI BOSHLASH",
-      free: "Birinchi test — bepul",
-      ranking: "🏆 Reyting",
-      profile: "👤 Profil",
-      back: "‹ Orqaga",
-      next: "DAVOM ETISH",
-      correct: "To‘g‘ri",
-      time: "Vaqt",
-      result: "TEST YAKUNLANDI",
-      certificate: "SERTIFIKAT OLISH",
-      share: "NATIJANI ULASHISH",
-      home: "Bosh sahifa",
-      description:
-        "18 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.",
-      loading: "Yuklanmoqda…",
-      error: "Xatolik yuz berdi. Qayta urinib ko‘ring.",
-      offline: "Internet yo‘q. Javoblaringiz saqlandi.",
-      paid: "Keyingi test pullik.",
-      noData: "Ma’lumot topilmadi."
-    },
-
-    ru: {
-      start: "НАЧАТЬ ТЕСТ",
-      free: "Первая попытка — бесплатно",
-      ranking: "🏆 Рейтинг",
-      profile: "👤 Профиль",
-      back: "‹ Назад",
-      next: "ПРОДОЛЖИТЬ",
-      correct: "Верно",
-      time: "Время",
-      result: "ТЕСТ ЗАВЕРШЁН",
-      certificate: "ПОЛУЧИТЬ СЕРТИФИКАТ",
-      share: "ПОДЕЛИТЬСЯ",
-      home: "Главная",
-      description:
-        "Проверьте мышление с помощью 18 логических задач.",
-      loading: "Загрузка…",
-      error: "Произошла ошибка. Попробуйте ещё раз.",
-      offline: "Нет интернета. Ответы сохранены.",
-      paid: "Следующая попытка платная.",
-      noData: "Данные не найдены."
-    },
-
-    en: {
-      start: "START TEST",
-      free: "First attempt — free",
-      ranking: "🏆 Ranking",
-      profile: "👤 Profile",
-      back: "‹ Back",
-      next: "CONTINUE",
-      correct: "Correct",
-      time: "Time",
-      result: "TEST COMPLETE",
-      certificate: "GET CERTIFICATE",
-      share: "SHARE RESULT",
-      home: "Home",
-      description:
-        "Test your thinking with 18 logic puzzles.",
-      loading: "Loading…",
-      error: "Something went wrong.",
-      offline: "No internet. Your answers were saved.",
-      paid: "The next attempt is paid.",
-      noData: "No data found."
-    }
-  };
-
-  const t = key => {
-    return (TEXT[state.lang] || TEXT.uz)[key] || key;
-  };
-
-  const $ = id => document.getElementById(id);
-
-  function escapeHTML(value) {
-    return String(value ?? "").replace(
-      /[&<>"']/g,
-      char => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      })[char]
-    );
-  }
-
-  function getInitData() {
-    return tg?.initData || "";
-  }
-
-  function localKey() {
-    const id =
-      tg?.initDataUnsafe?.user?.id ||
-      "guest";
-
-    return `iqtestpro_session_${id}`;
-  }
-
-  function saveSession() {
-    if (!state.session) return;
-
-    try {
-      localStorage.setItem(
-        localKey(),
-        JSON.stringify({
-          index: state.session.index,
-          answers: state.session.answers,
-          elapsed: getElapsed(),
-          startedAt: state.startedAt,
-          language: state.lang,
-          savedAt: Date.now()
-        })
-      );
-    } catch {}
-  }
-
-  function loadSession() {
-    try {
-      const raw = localStorage.getItem(localKey());
-
-      if (!raw) return null;
-
-      const data = JSON.parse(raw);
-
-      if (!data || !Array.isArray(data.answers)) {
-        return null;
-      }
-
-      if (data.answers.length > COUNT) {
-        return null;
-      }
-
-      return data;
-    } catch {
-      return null;
-    }
-  }
-
-  function clearSession() {
-    try {
-      localStorage.removeItem(localKey());
-    } catch {}
-  }
-
-  function getElapsed() {
-    if (!state.session) {
-      return 0;
+        try {
+            tg.setHeaderColor("#070914");
+            tg.setBackgroundColor("#070914");
+        } catch (_) {}
     }
 
-    const base =
-      Number(state.session.elapsed) || 0;
+    const app = document.getElementById("app");
 
-    if (!state.startedAt) {
-      return base;
+    const state = {
+        initData: tg?.initData || "",
+
+        user: null,
+        products: [],
+        botUsername: "",
+
+        screen: "home",
+
+        testType: null,
+        questions: [],
+        index: 0,
+        answers: [],
+
+        profile: {},
+
+        completed: {
+            iq: false,
+            eq: false,
+            pq: false
+        },
+
+        battleId: null,
+        busy: false
+    };
+
+    /* =========================================================
+       HELPERS
+    ========================================================= */
+
+    const $ = (selector) => document.querySelector(selector);
+
+    function esc(value) {
+        return String(value ?? "")
+            .replace(/[&<>"']/g, (char) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#039;"
+            }[char]));
     }
 
-    return Math.max(
-      base,
-      Math.floor(
-        (Date.now() - state.startedAt) / 1000
-      )
-    );
-  }
+    function toast(message) {
+        let el = document.querySelector(".toast");
 
-  function formatTime(seconds) {
-    const value = Math.max(
-      0,
-      Math.floor(Number(seconds) || 0)
-    );
+        if (!el) {
+            el = document.createElement("div");
+            el.className = "toast";
+            document.body.appendChild(el);
+        }
 
-    const minutes =
-      String(Math.floor(value / 60)).padStart(2, "0");
+        el.textContent = message;
+        el.classList.add("show");
 
-    const secondsPart =
-      String(value % 60).padStart(2, "0");
+        clearTimeout(el._timer);
 
-    return `${minutes}:${secondsPart}`;
-  }
-
-  async function api(path, options = {}) {
-    const response = await fetch(path, {
-      ...options,
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Telegram-Init-Data": getInitData(),
-        ...(options.headers || {})
-      }
-    });
-
-    let data = {};
-
-    try {
-      data = await response.json();
-    } catch {}
-
-    if (!response.ok) {
-      const error = new Error(
-        data?.detail ||
-        `HTTP_${response.status}`
-      );
-
-      error.status = response.status;
-      error.code =
-        data?.detail ||
-        "REQUEST_FAILED";
-
-      throw error;
+        el._timer = setTimeout(() => {
+            el.classList.remove("show");
+        }, 2800);
     }
 
-    return data;
-  }
-
-  function telegramReady() {
-    try {
-      tg?.ready();
-      tg?.expand();
-
-      tg?.setHeaderColor?.("#070914");
-      tg?.setBackgroundColor?.("#070914");
-    } catch {}
-  }
-
-  /*
-   * =========================================================
-   * UI
-   * =========================================================
-   */
-
-  function buildUI() {
-    const root = $("app");
-
-    if (!root) {
-      throw new Error("APP_ROOT_NOT_FOUND");
+    function goBack() {
+        renderHome();
     }
 
-    root.innerHTML = `
-      <main class="page">
-
-        <div class="brand-row">
-          <div class="brand">
-            <div class="brand-mark">IQ</div>
-            <div>
-              <b>IQTestPro</b>
-              <small>LOGIC • INTELLIGENCE</small>
-            </div>
-          </div>
-
-          <button
-            id="languageButton"
-            class="lang-mini"
-            type="button"
-          >
-            ${state.lang.toUpperCase()}
-          </button>
-        </div>
-
-
-        <!-- HOME -->
-
-        <section
-          id="homeScreen"
-          class="screen"
-        >
-
-          <div class="hero">
-
-            <div class="brain-glow">
-              🧠
-            </div>
-
-            <div class="eyebrow">
-              18 TA MANTIQIY PUZZLE
-            </div>
-
-            <h1>
-              IQ darajangizni
-              <span>sinab ko‘ring</span>
-            </h1>
-
-            <p>
-              ${t("description")}
-            </p>
-
-          </div>
-
-
-          <div class="cards">
-
-            <button
-              id="startButton"
-              class="test-card"
-              type="button"
-            >
-
-              <div class="card-icon">
-                🧠
-              </div>
-
-              <div>
-                <b>${t("start")}</b>
-                <small>${t("free")}</small>
-              </div>
-
-              <span class="arrow">
-                ›
-              </span>
-
-            </button>
-
-          </div>
-
-
-          <button
-            id="rankingButton"
-            class="ghost"
-            type="button"
-          >
-            ${t("ranking")}
-          </button>
-
-
-          <button
-            id="profileButton"
-            class="ghost"
-            type="button"
-          >
-            ${t("profile")}
-          </button>
-
-        </section>
-
-
-        <!-- TEST -->
-
-        <section
-          id="testScreen"
-          class="screen test"
-          style="display:none"
-        >
-
-          <button
-            id="backButton"
-            class="back"
-            type="button"
-          >
-            ${t("back")}
-          </button>
-
-
-          <div class="test-top">
-
-            <div>
-              <b>IQ TEST</b>
-              <small id="timer">
-                00:00
-              </small>
-            </div>
-
-            <div
-              id="questionNumber"
-              class="progress-num"
-            >
-              01 / 18
-            </div>
-
-          </div>
-
-
-          <div class="progress">
-            <i
-              id="progressBar"
-              style="width:5.55%"
-            ></i>
-          </div>
-
-
-          <div class="question-number">
-            MANTIQIY PUZZLE
-          </div>
-
-
-          <h2 id="questionText"></h2>
-
-
-          <div
-            id="puzzle"
-            class="visual-puzzle"
-            style="display:none"
-          ></div>
-
-
-          <div
-            id="answers"
-            class="options"
-          ></div>
-
-
-          <button
-            id="nextButton"
-            class="primary"
-            type="button"
-            disabled
-          >
-            ${t("next")}
-            <span>›</span>
-          </button>
-
-        </section>
-
-
-        <!-- RESULT -->
-
-        <section
-          id="resultScreen"
-          class="screen result"
-          style="display:none"
-        >
-
-          <div class="result-icon">
-            🧠
-          </div>
-
-          <div class="eyebrow">
-            ${t("result")}
-          </div>
-
-
-          <div
-            id="iqScore"
-            class="score"
-          >
-            —
-          </div>
-
-          <div class="score-label">
-            IQ SCORE
-          </div>
-
-
-          <div class="result-card">
-
-            <span>
-              ${t("correct")}
-            </span>
-
-            <strong id="correctCount">
-              — / 18
-            </strong>
-
-          </div>
-
-
-          <div class="metrics">
-
-            <div>
-              <span>⏱</span>
-              <b id="resultTime">00:00</b>
-              <small>${t("time")}</small>
-            </div>
-
-            <div>
-              <span>🏆</span>
-              <b id="resultRank">—</b>
-              <small>Reyting</small>
-            </div>
-
-            <div>
-              <span>🧠</span>
-              <b id="resultRaw">—</b>
-              <small>Score</small>
-            </div>
-
-          </div>
-
-
-          <button
-            id="certificateButton"
-            class="primary"
-            type="button"
-          >
-            ${t("certificate")}
-          </button>
-
-
-          <button
-            id="shareButton"
-            class="secondary"
-            type="button"
-          >
-            ${t("share")}
-          </button>
-
-
-          <button
-            id="homeButton"
-            class="ghost"
-            type="button"
-          >
-            ${t("home")}
-          </button>
-
-        </section>
-
-
-        <!-- RANKING -->
-
-        <section
-          id="rankingScreen"
-          class="screen full"
-          style="display:none"
-        >
-
-          <button
-            id="rankingBack"
-            class="back"
-            type="button"
-          >
-            ${t("back")}
-          </button>
-
-          <h1>
-            ${t("ranking")}
-          </h1>
-
-          <p>
-            Eng yaxshi natijalar
-          </p>
-
-          <div id="rankingList"></div>
-
-        </section>
-
-
-        <!-- PROFILE -->
-
-        <section
-          id="profileScreen"
-          class="screen profile"
-          style="display:none"
-        >
-
-          <button
-            id="profileBack"
-            class="back"
-            type="button"
-          >
-            ${t("back")}
-          </button>
-
-
-          <div
-            id="profileAvatar"
-            class="result-icon"
-          >
-            ?
-          </div>
-
-
-          <h1 id="profileName">
-            —
-          </h1>
-
-
-          <p>
-            IQ statistikangiz
-          </p>
-
-
-          <div class="full-card">
-
-            <div>
-              <span>Eng yaxshi IQ</span>
-              <strong id="bestIQ">—</strong>
-            </div>
-
-            <div>
-              <span>Reyting</span>
-              <strong id="profileRank">—</strong>
-            </div>
-
-            <div>
-              <span>Testlar</span>
-              <strong id="profileAttempts">0</strong>
-            </div>
-
-            <div>
-              <span>Takliflar</span>
-              <strong id="profileReferrals">0</strong>
-            </div>
-
-          </div>
-
-        </section>
-
-
-        <!-- LANGUAGE -->
-
-        <div
-          id="languageModal"
-          style="
-            display:none;
-            position:fixed;
-            inset:0;
-            z-index:9999;
-            background:rgba(0,0,0,.72);
-            padding:28vh 20px 0;
-          "
-        >
-
-          <div
-            style="
-              max-width:420px;
-              margin:auto;
-              background:#171a29;
-              border:1px solid #353b56;
-              border-radius:24px;
-              padding:20px;
-            "
-          >
-
-            <h3>
-              Tilni tanlang
-            </h3>
-
-            <button
-              class="secondary language-option"
-              data-language="uz"
-              type="button"
-            >
-              🇺🇿 O‘zbekcha
-            </button>
-
-            <button
-              class="secondary language-option"
-              data-language="ru"
-              type="button"
-            >
-              🇷🇺 Русский
-            </button>
-
-            <button
-              class="secondary language-option"
-              data-language="en"
-              type="button"
-            >
-              🇬🇧 English
-            </button>
-
-          </div>
-
-        </div>
-
-
-        <div
-          id="toast"
-          class="toast"
-        ></div>
-
-      </main>
-    `;
-  }
-
-
-  function showScreen(id) {
-    const screens = [
-      "homeScreen",
-      "testScreen",
-      "resultScreen",
-      "rankingScreen",
-      "profileScreen"
+    async function api(path, options = {}) {
+
+        const headers = {
+            "Content-Type": "application/json"
+        };
+
+        if (state.initData) {
+            headers["X-Telegram-Init-Data"] = state.initData;
+        }
+
+        const response = await fetch(path, {
+            ...options,
+            headers: {
+                ...headers,
+                ...(options.headers || {})
+            }
+        });
+
+        const text = await response.text();
+
+        let data = {};
+
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (_) {
+            data = {
+                detail: text || "Server javobi noto‘g‘ri."
+            };
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail ||
+                data.error ||
+                `Server xatosi: ${response.status}`
+            );
+        }
+
+        return data;
+    }
+
+    function saveProgress() {
+        try {
+            localStorage.setItem(
+                "iq_current_progress",
+                JSON.stringify({
+                    testType: state.testType,
+                    index: state.index,
+                    answers: state.answers,
+                    profile: state.profile
+                })
+            );
+        } catch (_) {}
+    }
+
+    function clearProgress() {
+        try {
+            localStorage.removeItem("iq_current_progress");
+        } catch (_) {}
+    }
+
+    function markCompleted(type) {
+        state.completed[type] = true;
+
+        try {
+            localStorage.setItem(`done_${type}`, "1");
+        } catch (_) {}
+    }
+
+    function loadCompleted() {
+        try {
+            state.completed.iq =
+                localStorage.getItem("done_iq") === "1";
+
+            state.completed.eq =
+                localStorage.getItem("done_eq") === "1";
+
+            state.completed.pq =
+                localStorage.getItem("done_pq") === "1";
+        } catch (_) {}
+    }
+
+    /* =========================================================
+       IQ — EXACTLY 18 QUESTIONS
+       Backend answer indexes:
+       0,0,0,0,1,2,0,0,2,0,0,2,0,1,1,1,2,1
+    ========================================================= */
+
+    const IQ = [
+
+        {
+            type: "sequence",
+            title: "Ketma-ketlikdagi keyingi holatni toping.",
+            visual: ["●", "●●", "●●●", "●●●●", "?"],
+            options: ["●●●●●", "●●", "●●●●●●", "●"],
+            correct: 0
+        },
+
+        {
+            type: "sequence",
+            title: "Strelka har safar 45° o‘ngga aylanmoqda. Keyingi holat?",
+            visual: ["↑", "↗", "→", "↘", "?"],
+            options: ["↓", "↙", "←", "↖"],
+            correct: 0
+        },
+
+        {
+            type: "sequence",
+            title: "Shakllar ketma-ketligi qanday davom etadi?",
+            visual: ["△", "□", "○", "△", "?"],
+            options: ["□", "○", "◇", "△"],
+            correct: 0
+        },
+
+        {
+            type: "sequence",
+            title: "Nuqtalar soni har safar 2 taga ortmoqda.",
+            visual: ["•", "•••", "•••••", "?"],
+            options: ["•••••••", "••••", "••••••", "••"],
+            correct: 0
+        },
+
+        {
+            type: "letters",
+            title: "Har safar bitta harf tashlab ketilmoqda.",
+            visual: ["A", "C", "E", "G", "?"],
+            options: ["H", "I", "J", "K"],
+            correct: 1
+        },
+
+        {
+            type: "numbers",
+            title: "Qonuniyatni aniqlang.",
+            visual: ["2", "4", "8", "16", "?"],
+            options: ["20", "24", "32", "36"],
+            correct: 2
+        },
+
+        {
+            type: "rotation",
+            title: "Belgi har safar 90° soat strelkasi bo‘yicha aylanadi.",
+            visual: ["↑", "→", "↓", "?"],
+            options: ["←", "↗", "↘", "↑"],
+            correct: 0
+        },
+
+        {
+            type: "colors",
+            title: "Ranglar spektr bo‘yicha davom etmoqda. Keyingisini toping.",
+            visual: ["🟣", "🔵", "🟢", "🟡", "?"],
+            options: ["🟠", "🔴", "🟣", "⚫"],
+            correct: 0
+        },
+
+        {
+            type: "numbers",
+            title: "Har bir son avvalgisining 2 baravari.",
+            visual: ["3", "6", "12", "24", "?"],
+            options: ["36", "42", "48", "54"],
+            correct: 2
+        },
+
+        {
+            type: "pairs",
+            title: "Har bir juftlikda chap va o‘ng belgi bir-biriga qarama-qarshi.",
+            visual: ["▲▼", "■□", "●○", "?"],
+            options: ["◆◇", "▲△", "■■", "○●"],
+            correct: 0
+        },
+
+        {
+            type: "rotation",
+            title: "Strelka har safar 45° ga buriladi.",
+            visual: ["↑", "↗", "→", "↘", "?"],
+            options: ["↓", "↙", "←", "↖"],
+            correct: 0
+        },
+
+        {
+            type: "numbers",
+            title: "1, 4, 9, 16 ketma-ketligining keyingi hadi?",
+            visual: ["1", "4", "9", "16", "?"],
+            options: ["20", "24", "25", "36"],
+            correct: 2
+        },
+
+        {
+            type: "repeat",
+            title: "Ikki belgidan iborat sikl takrorlanmoqda.",
+            visual: ["◆", "○", "◆", "○", "?"],
+            options: ["◆", "○", "□", "△"],
+            correct: 0
+        },
+
+        {
+            type: "letters",
+            title: "Ketma-ketlikni davom ettiring.",
+            visual: ["B", "D", "F", "H", "?"],
+            options: ["I", "J", "K", "L"],
+            correct: 1
+        },
+
+        {
+            type: "numbers",
+            title: "Har safar 5 qo‘shilmoqda.",
+            visual: ["5", "10", "15", "20", "?"],
+            options: ["24", "25", "30", "35"],
+            correct: 1
+        },
+
+        {
+            type: "mapping",
+            title: "Chapdagi son 2 ga ko‘paytirilmoqda.",
+            visual: ["1 → 2", "2 → 4", "3 → 6", "4 → ?"],
+            options: ["7", "8", "9", "10"],
+            correct: 1
+        },
+
+        {
+            type: "odd",
+            title: "Qaysi katak boshqalardan farq qiladi?",
+            visual: ["○", "○", "○", "?"],
+            options: ["○", "○", "□", "○"],
+            correct: 2
+        },
+
+        {
+            type: "numbers",
+            title: "Har safar son 3 ga bo‘linmoqda.",
+            visual: ["81", "27", "9", "3", "?"],
+            options: ["0", "1", "2", "6"],
+            correct: 1
+        }
     ];
 
-    screens.forEach(screen => {
-      const element = $(screen);
+    /* =========================================================
+       EQ
+    ========================================================= */
 
-      if (!element) return;
+    const EQ = [
 
-      element.style.display =
-        screen === id ? "block" : "none";
-    });
-
-    try {
-      window.scrollTo({
-        top: 0,
-        behavior: "instant"
-      });
-    } catch {
-      window.scrollTo(0, 0);
-    }
-  }
-
-
-  function showToast(message) {
-    const element = $("toast");
-
-    if (!element) return;
-
-    element.textContent = String(message || "");
-
-    element.classList.add("show");
-
-    clearTimeout(showToast.timer);
-
-    showToast.timer = setTimeout(() => {
-      element.classList.remove("show");
-    }, 2800);
-  }
-
-
-  /*
-   * =========================================================
-   * HOME
-   * =========================================================
-   */
-
-  function renderHome() {
-    stopTimer();
-
-    state.session = null;
-    state.result = null;
-    state.finishing = false;
-
-    showScreen("homeScreen");
-
-    $("startButton").onclick = startTest;
-    $("rankingButton").onclick = loadRanking;
-    $("profileButton").onclick = loadProfile;
-    $("languageButton").onclick = openLanguageModal;
-  }
-
-
-  /*
-   * =========================================================
-   * LANGUAGE
-   * =========================================================
-   */
-
-  function openLanguageModal() {
-    const modal = $("languageModal");
-
-    if (!modal) return;
-
-    modal.style.display = "block";
-  }
-
-
-  function bindLanguages() {
-    document
-      .querySelectorAll(".language-option")
-      .forEach(button => {
-
-        button.onclick = () => {
-
-          const language =
-            button.dataset.language;
-
-          if (!TEXT[language]) return;
-
-          state.lang = language;
-
-          localStorage.setItem(
-            "iq_lang",
-            language
-          );
-
-          $("languageModal").style.display =
-            "none";
-
-          buildUI();
-          bindLanguages();
-          renderHome();
-        };
-
-      });
-  }
-
-
-  /*
-   * =========================================================
-   * TEST START
-   * =========================================================
-   */
-
-  async function startTest() {
-
-    if (state.busy || state.finishing) {
-      return;
-    }
-
-    state.busy = true;
-
-    showToast(t("loading"));
-
-    try {
-
-      const local = loadSession();
-
-      /*
-       * If Telegram network disappears after
-       * the test has already started, continue
-       * from localStorage.
-       */
-
-      if (
-        local &&
-        local.answers.length < COUNT &&
-        navigator.onLine === false
-      ) {
-
-        state.session = {
-          index:
-            Number(local.index) ||
-            local.answers.length,
-
-          answers:
-            local.answers.slice(),
-
-          elapsed:
-            Number(local.elapsed) || 0
-        };
-
-        state.started =
-          Number(local.started) ||
-          (
-            Date.now() -
-            state.session.elapsed * 1000
-          );
-
-        renderQuestion();
-
-        return;
-      }
-
-
-      const data = await api(
-        "/api/session/start",
         {
-          method: "POST",
+            title: "Do‘stingiz xafa bo‘lib turibdi, lekin sababini aytmayapti. Eng foydali birinchi qadam?",
+            options: [
+                "Uni tinch tinglash va gapirishga tayyor ekaningizni bildirish",
+                "Darhol nima qilish kerakligini aytish",
+                "Mavzuni o‘zgartirish",
+                "Nega xafa bo‘lganini o‘zingiz taxmin qilish"
+            ],
+            correct: 0
+        },
 
-          body: JSON.stringify({
-            language: state.lang
-          })
+        {
+            title: "Jamoada ikki kishi bir-birining fikrini noto‘g‘ri tushundi. Siz nima qilasiz?",
+            options: [
+                "Kim aybdorligini aniqlaysiz",
+                "Ikkala tomonning fikrini alohida tinglaysiz",
+                "Bahs tugaguncha aralashmaysiz",
+                "O‘zingizning fikringizni majburan qabul qildirasiz"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Sizga tanqid aytildi va uning bir qismi adolatsiz tuyuldi. Eng konstruktiv yo‘l?",
+            options: [
+                "Darhol javob qaytarish",
+                "Foydali qismini ajratib, qolganini aniqlashtirish",
+                "Hammasini inkor qilish",
+                "Suhbatni tugatish"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Muhim suhbatdan oldin hissiyotlaringiz kuchayganini sezsangiz?",
+            options: [
+                "Bir oz tanaffus qilib, fikrlaringizni tartibga solish",
+                "Hissiyot bilan darhol gapirish",
+                "Suhbatni butunlay bekor qilish",
+                "Boshqa odamni ayblash"
+            ],
+            correct: 0
+        },
+
+        {
+            title: "Suhbatdoshingiz odatdagidan ancha jim bo‘lib qoldi.",
+            options: [
+                "Darhol sababini o‘zingiz belgilash",
+                "Muloyim tarzda holatini so‘rash",
+                "Buni atay qilayotganini aytish",
+                "Umuman e’tibor bermaslik"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Siz xato qilganingizni tushundingiz.",
+            options: [
+                "Xatoni yashirish",
+                "Bahona topish",
+                "Tan olish va tuzatishga harakat qilish",
+                "Boshqa odamni ayblash"
+            ],
+            correct: 2
+        },
+
+        {
+            title: "Do‘stingiz sizning fikringizga qat’iyan rozi emas.",
+            options: [
+                "Uni gapirtirmaslik",
+                "Nima uchun shunday o‘ylayotganini tushunishga urinish",
+                "Bahsni yutishga harakat qilish",
+                "Suhbatni darhol tugatish"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Jahlingiz chiqqan paytda muhim xabar yozishingiz kerak.",
+            options: [
+                "Darhol yuborish",
+                "Tanaffus qilib, keyin qayta o‘qish",
+                "Ataylab keskinroq yozish",
+                "Umuman tushuntirmaslik"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Kimdir sizga samimiy maqtov aytdi.",
+            options: [
+                "Boshqalarni undan past ko‘rish",
+                "Oddiy minnatdorchilik bildirish",
+                "Maqtovni rad etish",
+                "Darhol o‘zingizni maqtash"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Yangi odam jamoaga qo‘shildi va o‘zini noqulay his qilmoqda.",
+            options: [
+                "Uni o‘zi moslashishiga tashlab qo‘yish",
+                "Suhbatga qo‘shilishiga yordam berish",
+                "Uni sinab ko‘rish",
+                "U haqida boshqalardan so‘rash"
+            ],
+            correct: 1
+        },
+
+        {
+            title: "Ikki xil fikr bo‘yicha bahs ketmoqda. Qaysi yondashuv konstruktivroq?",
+            options: [
+                "Faktlarni tekshirish",
+                "Kim balandroq gapirsa, o‘sha haq",
+                "Bahsni cho‘zish",
+                "Mavzuni almashtirish"
+            ],
+            correct: 0
+        },
+
+        {
+            title: "Boshqa odamning hislarini tushunishga harakat qilish nima deyiladi?",
+            options: [
+                "Empatiya",
+                "Raqobat",
+                "Impuls",
+                "Perfeksionizm"
+            ],
+            correct: 0
         }
-      );
+    ];
 
+    /* =========================================================
+       PROCRASTINATION
+    ========================================================= */
 
-      state.session = {
-        index:
-          Number(data.index) || 0,
+    const PQ = [
 
-        answers:
-          Array.isArray(data.answers)
-            ? data.answers.slice(0, COUNT)
-            : [],
+        {
+            title: "Katta vazifani boshlash qiyin bo‘lyapti.",
+            options: [
+                "Uni 2 daqiqalik eng kichik qadamga bo‘lish",
+                "Kayfiyat kelishini kutish",
+                "Telefonni tekshirish",
+                "Vazifani keyinga surish"
+            ],
+            correct: 0
+        },
 
-        elapsed:
-          Number(data.elapsed) || 0
-      };
+        {
+            title: "Deadline hali uzoq. Eng barqaror yondashuv?",
+            options: [
+                "Vazifani bosqichlarga bo‘lib rejalash",
+                "Oxirgi kunga qoldirish",
+                "Umuman reja qilmaslik",
+                "Faqat deadline kuni boshlash"
+            ],
+            correct: 0
+        },
 
+        {
+            title: "Telefon bildirishnomalari sizni tez-tez chalg‘itmoqda.",
+            options: [
+                "Keraksiz bildirishnomalarni vaqtincha o‘chirish",
+                "Har birini darhol tekshirish",
+                "Telefonni ish stolining oldiga qo‘yish",
+                "Har safar boshqa ilovaga kirish"
+            ],
+            correct: 0
+        },
 
-      state.started =
-        Date.now() -
-        state.session.elapsed * 1000;
+        {
+            title: "Vazifa juda katta ko‘rinmoqda.",
+            options: [
+                "Uni kichik, aniq bosqichlarga ajratish",
+                "Hammasini birdan tugatishga urinish",
+                "Boshlamaslik",
+                "Faqat reja haqida o‘ylash"
+            ],
+            correct: 0
+        },
 
+        {
+            title: "Noaniq vazifalarni ko‘pincha qoldirasiz. Eng ehtimoliy sabab?",
+            options: [
+                "Faqat vaqt yetishmasligi",
+                "Noaniqlik boshlashni qiyinlashtirishi mumkin",
+                "Har doim dangasalik",
+                "Har doim charchoq"
+            ],
+            correct: 1
+        },
 
-      saveSession();
+        {
+            title: "Rejangiz kutilmaganda buzildi.",
+            options: [
+                "Rejani yangi sharoitga moslashtirish",
+                "Butun kunni tashlab yuborish",
+                "O‘zingizni ayblash",
+                "Hammasini ertaga surish"
+            ],
+            correct: 0
+        },
 
-      renderQuestion();
+        {
+            title: "Ishlashga kayfiyat yo‘q.",
+            options: [
+                "Kichik va oson qadamdan boshlash",
+                "Kayfiyat kelishini kutish",
+                "O‘yin ochish",
+                "Ishni bekor qilish"
+            ],
+            correct: 0
+        },
 
-    } catch (error) {
+        {
+            title: "Kichik mukofot tizimi qachon foydali bo‘lishi mumkin?",
+            options: [
+                "Tugallangan ishni kichik mukofot bilan bog‘lashda",
+                "Ishni boshlashdan oldin mukofot olishda",
+                "Faqat juda katta vazifalarda",
+                "Hech qachon"
+            ],
+            correct: 0
+        },
 
-      console.error(
-        "[IQTestPro] start error",
-        error
-      );
+        {
+            title: "Vazifa taxminan 30 daqiqada tugaydi.",
+            options: [
+                "Hozir boshlash",
+                "Bir soat qo‘shimcha reja qilish",
+                "Ertaga qoldirish",
+                "Boshqa ish topish"
+            ],
+            correct: 0
+        },
 
-      if (
-        error.status === 402 ||
-        error.code === "PAID_RETEST"
-      ) {
+        {
+            title: "Brauzerda keraksiz 12 ta tab ochiq.",
+            options: [
+                "Keraksizlarini yopish",
+                "Yana bir tab ochish",
+                "Hammasini qoldirish",
+                "Telefonni tekshirish"
+            ],
+            correct: 0
+        },
 
-        showToast(t("paid"));
+        {
+            title: "Ishni boshlashdan oldin eng foydali savol?",
+            options: [
+                "Keyingi aniq qadam nima?",
+                "Qanday qilib mukammal qilish mumkin?",
+                "Qachon kayfiyatim keladi?",
+                "Qachon tanaffus qilaman?"
+            ],
+            correct: 0
+        },
 
-      } else if (
-        error.code === "INVALID_INIT_DATA"
-      ) {
+        {
+            title: "Bugungi ishning bir qismi tugamay qoldi.",
+            options: [
+                "Qolgan qismini aniq vaqtga rejalash",
+                "Hammasini tashlash",
+                "O‘zingizni ayblash",
+                "Sabab izlab vaqt o‘tkazish"
+            ],
+            correct: 0
+        }
+    ];
 
-        showToast(
-          "Ilovani Telegram ichidan oching."
-        );
+    /* =========================================================
+       VISUAL PUZZLE
+    ========================================================= */
 
-      } else {
+    function renderVisual(question) {
 
-        showToast(t("error"));
+        if (!question.visual) {
+            return "";
+        }
 
-      }
-
-    } finally {
-
-      state.busy = false;
-
+        return `
+            <div class="visual-puzzle">
+                ${question.visual.map((item) => `
+                    <div class="puzzle-cell ${item === "?" ? "question" : ""}">
+                        ${esc(item)}
+                    </div>
+                `).join("")}
+            </div>
+        `;
     }
-  }
 
+    function optionVisual(question, option) {
 
-  /*
-   * =========================================================
-   * QUESTION
-   * =========================================================
-   */
+        if (question.type === "sequence" ||
+            question.type === "rotation" ||
+            question.type === "colors" ||
+            question.type === "pairs" ||
+            question.type === "repeat") {
 
-  function renderQuestion() {
+            return `<span class="option-symbol">${esc(option)}</span>`;
+        }
 
-    if (!state.session) {
-      return;
+        return "";
     }
 
-    const index =
-      Number(state.session.index);
+    /* =========================================================
+       HOME
+    ========================================================= */
 
+    function renderHome() {
 
-    if (index >= COUNT) {
-      finishTest();
-      return;
-    }
+        state.screen = "home";
 
+        app.innerHTML = `
+            <main class="page home">
 
-    const question =
-      QUESTIONS[index];
+                <header class="brand-row">
 
+                    <div class="brand">
+                        <div class="brand-mark">IQ</div>
 
-    if (!question) {
-      showToast(t("error"));
-      return;
-    }
+                        <div class="brand-text">
+                            <b>IQ TEST BOT</b>
+                            <small>SMART THINKING</small>
+                        </div>
+                    </div>
 
+                    <button
+                        class="lang-mini"
+                        onclick="openLanguage()"
+                    >
+                        UZ
+                    </button>
 
-    $("questionNumber").textContent =
-      `${String(index + 1).padStart(2, "0")} / ${COUNT}`;
+                </header>
 
+                <section class="hero">
 
-    $("progressBar").style.width =
-      `${((index + 1) / COUNT) * 100}%`;
+                    <div class="brain-glow">
+                        🧠
+                    </div>
 
+                    <div class="eyebrow">
+                        18 TA MANTIQIY PUZZLE
+                    </div>
 
-    $("questionText").textContent =
-      question[0];
+                    <h1>
+                        IQ darajangizni
+                        <br>
+                        <span>sinab ko‘ring</span>
+                    </h1>
 
+                    <p>
+                        18 ta mantiqiy puzzle orqali
+                        fikrlash qobiliyatingizni sinang.
+                    </p>
 
-    const answers =
-      $("answers");
+                </section>
 
+                <section class="cards">
 
-    answers.innerHTML = "";
+                    ${testCard(
+                        "iq",
+                        "🧠",
+                        "IQ",
+                        "18 ta mantiqiy puzzle",
+                        true
+                    )}
 
+                    ${testCard(
+                        "eq",
+                        "🎭",
+                        "EQ",
+                        "IQ testidan keyin ochiladi"
+                    )}
 
-    const selected =
-      state.session.answers[index];
+                    ${testCard(
+                        "pq",
+                        "⏳",
+                        "PROKRASTINATSIYA",
+                        "EQ testidan keyin ochiladi"
+                    )}
 
+                    ${testCard(
+                        "full",
+                        "⭐",
+                        "SIZ QANDAY INSONSIZ",
+                        "Uchala testdan keyin ochiladi"
+                    )}
 
-    question[1].forEach(
-      (option, optionIndex) => {
+                </section>
 
-        const button =
-          document.createElement("button");
+                <button
+                    class="battle-card"
+                    onclick="renderBattle()"
+                >
 
-        button.type = "button";
+                    <div class="battle-icon">
+                        ⚔️
+                    </div>
 
-        button.className =
-          "option";
+                    <div class="battle-content">
+                        <b>Do‘st bilan battle</b>
+                        <small>
+                            Kimning IQ natijasi yuqori?
+                        </small>
+                    </div>
 
+                    <div class="battle-arrow">
+                        →
+                    </div>
 
-        button.innerHTML = `
-          <span>
-            ${LETTERS[optionIndex]}
-          </span>
+                </button>
 
-          <b>
-            ${escapeHTML(option)}
-          </b>
+                <div class="live">
+                    <span class="live-dot"></span>
+                    <b id="liveCount">0</b>
+                    kishi hozir faol
+                </div>
+
+                <div class="mini-note">
+                    Natija • Reyting • Sertifikat
+                </div>
+
+            </main>
         `;
 
+        loadCounter();
+    }
 
-        if (
-          Number(selected) === optionIndex
-        ) {
+    function testCard(
+        code,
+        icon,
+        title,
+        subtitle,
+        active = false
+    ) {
 
-          button.classList.add(
-            "selected"
-          );
+        const done = state.completed[code];
 
+        let locked = false;
+
+        if (code === "eq") {
+            locked = !state.completed.iq;
         }
 
-
-        button.onclick = () => {
-          selectAnswer(optionIndex);
-        };
-
-
-        answers.appendChild(button);
-
-      }
-    );
-
-
-    $("nextButton").disabled =
-      !Number.isInteger(
-        Number(selected)
-      );
-
-
-    $("nextButton").onclick = () => {
-
-      const answer =
-        Number(
-          state.session.answers[index]
-        );
-
-      if (
-        Number.isInteger(answer)
-      ) {
-
-        selectAnswer(answer);
-
-      }
-
-    };
-
-
-    $("timer").textContent =
-      formatTime(getElapsed());
-
-
-    $("backButton").onclick = () => {
-
-      const leave =
-        window.confirm(
-          "Testdan chiqilsinmi? Progress saqlanadi."
-        );
-
-      if (leave) {
-        renderHome();
-      }
-
-    };
-
-
-    saveSession();
-
-    showScreen("testScreen");
-
-    startTimer();
-  }
-
-
-  function selectAnswer(optionIndex) {
-
-    if (
-      !state.session ||
-      state.finishing
-    ) {
-      return;
-    }
-
-
-    const index =
-      Number(state.session.index);
-
-
-    if (
-      !Number.isInteger(optionIndex) ||
-      optionIndex < 0 ||
-      optionIndex > 3
-    ) {
-      return;
-    }
-
-
-    state.session.answers[index] =
-      optionIndex;
-
-
-    state.session.index =
-      index + 1;
-
-
-    state.session.elapsed =
-      getElapsed();
-
-
-    saveSession();
-
-
-    if (
-      state.session.index >= COUNT
-    ) {
-
-      finishTest();
-
-    } else {
-
-      renderQuestion();
-
-    }
-  }
-
-
-  /*
-   * =========================================================
-   * TIMER
-   * =========================================================
-   */
-
-  function startTimer() {
-
-    stopTimer();
-
-    const update = () => {
-
-      if (!state.session) {
-        return;
-      }
-
-      const timer =
-        $("timer");
-
-      if (timer) {
-        timer.textContent =
-          formatTime(getElapsed());
-      }
-
-    };
-
-
-    update();
-
-    state.timer =
-      setInterval(update, 500);
-  }
-
-
-  function stopTimer() {
-
-    if (state.timer) {
-
-      clearInterval(
-        state.timer
-      );
-
-      state.timer = null;
-    }
-  }
-
-
-  /*
-   * =========================================================
-   * FINISH
-   * =========================================================
-   */
-
-  async function finishTest() {
-
-    if (
-      state.finishing ||
-      !state.session
-    ) {
-      return;
-    }
-
-
-    state.finishing = true;
-
-    stopTimer();
-
-
-    const answers =
-      Array.isArray(
-        state.session.answers
-      )
-        ? state.session.answers.slice(
-            0,
-            COUNT
-          )
-        : [];
-
-
-    if (answers.length !== COUNT) {
-
-      state.finishing = false;
-
-      showToast(t("error"));
-
-      return;
-    }
-
-
-    try {
-
-      /*
-       * IMPORTANT:
-       *
-       * No network request happens
-       * during individual questions.
-       *
-       * All 18 answers are sent once
-       * at the end.
-       */
-
-      await api(
-        "/api/session/sync",
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            answers
-          })
+        if (code === "pq") {
+            locked = !state.completed.eq;
         }
-      );
 
-
-      const result =
-        await api(
-          "/api/session/finish",
-          {
-            method: "POST",
-            body: "{}"
-          }
-        );
-
-
-      state.result =
-        result;
-
-      state.session =
-        null;
-
-      clearSession();
-
-      renderResult();
-
-    } catch (error) {
-
-      console.error(
-        "[IQTestPro] finish error",
-        error
-      );
-
-
-      state.finishing = false;
-
-
-      if (
-        navigator.onLine === false
-      ) {
-
-        showToast(
-          t("offline")
-        );
-
-      } else {
-
-        showToast(
-          t("error")
-        );
-
-      }
-
-    } finally {
-
-      state.finishing = false;
-
-    }
-  }
-
-
-  /*
-   * =========================================================
-   * RESULT
-   * =========================================================
-   */
-
-  function renderResult() {
-
-    stopTimer();
-
-    showScreen(
-      "resultScreen"
-    );
-
-
-    const result =
-      state.result || {};
-
-
-    $("iqScore").textContent =
-      result.iq ?? "—";
-
-
-    $("correctCount").textContent =
-      `${result.correct ?? "—"} / ${COUNT}`;
-
-
-    $("resultTime").textContent =
-      formatTime(
-        result.elapsed ?? 0
-      );
-
-
-    $("resultRank").textContent =
-      result.rank == null
-        ? "—"
-        : `#${result.rank}`;
-
-
-    $("resultRaw").textContent =
-      result.raw ?? "—";
-
-
-    $("certificateButton").onclick =
-      getCertificate;
-
-
-    $("shareButton").onclick =
-      shareResult;
-
-
-    $("homeButton").onclick =
-      renderHome;
-  }
-
-
-  /*
-   * =========================================================
-   * RANKING
-   * =========================================================
-   */
-
-  async function loadRanking() {
-
-    showScreen(
-      "rankingScreen"
-    );
-
-
-    $("rankingBack").onclick =
-      renderHome;
-
-
-    const list =
-      $("rankingList");
-
-
-    list.innerHTML =
-      "<p>Yuklanmoqda…</p>";
-
-
-    try {
-
-      const data =
-        await api(
-          "/api/ranking",
-          {
-            method: "GET"
-          }
-        );
-
-
-      const items =
-        Array.isArray(data.items)
-          ? data.items
-          : [];
-
-
-      if (!items.length) {
-
-        list.innerHTML =
-          "<p>Hali reyting ma’lumotlari yo‘q.</p>";
-
-        return;
-      }
-
-
-      list.innerHTML =
-        items
-          .map(
-            (item, index) => {
-
-              const name =
-                escapeHTML(
-                  item.first_name ||
-                  item.username ||
-                  "User"
-                );
-
-
-              const score =
-                escapeHTML(
-                  item.best_score ??
-                  "—"
-                );
-
-
-              return `
-                <div class="result-card">
-
-                  <span>
-                    #${index + 1}
-                    ${name}
-                  </span>
-
-                  <strong>
-                    ${score}
-                  </strong>
+        if (code === "full") {
+            locked = !(
+                state.completed.iq &&
+                state.completed.eq &&
+                state.completed.pq
+            );
+        }
+
+        let classes = "test-card";
+
+        if (active && !locked) {
+            classes += " active";
+        }
+
+        if (locked) {
+            classes += " locked";
+        }
+
+        if (done) {
+            classes += " done";
+        }
+
+        let right = "→";
+
+        if (locked) {
+            right = `
+                <span class="lock-text">
+                    🔒<br>
+                    ${code === "eq"
+                        ? "IQ dan keyin"
+                        : code === "pq"
+                            ? "EQ dan keyin"
+                            : "Uchala testdan keyin"
+                    }
+                </span>
+            `;
+        }
+
+        if (done) {
+            right = "✓";
+        }
+
+        return `
+            <button
+                class="${classes}"
+                onclick="cardClick('${code}')"
+                data-code="${code}"
+            >
+
+                <div class="card-icon">
+                    ${done ? "✓" : icon}
+                </div>
+
+                <div class="card-content">
+
+                    <b>${esc(title)}</b>
+
+                    <small>
+                        ${done ? "Tugallangan" : esc(subtitle)}
+                    </small>
 
                 </div>
-              `;
+
+                <div class="card-right">
+                    ${right}
+                </div>
+
+            </button>
+        `;
+    }
+
+    /* =========================================================
+       CARD CLICK
+    ========================================================= */
+
+    window.cardClick = async function(code) {
+
+        if (state.busy) {
+            return;
+        }
+
+        if (code === "iq") {
+
+            try {
+
+                const access = await api("/api/access/iq");
+
+                if (access.allowed) {
+                    renderIntro("iq");
+                    return;
+                }
+
+                await startPayment("iq");
+
+            } catch (error) {
+
+                toast(error.message);
 
             }
-          )
-          .join("");
 
-    } catch (error) {
+            return;
+        }
 
-      console.error(
-        "[IQTestPro] ranking error",
-        error
-      );
+        if (
+            code === "eq" &&
+            !state.completed.iq
+        ) {
+            toast("Avval IQ testini tugating.");
+            return;
+        }
 
-      list.innerHTML =
-        "<p>Reytingni yuklab bo‘lmadi.</p>";
+        if (
+            code === "pq" &&
+            !state.completed.eq
+        ) {
+            toast("Avval EQ testini tugating.");
+            return;
+        }
+
+        if (
+            code === "full" &&
+            !(
+                state.completed.iq &&
+                state.completed.eq &&
+                state.completed.pq
+            )
+        ) {
+            toast("Avval uchala testni tugating.");
+            return;
+        }
+
+        if (code === "full") {
+            renderFull();
+            return;
+        }
+
+        renderIntro(code);
+    };
+
+    /* =========================================================
+       INTRO
+    ========================================================= */
+
+    function renderIntro(type) {
+
+        state.testType = type;
+
+        let data;
+
+        if (type === "iq") {
+
+            data = {
+                icon: "🧠",
+                eyebrow: "18 TA MANTIQIY PUZZLE",
+                title: "Aql darajangizni aniqlang",
+                desc:
+                    "18 ta vizual va mantiqiy puzzle orqali fikrlash, analiz va muammolarni yechish qobiliyatingizni sinang.",
+                chips: [
+                    "📄 18 ta savol",
+                    "∞ Vaqt cheksiz",
+                    "🔷 Tasviriy mantiq",
+                    "🏅 IQ natijasi"
+                ]
+            };
+
+        } else if (type === "eq") {
+
+            data = {
+                icon: "🎭",
+                eyebrow: "HISSIY INTELLEKT",
+                title: "EQ darajangizni aniqlang",
+                desc:
+                    "Murakkab ijtimoiy va hissiy vaziyatlarda qanday qaror qilishingizni tekshiring.",
+                chips: [
+                    "📄 12 ta savol",
+                    "∞ Vaqt cheksiz",
+                    "🎭 Vaziyatli test",
+                    "📊 EQ tahlil"
+                ]
+            };
+
+        } else {
+
+            data = {
+                icon: "⏳",
+                eyebrow: "PROKRASTINATSIYA",
+                title: "Ishni keyinga surish odatingizni aniqlang",
+                desc:
+                    "Vazifalarni boshlash, chalg‘ish va deadline bilan ishlashdagi xatti-harakatlaringizni tahlil qiling.",
+                chips: [
+                    "📄 12 ta savol",
+                    "∞ Vaqt cheksiz",
+                    "🎯 Vaziyatli test",
+                    "📊 Shaxsiy tahlil"
+                ]
+            };
+        }
+
+        app.innerHTML = `
+            <main class="page intro">
+
+                <button
+                    class="back"
+                    onclick="renderHome()"
+                >
+                    ← Orqaga
+                </button>
+
+                <div class="intro-icon">
+                    ${data.icon}
+                </div>
+
+                <div class="eyebrow">
+                    ${data.eyebrow}
+                </div>
+
+                <h1>
+                    ${esc(data.title)}
+                </h1>
+
+                <p>
+                    ${esc(data.desc)}
+                </p>
+
+                <div class="chips">
+                    ${data.chips.map(item => `
+                        <span class="chip">
+                            ${esc(item)}
+                        </span>
+                    `).join("")}
+                </div>
+
+                <div class="how-card">
+
+                    <div class="how-title">
+                        Qanday ishlaydi?
+                    </div>
+
+                    <div class="how-list">
+
+                        <div class="how-item">
+                            <span class="how-number">1</span>
+                            <span>Har bir savolga o‘zingizning javobingizni tanlaysiz.</span>
+                        </div>
+
+                        <div class="how-item">
+                            <span class="how-number">2</span>
+                            <span>IQ testida savollar bosqichma-bosqich murakkablashadi.</span>
+                        </div>
+
+                        <div class="how-item">
+                            <span class="how-number">3</span>
+                            <span>Vaqt cheklovi yo‘q — tezlikdan ko‘ra to‘g‘ri fikrlash muhim.</span>
+                        </div>
+
+                        <div class="how-item">
+                            <span class="how-number">4</span>
+                            <span>Yakunda natijangiz va keyingi testlar ochiladi.</span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                ${
+                    type === "iq"
+                    ? `
+                        <div class="sample-card">
+
+                            <div class="sample-label">
+                                NAMUNA
+                            </div>
+
+                            <div class="sample-puzzle">
+                                <div class="sample-box">●</div>
+                                <div class="sample-box">●●</div>
+                                <div class="sample-box">●●●</div>
+                                <div class="sample-box">?</div>
+                            </div>
+
+                            <div
+                                class="mini-note"
+                                style="margin-top:12px"
+                            >
+                                Bu namuna haqiqiy 18 ta savol hisobiga kirmaydi.
+                            </div>
+
+                        </div>
+                    `
+                    : ""
+                }
+
+                <button
+                    class="primary"
+                    onclick="startProfile('${type}')"
+                >
+                    🚀 Testni boshlash
+                    <span>→</span>
+                </button>
+
+            </main>
+        `;
     }
-  }
 
+    /* =========================================================
+       PROFILE
+    ========================================================= */
 
-  /*
-   * =========================================================
-   * PROFILE
-   * =========================================================
-   */
+    window.startProfile = function(type) {
 
-  async function loadProfile() {
+        state.testType = type;
 
-    showScreen(
-      "profileScreen"
-    );
+        let saved = {};
 
+        try {
+            saved = JSON.parse(
+                localStorage.getItem("iq_profile") || "{}"
+            );
+        } catch (_) {
+            saved = {};
+        }
 
-    $("profileBack").onclick =
-      renderHome;
+        app.innerHTML = `
+            <main class="page profile">
 
+                <button
+                    class="back"
+                    onclick="renderIntro('${type}')"
+                >
+                    ← Orqaga
+                </button>
 
-    try {
+                <h1>
+                    O‘zingiz haqingizda
+                </h1>
 
-      const data =
-        await api(
-          "/api/profile",
-          {
-            method: "GET"
-          }
-        );
+                <p>
+                    Natijangiz va sertifikat uchun kerakli ma’lumotlarni kiriting.
+                </p>
 
+                <label class="form-label">
+                    Ism va familiya
 
-      const name =
-        data.first_name ||
-        data.username ||
-        "User";
+                    <input
+                        id="fullName"
+                        type="text"
+                        maxlength="80"
+                        autocomplete="name"
+                        value="${esc(saved.fullName || "")}"
+                        placeholder="Masalan: Muhammad Ali Omonov"
+                    >
+                </label>
 
+                <div class="two">
 
-      $("profileName").textContent =
-        name;
+                    <label class="form-label">
+                        Yosh
 
+                        <input
+                            id="age"
+                            type="number"
+                            min="10"
+                            max="100"
+                            value="${esc(saved.age || "")}"
+                            placeholder="20"
+                        >
+                    </label>
 
-      $("profileAvatar").textContent =
-        name
-          .trim()
-          .charAt(0)
-          .toUpperCase() ||
-        "?";
+                    <label class="form-label">
+                        Jins
 
+                        <select id="gender">
 
-      $("bestIQ").textContent =
-        data.best_score ??
-        "—";
+                            <option value="">
+                                Tanlang
+                            </option>
 
+                            <option value="Erkak"
+                                ${saved.gender === "Erkak" ? "selected" : ""}>
+                                Erkak
+                            </option>
 
-      $("profileRank").textContent =
-        data.rank == null
-          ? "—"
-          : `#${data.rank}`;
+                            <option value="Ayol"
+                                ${saved.gender === "Ayol" ? "selected" : ""}>
+                                Ayol
+                            </option>
 
+                        </select>
 
-      $("profileAttempts").textContent =
-        data.attempts ??
-        0;
+                    </label>
 
+                </div>
 
-      $("profileReferrals").textContent =
-        data.referrals ??
-        0;
+                <label class="form-label">
+                    Mamlakat
 
-    } catch (error) {
+                    <input
+                        id="country"
+                        type="text"
+                        maxlength="50"
+                        value="${esc(saved.country || "O‘zbekiston")}"
+                        placeholder="O‘zbekiston"
+                    >
+                </label>
 
-      console.error(
-        "[IQTestPro] profile error",
-        error
-      );
+                <button
+                    class="primary"
+                    onclick="beginTest('${type}')"
+                >
+                    Davom etish
+                    <span>→</span>
+                </button>
 
-      showToast(
-        t("noData")
-      );
-    }
-  }
+            </main>
+        `;
+    };
 
+    window.beginTest = function(type) {
 
-  /*
-   * =========================================================
-   * CERTIFICATE
-   * =========================================================
-   */
+        const fullName =
+            ($("#fullName")?.value || "").trim();
 
-  async function getCertificate() {
+        const age =
+            ($("#age")?.value || "").trim();
 
-    try {
+        const gender =
+            ($("#gender")?.value || "").trim();
 
-      const response =
-        await fetch(
-          "/api/certificate",
-          {
-            method: "GET",
-            cache: "no-store",
+        const country =
+            ($("#country")?.value || "").trim();
 
-            headers: {
-              "X-Telegram-Init-Data":
-                getInitData()
-            }
-          }
-        );
+        if (!fullName) {
+            toast("Ism va familiyani kiriting.");
+            return;
+        }
 
+        if (fullName.length < 3) {
+            toast("Ism va familiya juda qisqa.");
+            return;
+        }
 
-      if (!response.ok) {
-
-        showToast(
-          "Sertifikat hozircha mavjud emas."
-        );
-
-        return;
-      }
-
-
-      const blob =
-        await response.blob();
-
-
-      const url =
-        URL.createObjectURL(blob);
-
-
-      const overlay =
-        document.createElement(
-          "div"
-        );
-
-
-      overlay.style.cssText = `
-        position:fixed;
-        inset:0;
-        z-index:99999;
-        background:rgba(0,0,0,.94);
-        padding:20px;
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        justify-content:center;
-        gap:15px;
-      `;
-
-
-      overlay.innerHTML = `
-        <img
-          src="${url}"
-          alt="Certificate"
-          style="
-            max-width:100%;
-            max-height:80vh;
-            border-radius:18px;
-            object-fit:contain;
-          "
-        >
-
-        <button
-          class="primary"
-          type="button"
-          style="max-width:520px"
-        >
-          ${t("back")}
-        </button>
-      `;
-
-
-      overlay
-        .querySelector("button")
-        .onclick = () => {
-
-          URL.revokeObjectURL(
-            url
-          );
-
-          overlay.remove();
+        state.profile = {
+            fullName,
+            age,
+            gender,
+            country
         };
 
+        try {
+            localStorage.setItem(
+                "iq_profile",
+                JSON.stringify(state.profile)
+            );
+        } catch (_) {}
 
-      document.body.appendChild(
-        overlay
-      );
+        state.testType = type;
 
-    } catch (error) {
+        if (type === "iq") {
+            state.questions = IQ;
+        } else if (type === "eq") {
+            state.questions = EQ;
+        } else {
+            state.questions = PQ;
+        }
 
-      console.error(
-        "[IQTestPro] certificate error",
-        error
-      );
+        state.index = 0;
+        state.answers = [];
 
-      showToast(
-        "Sertifikatni olishda xatolik."
-      );
+        saveProgress();
+
+        renderQuestion();
+    };
+
+    /* =========================================================
+       QUESTION
+    ========================================================= */
+
+    function renderQuestion() {
+
+        const question =
+            state.questions[state.index];
+
+        if (!question) {
+            finishTest();
+            return;
+        }
+
+        const total =
+            state.questions.length;
+
+        const current =
+            state.index + 1;
+
+        const percent =
+            Math.round(
+                ((current - 1) / total) * 100
+            );
+
+        app.innerHTML = `
+            <main class="page test">
+
+                <div class="test-top">
+
+                    <button
+                        class="test-back"
+                        onclick="confirmExit()"
+                    >
+                        ←
+                    </button>
+
+                    <div class="test-title">
+                        <b>
+                            ${state.testType.toUpperCase()}
+                        </b>
+
+                        <small>
+                            ${current} / ${total}
+                        </small>
+                    </div>
+
+                    <div class="test-percent">
+                        ${percent}%
+                    </div>
+
+                </div>
+
+                <div class="progress">
+                    <i style="width:${percent}%"></i>
+                </div>
+
+                <div class="question-label">
+                    SAVOL ${current}
+                </div>
+
+                <h2 class="question-title">
+                    ${esc(question.title)}
+                </h2>
+
+                ${state.testType === "iq"
+                    ? renderVisual(question)
+                    : ""
+                }
+
+                <div class="options">
+
+                    ${question.options.map((option, index) => `
+
+                        <button
+                            class="option"
+                            onclick="answerQuestion(${index})"
+                        >
+
+                            <span class="option-letter">
+                                ${String.fromCharCode(65 + index)}
+                            </span>
+
+                            <span class="option-content">
+                                ${esc(option)}
+                            </span>
+
+                            ${optionVisual(question, option)}
+
+                        </button>
+
+                    `).join("")}
+
+                </div>
+
+            </main>
+        `;
     }
-  }
 
+    window.answerQuestion = function(index) {
 
-  /*
-   * =========================================================
-   * SHARE
-   * =========================================================
-   */
+        if (state.busy) {
+            return;
+        }
 
-  function shareResult() {
+        state.busy = true;
 
-    if (!state.result) {
-      return;
-    }
+        state.answers[state.index] = index;
 
+        saveProgress();
 
-    const text =
-      `🧠 IQTestPro\n` +
-      `IQ SCORE: ${state.result.iq ?? "—"}\n` +
-      `${state.result.correct ?? "—"}/${COUNT}`;
+        setTimeout(() => {
 
+            state.busy = false;
 
-    const url =
-      `${location.origin}/app`;
+            state.index++;
 
+            if (
+                state.index >=
+                state.questions.length
+            ) {
 
-    const telegramURL =
-      `https://t.me/share/url?` +
-      `url=${encodeURIComponent(url)}` +
-      `&text=${encodeURIComponent(text)}`;
+                finishTest();
 
+                return;
+            }
 
-    try {
+            renderQuestion();
 
-      if (tg?.openTelegramLink) {
+        }, 100);
+    };
 
-        tg.openTelegramLink(
-          telegramURL
+    window.confirmExit = function() {
+
+        const leave = confirm(
+            "Testni tark etmoqchimisiz?\n\n" +
+            "Hozirgi javoblaringiz qurilmada saqlanadi."
         );
 
-        return;
-      }
+        if (leave) {
+            renderHome();
+        }
+    };
 
+    /* =========================================================
+       FINISH
+    ========================================================= */
 
-      if (navigator.share) {
+    async function finishTest() {
 
-        navigator.share({
-          text,
-          url
-        }).catch(() => {});
+        if (state.busy) {
+            return;
+        }
 
-        return;
-      }
+        state.busy = true;
 
+        app.innerHTML = `
+            <main class="page loading">
 
-      if (
-        navigator.clipboard?.writeText
-      ) {
+                <div class="loader"></div>
 
-        navigator.clipboard
-          .writeText(text)
-          .then(() => {
-            showToast(
-              "Natija nusxalandi."
+                <h2>
+                    Natija hisoblanmoqda
+                </h2>
+
+                <p>
+                    Bir oz kuting...
+                </p>
+
+            </main>
+        `;
+
+        try {
+
+            const result =
+                await api("/api/test/submit", {
+                    method: "POST",
+
+                    body: JSON.stringify({
+                        test_type: state.testType,
+
+                        answers: state.answers,
+
+                        profile: state.profile,
+
+                        battle_id: state.battleId || null
+                    })
+                });
+
+            clearProgress();
+
+            markCompleted(state.testType);
+
+            renderResult(result);
+
+        } catch (error) {
+
+            console.error(error);
+
+            app.innerHTML = `
+                <main class="page error">
+
+                    <div
+                        class="result-icon"
+                        style="margin-top:30px"
+                    >
+                        ⚠️
+                    </div>
+
+                    <h2>
+                        Natijani saqlashda xatolik
+                    </h2>
+
+                    <p>
+                        ${esc(error.message)}
+                    </p>
+
+                    <button
+                        class="primary"
+                        onclick="renderQuestion()"
+                    >
+                        Qayta urinish
+                    </button>
+
+                </main>
+            `;
+
+        } finally {
+
+            state.busy = false;
+        }
+    }
+
+    /* =========================================================
+       RESULT
+    ========================================================= */
+
+    function renderResult(result) {
+
+        const type =
+            state.testType;
+
+        const score =
+            Number(
+                result.score ??
+                result.iq ??
+                0
             );
-          });
 
-      }
+        const correct =
+            Number(
+                result.correct ??
+                0
+            );
 
-    } catch (error) {
+        const total =
+            state.questions.length;
 
-      console.error(
-        "[IQTestPro] share error",
-        error
-      );
+        let title = "Natijangiz";
 
+        let icon = "🧠";
+
+        if (type === "eq") {
+            title = "EQ natijangiz";
+            icon = "🎭";
+        }
+
+        if (type === "pq") {
+            title = "Prokrastinatsiya natijangiz";
+            icon = "⏳";
+        }
+
+        let label = "Natija";
+
+        if (type === "iq") {
+
+            if (score >= 125) {
+                label = "Juda yuqori ko‘rsatkich";
+            } else if (score >= 115) {
+                label = "Yuqori ko‘rsatkich";
+            } else if (score >= 100) {
+                label = "O‘rtacha ko‘rsatkich";
+            } else {
+                label = "Rivojlantirish mumkin";
+            }
+
+        } else if (type === "eq") {
+
+            label =
+                score >= 80
+                    ? "Yaxshi hissiy ko‘rsatkich"
+                    : "Rivojlantirish mumkin";
+
+        } else {
+
+            label =
+                score >= 70
+                    ? "Prokrastinatsiya nazorat ostida"
+                    : "Keyinga surish odati yuqori";
+        }
+
+        app.innerHTML = `
+            <main class="page result">
+
+                <div class="result-icon">
+                    ${icon}
+                </div>
+
+                <div class="eyebrow">
+                    TEST YAKUNLANDI
+                </div>
+
+                <h1>
+                    ${title}
+                </h1>
+
+                <div class="score">
+                    ${score}
+                </div>
+
+                <div class="score-label">
+                    ${label}
+                </div>
+
+                <div class="result-main-card">
+
+                    <span>
+                        To‘g‘ri javoblar
+                    </span>
+
+                    <strong>
+                        ${correct}/${total}
+                    </strong>
+
+                </div>
+
+                <div class="metrics">
+
+                    <div class="metric">
+
+                        <div class="metric-icon">
+                            🎯
+                        </div>
+
+                        <b>
+                            ${Math.round(
+                                (correct / total) * 100
+                            )}%
+                        </b>
+
+                        <small>
+                            Aniqlik
+                        </small>
+
+                    </div>
+
+                    <div class="metric">
+
+                        <div class="metric-icon">
+                            🧠
+                        </div>
+
+                        <b>
+                            ${type === "iq"
+                                ? "IQ"
+                                : type === "eq"
+                                    ? "EQ"
+                                    : "PQ"
+                            }
+                        </b>
+
+                        <small>
+                            Test turi
+                        </small>
+
+                    </div>
+
+                    <div class="metric">
+
+                        <div class="metric-icon">
+                            🏆
+                        </div>
+
+                        <b>
+                            ${result.rank
+                                ? "#" + result.rank
+                                : "—"
+                            }
+                        </b>
+
+                        <small>
+                            Reyting
+                        </small>
+
+                    </div>
+
+                </div>
+
+                <p class="result-text">
+                    Bu natija IQ TEST BOT ichidagi
+                    mahsulot ko‘rsatkichi hisoblanadi.
+                    U klinik yoki standartlashtirilgan
+                    psixologik tashxis o‘rnini bosmaydi.
+                </p>
+
+                ${nextButton(type)}
+
+                <button
+                    class="ghost"
+                    onclick="renderHome()"
+                >
+                    Bosh sahifaga
+                </button>
+
+            </main>
+        `;
     }
-  }
 
+    function nextButton(type) {
 
-  /*
-   * =========================================================
-   * BOOT
-   * =========================================================
-   */
+        if (type === "iq") {
 
-  function bindEvents() {
+            return `
+                <button
+                    class="primary"
+                    onclick="renderIntro('eq')"
+                >
+                    🎭 EQ testiga o‘tish
+                    <span>→</span>
+                </button>
+            `;
+        }
 
-    bindLanguages();
+        if (type === "eq") {
 
-    $("languageButton").onclick =
-      openLanguageModal;
+            return `
+                <button
+                    class="primary"
+                    onclick="renderIntro('pq')"
+                >
+                    ⏳ PQ testiga o‘tish
+                    <span>→</span>
+                </button>
+            `;
+        }
 
-    $("startButton").onclick =
-      startTest;
-
-    $("rankingButton").onclick =
-      loadRanking;
-
-    $("profileButton").onclick =
-      loadProfile;
-  }
-
-
-  function boot() {
-
-    telegramReady();
-
-    buildUI();
-
-    bindEvents();
-
-    renderHome();
-
-    console.log(
-      "[IQTestPro] 18-question app loaded"
-    );
-  }
-
-
-  window.addEventListener(
-    "online",
-    () => {
-
-      if (
-        state.session &&
-        Array.isArray(
-          state.session.answers
-        ) &&
-        state.session.answers.length === COUNT &&
-        !state.finishing
-      ) {
-
-        finishTest();
-
-      }
-
+        return `
+            <button
+                class="primary"
+                onclick="renderFull()"
+            >
+                ⭐ To‘liq tahlil
+                <span>→</span>
+            </button>
+        `;
     }
-  );
 
+    /* =========================================================
+       FULL PROFILE
+    ========================================================= */
 
-  window.IQTestPro = {
-    state,
-    startTest,
-    finishTest,
-    renderHome
-  };
+    window.renderFull = function() {
 
+        if (
+            !(
+                state.completed.iq &&
+                state.completed.eq &&
+                state.completed.pq
+            )
+        ) {
 
-  if (
-    document.readyState ===
-    "loading"
-  ) {
+            toast(
+                "Avval IQ, EQ va prokrastinatsiya testlarini tugating."
+            );
 
-    document.addEventListener(
-      "DOMContentLoaded",
-      boot,
-      { once: true }
+            return;
+        }
+
+        app.innerHTML = `
+            <main class="page result">
+
+                <div class="result-icon">
+                    ⭐
+                </div>
+
+                <div class="eyebrow">
+                    TO‘LIQ TAHLIL
+                </div>
+
+                <h1>
+                    Siz qanday insonsiz?
+                </h1>
+
+                <p class="result-text">
+                    IQ, EQ va prokrastinatsiya
+                    natijalaringiz asosida
+                    shaxsiy profilingiz shakllantiriladi.
+                </p>
+
+                <div class="result-main-card">
+                    <span>🧠 IQ</span>
+                    <strong>✓ Tugallangan</strong>
+                </div>
+
+                <div class="result-main-card">
+                    <span>🎭 EQ</span>
+                    <strong>✓ Tugallangan</strong>
+                </div>
+
+                <div class="result-main-card">
+                    <span>⏳ PQ</span>
+                    <strong>✓ Tugallangan</strong>
+                </div>
+
+                <p class="result-text">
+                    To‘liq individual tahlil backend
+                    natijalari asosida kengaytiriladi.
+                </p>
+
+                <button
+                    class="primary"
+                    onclick="renderHome()"
+                >
+                    Bosh sahifaga
+                    <span>→</span>
+                </button>
+
+            </main>
+        `;
+    };
+
+    /* =========================================================
+       PAYMENT
+    ========================================================= */
+
+    async function startPayment(productCode) {
+
+        try {
+
+            const result =
+                await api("/api/payment/start", {
+                    method: "POST",
+
+                    body: JSON.stringify({
+                        product_code: productCode
+                    })
+                });
+
+            if (result.free) {
+                renderIntro(productCode);
+                return;
+            }
+
+            toast(
+                "To‘lov ma’lumotlari Telegram chatga yuborildi."
+            );
+
+            setTimeout(() => {
+
+                const username =
+                    state.botUsername ||
+                    "iqtest_ubot";
+
+                const url =
+                    `https://t.me/${username}`;
+
+                if (tg?.openTelegramLink) {
+                    tg.openTelegramLink(url);
+                } else {
+                    window.location.href = url;
+                }
+
+            }, 700);
+
+        } catch (error) {
+
+            toast(error.message);
+        }
+    }
+
+    /* =========================================================
+       BATTLE
+    ========================================================= */
+
+    window.renderBattle = function() {
+
+        app.innerHTML = `
+            <main class="page battle">
+
+                <button
+                    class="back"
+                    onclick="renderHome()"
+                >
+                    ← Orqaga
+                </button>
+
+                <div class="battle-hero">
+                    ⚔️
+                </div>
+
+                <div class="eyebrow">
+                    IQ BATTLE
+                </div>
+
+                <h1>
+                    Do‘st bilan battle
+                </h1>
+
+                <p>
+                    Ikkalangiz ham bir xil 18 ta IQ
+                    testini mustaqil yechasiz.
+                    Javoblaringiz bir-biringizga
+                    ko‘rinmaydi.
+                </p>
+
+                <div class="battle-price">
+                    ⚡ Har bir ishtirokchi — 7 500 so‘m
+                </div>
+
+                <button
+                    class="primary"
+                    onclick="createBattle()"
+                >
+                    🔑 Battle kodini yaratish
+                </button>
+
+                <button
+                    class="secondary"
+                    onclick="joinBattle()"
+                >
+                    Kod bilan battle'ga kirish
+                </button>
+
+            </main>
+        `;
+    };
+
+    window.createBattle = async function() {
+
+        try {
+
+            const result =
+                await api("/api/battle/create", {
+                    method: "POST",
+                    body: JSON.stringify({})
+                });
+
+            state.battleId =
+                result.battle_id;
+
+            localStorage.setItem(
+                "battle_id",
+                String(state.battleId)
+            );
+
+            if (result.payment_required) {
+
+                toast(
+                    "Battle to‘lovi uchun Telegram chatga qayting."
+                );
+
+                setTimeout(() => {
+
+                    const username =
+                        state.botUsername ||
+                        "iqtest_ubot";
+
+                    const url =
+                        `https://t.me/${username}`;
+
+                    if (tg?.openTelegramLink) {
+                        tg.openTelegramLink(url);
+                    } else {
+                        window.location.href = url;
+                    }
+
+                }, 700);
+
+                return;
+            }
+
+            showBattleCode(result);
+
+        } catch (error) {
+
+            toast(error.message);
+        }
+    };
+
+    function showBattleCode(result) {
+
+        app.innerHTML = `
+            <main class="page battle">
+
+                <div class="battle-hero">
+                    ⚔️
+                </div>
+
+                <div class="eyebrow">
+                    BATTLE KODI
+                </div>
+
+                <h1>
+                    Do‘stingizni chaqiring
+                </h1>
+
+                <div class="battle-code">
+                    ${esc(result.code || "----")}
+                </div>
+
+                <div class="battle-status">
+                    Ushbu kodni do‘stingizga yuboring.
+                    U kod bilan qo‘shilgach,
+                    ikkalangiz ham mustaqil IQ testini
+                    ishlaysiz.
+                </div>
+
+                <button
+                    class="primary"
+                    onclick="shareBattleCode('${esc(result.code || "")}')"
+                >
+                    📤 Kodni ulashish
+                </button>
+
+                <button
+                    class="secondary"
+                    onclick="renderHome()"
+                >
+                    Bosh sahifa
+                </button>
+
+            </main>
+        `;
+    }
+
+    window.shareBattleCode = function(code) {
+
+        const text =
+            `⚔️ IQ TEST BOT Battle\n\n` +
+            `Battle kodi: ${code}\n\n` +
+            `Kod bilan qo‘shil:`;
+
+        if (tg?.openTelegramLink) {
+
+            const url =
+                "https://t.me/share/url?" +
+                "url=" +
+                encodeURIComponent(
+                    `https://t.me/${state.botUsername || "iqtest_ubot"}`
+                ) +
+                "&text=" +
+                encodeURIComponent(text);
+
+            tg.openTelegramLink(url);
+
+        } else if (navigator.share) {
+
+            navigator.share({
+                text
+            }).catch(() => {});
+
+        } else {
+
+            toast(
+                `Battle kodi: ${code}`
+            );
+        }
+    };
+
+    window.joinBattle = async function() {
+
+        const code =
+            prompt(
+                "Do‘stingiz yuborgan 4 xonali kodni kiriting:"
+            );
+
+        if (!code) {
+            return;
+        }
+
+        const clean =
+            String(code)
+                .replace(/\D/g, "")
+                .slice(0, 4);
+
+        if (clean.length !== 4) {
+            toast("Battle kodi 4 xonali bo‘lishi kerak.");
+            return;
+        }
+
+        try {
+
+            const result =
+                await api("/api/battle/join", {
+                    method: "POST",
+
+                    body: JSON.stringify({
+                        code: clean
+                    })
+                });
+
+            state.battleId =
+                result.battle_id;
+
+            localStorage.setItem(
+                "battle_id",
+                String(state.battleId)
+            );
+
+            if (result.payment_required) {
+
+                toast(
+                    "Battle to‘lovi uchun Telegram chatga qayting."
+                );
+
+                setTimeout(() => {
+
+                    const username =
+                        state.botUsername ||
+                        "iqtest_ubot";
+
+                    const url =
+                        `https://t.me/${username}`;
+
+                    if (tg?.openTelegramLink) {
+                        tg.openTelegramLink(url);
+                    } else {
+                        window.location.href = url;
+                    }
+
+                }, 700);
+
+                return;
+            }
+
+            renderIntro("iq");
+
+        } catch (error) {
+
+            toast(error.message);
+        }
+    };
+
+    /* =========================================================
+       LANGUAGE
+    ========================================================= */
+
+    window.openLanguage = function() {
+
+        toast(
+            "Tilni Telegram botidagi 🌐 Til bo‘limidan o‘zgartiring."
+        );
+    };
+
+    /* =========================================================
+       COUNTER
+    ========================================================= */
+
+    async function loadCounter() {
+
+        const counter =
+            document.getElementById("liveCount");
+
+        if (!counter) {
+            return;
+        }
+
+        try {
+
+            const result =
+                await api("/api/counter");
+
+            const active =
+                Number(result.active ?? 0);
+
+            counter.textContent =
+                active.toLocaleString("uz-UZ");
+
+        } catch (error) {
+
+            console.warn(
+                "Counter error:",
+                error
+            );
+
+            counter.textContent = "0";
+        }
+    }
+
+    setInterval(
+        loadCounter,
+        30000
     );
 
-  } else {
+    /* =========================================================
+       INITIAL LOAD
+    ========================================================= */
 
-    boot();
+    async function loadApp() {
 
-  }
+        try {
+
+            if (!state.initData) {
+
+                app.innerHTML = `
+                    <main class="page error">
+
+                        <div class="result-icon">
+                            📱
+                        </div>
+
+                        <h2>
+                            Telegram ichidan oching
+                        </h2>
+
+                        <p>
+                            Bu Mini App faqat
+                            Telegram ichida ishlaydi.
+                        </p>
+
+                    </main>
+                `;
+
+                return;
+            }
+
+            const [
+                me,
+                config
+            ] = await Promise.all([
+                api("/api/me"),
+                api("/api/config")
+            ]);
+
+            state.user =
+                me.user || null;
+
+            state.products =
+                config.products || [];
+
+            state.botUsername =
+                config.bot_username || "";
+
+            loadCompleted();
+
+            try {
+
+                state.battleId =
+                    Number(
+                        localStorage.getItem("battle_id") || 0
+                    ) || null;
+
+            } catch (_) {}
+
+            renderHome();
+
+        } catch (error) {
+
+            console.error(error);
+
+            app.innerHTML = `
+                <main class="page error">
+
+                    <div class="result-icon">
+                        ⚠️
+                    </div>
+
+                    <h2>
+                        Ulanishda xatolik
+                    </h2>
+
+                    <p>
+                        ${esc(error.message)}
+                    </p>
+
+                    <button
+                        class="primary"
+                        onclick="location.reload()"
+                    >
+                        Qayta urinish
+                    </button>
+
+                </main>
+            `;
+        }
+    }
+
+    window.renderHome = renderHome;
+
+    loadApp();
 
 })();
