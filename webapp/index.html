@@ -2,115 +2,1008 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     >
 
-    <meta
-        name="theme-color"
-        content="#080912"
-    >
-
-    <meta
-        name="color-scheme"
-        content="dark"
-    >
-
-    <meta
-        name="apple-mobile-web-app-capable"
-        content="yes"
-    >
-
-    <meta
-        name="apple-mobile-web-app-status-bar-style"
-        content="black-translucent"
-    >
-
-    <meta
-        name="format-detection"
-        content="telephone=no"
-    >
+    <meta name="theme-color" content="#070914">
+    <meta name="color-scheme" content="dark">
 
     <title>IQ TEST BOT</title>
 
-    <!--
-        Telegram Mini App SDK.
-        Must load before app.js.
-    -->
-    <script
-        src="https://telegram.org/js/telegram-web-app.js"
-    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet"
+    >
 
-    <!--
-        API base can be changed from the HTML without
-        touching app.js.
-
-        IMPORTANT:
-        Leave empty when frontend and backend are served
-        from the same domain.
-    -->
-    <script>
-        window.IQ_TEST_BOT_API_BASE = "";
-    </script>
-
-    <link rel="stylesheet" href="/static/style.css">
-<script src="/static/app.js"></script>
+    <link rel="stylesheet" href="/app/style.css">
 </head>
 
 <body>
 
-    <!--
-        JavaScript creates the complete application UI
-        inside this element.
-    -->
-    <main id="app">
-        <section class="initial-loading-screen">
-            <div class="initial-loading-brain">
-                🧠
-            </div>
+<div id="app" class="app">
 
-            <div class="initial-loading-brand">
-                IQ TEST BOT
-            </div>
+    <!-- Background -->
+    <div class="background" aria-hidden="true">
+        <div class="bg-orb bg-orb-1"></div>
+        <div class="bg-orb bg-orb-2"></div>
+        <div class="bg-orb bg-orb-3"></div>
+        <div class="bg-grid"></div>
+    </div>
 
-            <div class="initial-loading-spinner"></div>
+    <!-- Loading -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-logo">
+            <div class="brain-loader">🧠</div>
+        </div>
 
-            <div class="initial-loading-text">
-                Yuklanmoqda...
-            </div>
+        <div class="loading-title">IQ TEST BOT</div>
+
+        <div class="loading-spinner"></div>
+
+        <div class="loading-text">Yuklanmoqda...</div>
+    </div>
+
+    <!-- Main application -->
+    <main id="main-content" class="main-content hidden">
+
+        <!-- HOME -->
+        <section id="screen-home" class="screen active">
+
+            <header class="topbar">
+                <div>
+                    <div class="brand-small">IQ TEST BOT</div>
+                    <div id="user-greeting" class="user-greeting">
+                        Salom 👋
+                    </div>
+                </div>
+
+                <button
+                    id="language-button"
+                    class="icon-button"
+                    type="button"
+                    aria-label="Til"
+                >
+                    🌐
+                </button>
+            </header>
+
+            <!-- Hero -->
+            <section class="hero-card glass-card">
+
+                <div class="hero-glow"></div>
+
+                <div class="brain-orbit">
+                    <div class="orbit orbit-1"></div>
+                    <div class="orbit orbit-2"></div>
+                    <div class="orbit orbit-3"></div>
+
+                    <div class="brain">
+                        🧠
+                    </div>
+
+                    <span class="orbit-dot dot-1"></span>
+                    <span class="orbit-dot dot-2"></span>
+                    <span class="orbit-dot dot-3"></span>
+                </div>
+
+                <div class="hero-content">
+                    <div class="eyebrow">
+                        <span class="eyebrow-dot"></span>
+                        18 TA MANTIQIY PUZZLE
+                    </div>
+
+                    <h1>
+                        IQ darajangizni<br>
+                        <span>sinab ko‘ring.</span>
+                    </h1>
+
+                    <p>
+                        18 ta mantiqiy puzzle orqali
+                        fikrlash qobiliyatingizni sinang.
+                    </p>
+
+                    <button
+                        id="start-iq-button"
+                        class="primary-button hero-button"
+                        type="button"
+                    >
+                        <span>🧠</span>
+                        IQ TESTNI BOSHLASH
+                        <span class="button-arrow">→</span>
+                    </button>
+                </div>
+
+            </section>
+
+            <!-- Live stats -->
+            <section class="live-stats glass-card">
+
+                <div class="live-stat">
+                    <div class="live-stat-icon">👥</div>
+
+                    <div class="live-stat-info">
+                        <span class="live-stat-label">JAMI FOYDALANUVCHI</span>
+                        <strong id="total-users">0</strong>
+                    </div>
+                </div>
+
+                <div class="live-divider"></div>
+
+                <div class="live-stat">
+                    <div class="live-dot"></div>
+
+                    <div class="live-stat-info">
+                        <span class="live-stat-label">HOZIR ONLINE</span>
+                        <strong id="online-users">0</strong>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Test cards -->
+            <section class="section-block">
+
+                <div class="section-heading">
+                    <div>
+                        <span class="section-kicker">TESTLAR</span>
+                        <h2>O‘zingizni sinang</h2>
+                    </div>
+                </div>
+
+                <div class="test-list">
+
+                    <!-- IQ -->
+                    <button
+                        id="iq-card"
+                        class="test-card test-card-iq glass-card"
+                        type="button"
+                    >
+                        <div class="test-icon iq-icon">🧠</div>
+
+                        <div class="test-info">
+                            <div class="test-topline">
+                                <span class="test-name">IQ</span>
+                                <span class="status-badge active-badge">
+                                    OCHIQ
+                                </span>
+                            </div>
+
+                            <p>
+                                Mantiq, pattern va fazoviy fikrlash.
+                            </p>
+
+                            <div class="test-meta">
+                                <span>18 savol</span>
+                                <span>∞ vaqt</span>
+                            </div>
+                        </div>
+
+                        <span class="test-arrow">→</span>
+                    </button>
+
+                    <!-- EQ -->
+                    <button
+                        id="eq-card"
+                        class="test-card glass-card locked-card"
+                        type="button"
+                        data-test="eq"
+                    >
+                        <div class="test-icon eq-icon">🎭</div>
+
+                        <div class="test-info">
+                            <div class="test-topline">
+                                <span class="test-name">EQ</span>
+                                <span class="status-badge locked-badge">
+                                    🔒 IQ KERAK
+                                </span>
+                            </div>
+
+                            <p>
+                                Hissiyot, empatiya va o‘zini anglash.
+                            </p>
+
+                            <div class="test-meta">
+                                <span>20 savol</span>
+                                <span>Situatsion</span>
+                            </div>
+                        </div>
+
+                        <span class="test-arrow">🔒</span>
+                    </button>
+
+                    <!-- PQ -->
+                    <button
+                        id="pq-card"
+                        class="test-card glass-card locked-card"
+                        type="button"
+                        data-test="pq"
+                    >
+                        <div class="test-icon pq-icon">⏳</div>
+
+                        <div class="test-info">
+                            <div class="test-topline">
+                                <span class="test-name">PROKRASTINATSIYA</span>
+                                <span class="status-badge locked-badge">
+                                    🔒 EQ KERAK
+                                </span>
+                            </div>
+
+                            <p>
+                                Kechiktirish, diqqat va o‘zini boshqarish.
+                            </p>
+
+                            <div class="test-meta">
+                                <span>PQ test</span>
+                                <span>Behavioral</span>
+                            </div>
+                        </div>
+
+                        <span class="test-arrow">🔒</span>
+                    </button>
+
+                    <!-- Personal profile -->
+                    <button
+                        id="profile-card"
+                        class="test-card glass-card locked-card profile-test-card"
+                        type="button"
+                        data-test="profile"
+                    >
+                        <div class="test-icon profile-icon">⭐</div>
+
+                        <div class="test-info">
+                            <div class="test-topline">
+                                <span class="test-name">SIZ QANDAY INSONSIZ?</span>
+                                <span class="status-badge locked-badge">
+                                    🔒
+                                </span>
+                            </div>
+
+                            <p>
+                                IQ, EQ va PQ asosida shaxsiy profilingiz.
+                            </p>
+
+                            <div class="test-meta">
+                                <span>Shaxsiy tahlil</span>
+                                <span>Premium</span>
+                            </div>
+                        </div>
+
+                        <span class="test-arrow">🔒</span>
+                    </button>
+
+                </div>
+            </section>
+
+            <!-- Battle -->
+            <section class="section-block">
+
+                <button
+                    id="battle-card"
+                    class="battle-card glass-card"
+                    type="button"
+                >
+
+                    <div class="battle-glow"></div>
+
+                    <div class="battle-icon">
+                        ⚔️
+                    </div>
+
+                    <div class="battle-content">
+                        <span class="battle-kicker">
+                            DO‘STINGIZNI CHAQIRING
+                        </span>
+
+                        <h2>DO‘ST BILAN BATTLE</h2>
+
+                        <p>
+                            IQ natijangizni do‘stingiz bilan
+                            solishtiring.
+                        </p>
+
+                        <div class="battle-price">
+                            <span>7 500 so‘m</span>
+                            <small>/ ishtirokchi</small>
+                        </div>
+                    </div>
+
+                    <span class="battle-arrow">→</span>
+
+                </button>
+
+            </section>
+
+            <!-- Bottom information -->
+            <section class="info-strip">
+
+                <div class="info-item">
+                    <span>🔐</span>
+                    <div>
+                        <strong>Xavfsiz</strong>
+                        <small>Natijalar saqlanadi</small>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <span>⚡</span>
+                    <div>
+                        <strong>Tezkor</strong>
+                        <small>Testni offline ishlash</small>
+                    </div>
+                </div>
+
+            </section>
+
+            <footer class="app-footer">
+                <span>IQ TEST BOT</span>
+                <span>•</span>
+                <span>O‘zingizni biling.</span>
+            </footer>
+
         </section>
+
+
+        <!-- IQ INTRO -->
+        <section id="screen-iq-intro" class="screen">
+
+            <header class="screen-header">
+                <button
+                    id="iq-intro-back"
+                    class="back-button"
+                    type="button"
+                    aria-label="Orqaga"
+                >
+                    ←
+                </button>
+
+                <span>IQ TEST</span>
+
+                <div class="header-spacer"></div>
+            </header>
+
+            <div class="intro-page">
+
+                <div class="intro-icon-wrap">
+                    <div class="intro-icon-glow"></div>
+                    <div class="intro-icon">🧠</div>
+                </div>
+
+                <div class="intro-label">
+                    AQL DARAJANGIZNI ANIQLANG
+                </div>
+
+                <h1>
+                    Qanday<br>
+                    <span>fikrlaysiz?</span>
+                </h1>
+
+                <p class="intro-description">
+                    18 ta vizual mantiqiy puzzle sizning
+                    pattern recognition, mantiqiy va fazoviy
+                    fikrlashingizni sinaydi.
+                </p>
+
+                <div class="intro-features">
+
+                    <div class="intro-feature">
+                        <span>🧩</span>
+                        <div>
+                            <strong>18 ta puzzle</strong>
+                            <small>6 oson · 6 o‘rta · 6 qiyin</small>
+                        </div>
+                    </div>
+
+                    <div class="intro-feature">
+                        <span>∞</span>
+                        <div>
+                            <strong>Vaqt cheklanmagan</strong>
+                            <small>Shoshilmasdan o‘ylang</small>
+                        </div>
+                    </div>
+
+                    <div class="intro-feature">
+                        <span>📊</span>
+                        <div>
+                            <strong>IQ-style Score</strong>
+                            <small>Natijangiz batafsil tahlil qilinadi</small>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Sample -->
+                <div class="sample-card glass-card">
+
+                    <div class="sample-header">
+                        <span>DEMO PUZZLE</span>
+                        <small>SINOV SAVOLI</small>
+                    </div>
+
+                    <div class="sample-grid">
+
+                        <div class="sample-cell shape-circle"></div>
+                        <div class="sample-cell shape-square"></div>
+                        <div class="sample-cell shape-triangle"></div>
+
+                        <div class="sample-cell shape-square"></div>
+                        <div class="sample-cell shape-triangle"></div>
+                        <div class="sample-cell shape-circle"></div>
+
+                        <div class="sample-cell shape-triangle"></div>
+                        <div class="sample-cell shape-circle"></div>
+                        <div class="sample-cell sample-missing">?</div>
+
+                    </div>
+
+                    <div class="sample-note">
+                        Bu savol test natijasiga qo‘shilmaydi.
+                    </div>
+
+                </div>
+
+                <button
+                    id="begin-iq-test"
+                    class="primary-button full-button"
+                    type="button"
+                >
+                    TESTNI BOSHLASH
+                    <span>→</span>
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- IQ TEST -->
+        <section id="screen-iq-test" class="screen test-screen">
+
+            <header class="test-header">
+
+                <button
+                    id="test-exit"
+                    class="back-button"
+                    type="button"
+                    aria-label="Chiqish"
+                >
+                    ×
+                </button>
+
+                <div class="question-progress-wrap">
+                    <div class="question-progress-text">
+                        <span id="question-current">1</span>
+                        <span>/</span>
+                        <span id="question-total">18</span>
+                    </div>
+
+                    <div class="progress-track">
+                        <div
+                            id="question-progress"
+                            class="progress-fill"
+                            style="width: 5.56%;"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="test-timer" id="test-timer">
+                    00:00
+                </div>
+
+            </header>
+
+            <div class="test-body">
+
+                <div class="difficulty-label" id="difficulty-label">
+                    OSON
+                </div>
+
+                <h1
+                    id="question-title"
+                    class="question-title"
+                >
+                    Qaysi shakl yetishmayapti?
+                </h1>
+
+                <p
+                    id="question-description"
+                    class="question-description"
+                >
+                    Matritsadagi mantiqiy ketma-ketlikni toping.
+                </p>
+
+                <div
+                    id="question-visual"
+                    class="question-visual glass-card"
+                >
+                    <!-- app.js renders puzzle here -->
+                </div>
+
+                <div
+                    id="answer-options"
+                    class="answer-options"
+                >
+                    <!-- app.js renders answers here -->
+                </div>
+
+                <button
+                    id="next-question"
+                    class="primary-button next-button"
+                    type="button"
+                    disabled
+                >
+                    DAVOM ETISH
+                    <span>→</span>
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- CELEBRATION -->
+        <section id="screen-celebration" class="screen center-screen">
+
+            <div class="celebration-content">
+
+                <div class="celebration-emoji">
+                    🎉
+                </div>
+
+                <div class="celebration-glow"></div>
+
+                <div class="celebration-kicker">
+                    AJOYIB BOSHLADINGIZ! 🚀
+                </div>
+
+                <h1>
+                    Birinchi 5 savol
+                    <span>ortda.</span>
+                </h1>
+
+                <p>
+                    Shu zaylda davom eting!
+                </p>
+
+                <button
+                    id="continue-after-five"
+                    class="primary-button"
+                    type="button"
+                >
+                    DAVOM ETISH
+                    <span>→</span>
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- ANALYZING -->
+        <section id="screen-analyzing" class="screen center-screen">
+
+            <div class="analyzing-content">
+
+                <div class="analysis-brain">
+                    <div class="analysis-ring ring-1"></div>
+                    <div class="analysis-ring ring-2"></div>
+                    <div class="analysis-ring ring-3"></div>
+                    <div class="analysis-brain-icon">🧠</div>
+                </div>
+
+                <div class="analysis-kicker">
+                    TEST YAKUNLANDI
+                </div>
+
+                <h1>
+                    Javoblaringiz<br>
+                    <span>tahlil qilinmoqda...</span>
+                </h1>
+
+                <div class="analysis-dots">
+                    <span>●</span>
+                    <span>●</span>
+                    <span>●</span>
+                    <span>●</span>
+                    <span>●</span>
+                </div>
+
+                <p>
+                    Natijangiz tayyorlanmoqda
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- RESULT -->
+        <section id="screen-result" class="screen">
+
+            <header class="screen-header result-header">
+
+                <button
+                    id="result-home"
+                    class="back-button"
+                    type="button"
+                >
+                    ←
+                </button>
+
+                <span>IQ NATIJA</span>
+
+                <div class="header-spacer"></div>
+
+            </header>
+
+            <div class="result-page">
+
+                <div class="result-kicker">
+                    ✨ TEST YAKUNLANDI
+                </div>
+
+                <div class="score-card glass-card">
+
+                    <div class="score-label">
+                        IQ-STYLE SCORE
+                    </div>
+
+                    <div
+                        id="result-score"
+                        class="result-score"
+                    >
+                        124
+                    </div>
+
+                    <div
+                        id="result-level"
+                        class="result-level"
+                    >
+                        YUQORI DARAJA
+                    </div>
+
+                    <div class="score-line"></div>
+
+                    <div class="result-summary">
+
+                        <div>
+                            <strong id="result-correct">15 / 18</strong>
+                            <span>To‘g‘ri javob</span>
+                        </div>
+
+                        <div>
+                            <strong id="result-time">04:32</strong>
+                            <span>Test vaqti</span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="result-section">
+
+                    <div class="result-section-title">
+                        📊 YO‘NALISHLAR
+                    </div>
+
+                    <div class="metric-list">
+
+                        <div class="metric">
+                            <div class="metric-top">
+                                <span>Mantiq</span>
+                                <strong id="metric-logic-value">84%</strong>
+                            </div>
+
+                            <div class="metric-track">
+                                <div
+                                    id="metric-logic"
+                                    class="metric-fill"
+                                    style="width: 84%;"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-top">
+                                <span>Pattern</span>
+                                <strong id="metric-pattern-value">91%</strong>
+                            </div>
+
+                            <div class="metric-track">
+                                <div
+                                    id="metric-pattern"
+                                    class="metric-fill"
+                                    style="width: 91%;"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-top">
+                                <span>Raqamlar</span>
+                                <strong id="metric-number-value">76%</strong>
+                            </div>
+
+                            <div class="metric-track">
+                                <div
+                                    id="metric-number"
+                                    class="metric-fill"
+                                    style="width: 76%;"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-top">
+                                <span>Fazoviy fikrlash</span>
+                                <strong id="metric-spatial-value">68%</strong>
+                            </div>
+
+                            <div class="metric-track">
+                                <div
+                                    id="metric-spatial"
+                                    class="metric-fill"
+                                    style="width: 68%;"
+                                ></div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="strength-card glass-card">
+
+                    <div class="strength-icon">
+                        💡
+                    </div>
+
+                    <div>
+                        <span>KUCHLI TOMONINGIZ</span>
+                        <strong id="result-strength">
+                            Pattern recognition
+                        </strong>
+                    </div>
+
+                </div>
+
+                <div class="result-actions">
+
+                    <button
+                        id="certificate-button"
+                        class="primary-button full-button"
+                        type="button"
+                    >
+                        📜 SERTIFIKATNI OLISH
+                    </button>
+
+                    <button
+                        id="share-result-button"
+                        class="secondary-button full-button"
+                        type="button"
+                    >
+                        📤 NATIJANI ULASHISH
+                    </button>
+
+                    <button
+                        id="retry-iq-button"
+                        class="ghost-button full-button"
+                        type="button"
+                    >
+                        🔄 IQ TESTNI QAYTA ISHLASH
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- LANGUAGE -->
+        <section id="screen-language" class="screen">
+
+            <header class="screen-header">
+
+                <button
+                    id="language-back"
+                    class="back-button"
+                    type="button"
+                >
+                    ←
+                </button>
+
+                <span>TIL</span>
+
+                <div class="header-spacer"></div>
+
+            </header>
+
+            <div class="simple-page">
+
+                <div class="simple-icon">🌐</div>
+
+                <h1>Tilni tanlang</h1>
+
+                <p>
+                    Ilova tilini tanlang.
+                </p>
+
+                <div class="language-list">
+
+                    <button
+                        class="language-option"
+                        data-language="uz"
+                        type="button"
+                    >
+                        <span>🇺🇿</span>
+                        <strong>O‘zbekcha</strong>
+                        <span class="language-check">✓</span>
+                    </button>
+
+                    <button
+                        class="language-option"
+                        data-language="ru"
+                        type="button"
+                    >
+                        <span>🇷🇺</span>
+                        <strong>Русский</strong>
+                        <span class="language-check">✓</span>
+                    </button>
+
+                    <button
+                        class="language-option"
+                        data-language="en"
+                        type="button"
+                    >
+                        <span>🇬🇧</span>
+                        <strong>English</strong>
+                        <span class="language-check">✓</span>
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- GENERIC LOCKED -->
+        <section id="screen-locked" class="screen center-screen">
+
+            <div class="locked-content">
+
+                <div class="locked-big-icon">🔒</div>
+
+                <div class="locked-kicker">
+                    HALI OCHILMAGAN
+                </div>
+
+                <h1 id="locked-title">
+                    Avval IQ testini ishlang
+                </h1>
+
+                <p id="locked-description">
+                    Ushbu bo‘limni ochish uchun
+                    oldingi testni yakunlang.
+                </p>
+
+                <button
+                    id="locked-action"
+                    class="primary-button"
+                    type="button"
+                >
+                    IQ TESTNI BOSHLASH
+                    <span>→</span>
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- ERROR -->
+        <section id="screen-error" class="screen center-screen">
+
+            <div class="error-content">
+
+                <div class="error-icon">⚠️</div>
+
+                <h1>
+                    Biror narsa noto‘g‘ri ketdi
+                </h1>
+
+                <p id="error-message">
+                    Iltimos, qaytadan urinib ko‘ring.
+                </p>
+
+                <button
+                    id="error-retry"
+                    class="primary-button"
+                    type="button"
+                >
+                    QAYTA URINISH
+                    <span>↻</span>
+                </button>
+
+            </div>
+
+        </section>
+
     </main>
 
-    <!--
-        Main application.
-        Payment logic is also inside app.js.
-        Separate payment.js is NOT required.
-    -->
-    <script
-        src="/webapp/app.js"
-        defer
-    ></script>
+</div>
 
-    <noscript>
-        <div
-            style="
-                min-height:100vh;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                padding:24px;
-                background:#080912;
-                color:#fff;
-                font-family:Arial,sans-serif;
-                text-align:center;
-            "
+<!-- Toast -->
+<div
+    id="toast"
+    class="toast"
+    role="status"
+    aria-live="polite"
+>
+    <span id="toast-icon">✓</span>
+    <span id="toast-message">Tayyor</span>
+</div>
+
+<!-- Modal -->
+<div
+    id="modal-backdrop"
+    class="modal-backdrop hidden"
+    aria-hidden="true"
+>
+    <div
+        id="modal"
+        class="modal glass-card"
+        role="dialog"
+        aria-modal="true"
+    >
+        <button
+            id="modal-close"
+            class="modal-close"
+            type="button"
+            aria-label="Yopish"
         >
-            IQ TEST BOT ishlashi uchun JavaScript yoqilgan
-            bo‘lishi kerak.
+            ×
+        </button>
+
+        <div id="modal-icon" class="modal-icon">
+            ⚠️
         </div>
-    </noscript>
+
+        <h2 id="modal-title">Diqqat</h2>
+
+        <p id="modal-message">
+            Davom etishni xohlaysizmi?
+        </p>
+
+        <div id="modal-actions" class="modal-actions">
+            <button
+                id="modal-cancel"
+                class="secondary-button"
+                type="button"
+            >
+                BEKOR QILISH
+            </button>
+
+            <button
+                id="modal-confirm"
+                class="primary-button"
+                type="button"
+            >
+                TASDIQLASH
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Telegram Mini App -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<!-- Main application -->
+<script src="/app/app.js" defer></script>
 
 </body>
 </html>
