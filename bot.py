@@ -112,14 +112,66 @@ async def init_db():
     async with p.acquire() as c:
         await c.execute("""
         CREATE TABLE IF NOT EXISTS users(
-            id BIGINT PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            language TEXT DEFAULT 'uz',
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            last_seen TIMESTAMPTZ DEFAULT NOW()
+            user_id BIGINT PRIMARY KEY,
+            username TEXT NOT NULL DEFAULT '',
+            first_name TEXT NOT NULL DEFAULT '',
+            last_name TEXT NOT NULL DEFAULT '',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            best_score INTEGER,
+            best_raw INTEGER,
+            best_time INTEGER,
+            referrals INTEGER NOT NULL DEFAULT 0,
+            cert_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+            referred_by BIGINT,
+            referral_counted BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            language TEXT NOT NULL DEFAULT 'uz',
+            last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+
+        -- The production database predates this version of the bot. Keep all
+        -- existing users and add only the columns/defaults this version needs.
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS attempts INTEGER;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS best_score INTEGER;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS best_raw INTEGER;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS best_time INTEGER;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS referrals INTEGER;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_claimed BOOLEAN;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_counted BOOLEAN;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;
+
+        UPDATE users SET attempts=COALESCE(attempts,0);
+        UPDATE users SET referrals=COALESCE(referrals,0);
+        UPDATE users SET cert_claimed=COALESCE(cert_claimed,FALSE);
+        UPDATE users SET referral_counted=COALESCE(referral_counted,FALSE);
+        UPDATE users SET created_at=COALESCE(created_at,NOW());
+        UPDATE users SET updated_at=COALESCE(updated_at,created_at,NOW());
+        UPDATE users SET last_seen=COALESCE(last_seen,updated_at,created_at,NOW());
+
+        ALTER TABLE users ALTER COLUMN attempts SET DEFAULT 0;
+        ALTER TABLE users ALTER COLUMN attempts SET NOT NULL;
+        ALTER TABLE users ALTER COLUMN referrals SET DEFAULT 0;
+        ALTER TABLE users ALTER COLUMN referrals SET NOT NULL;
+        ALTER TABLE users ALTER COLUMN cert_claimed SET DEFAULT FALSE;
+        ALTER TABLE users ALTER COLUMN cert_claimed SET NOT NULL;
+        ALTER TABLE users ALTER COLUMN referral_counted SET DEFAULT FALSE;
+        ALTER TABLE users ALTER COLUMN referral_counted SET NOT NULL;
+        ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW();
+        ALTER TABLE users ALTER COLUMN updated_at SET DEFAULT NOW();
+        ALTER TABLE users ALTER COLUMN last_seen SET DEFAULT NOW();
+
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid='users'::regclass AND contype='p'
+            ) THEN
+                ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (user_id);
+            END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS settings(
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -133,7 +185,7 @@ async def init_db():
         );
         CREATE TABLE IF NOT EXISTS test_results(
             id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT REFERENCES users(id),
+            user_id BIGINT REFERENCES users(user_id),
             test_type TEXT NOT NULL,
             score INTEGER NOT NULL,
             raw_score INTEGER,
@@ -143,7 +195,7 @@ async def init_db():
         );
         CREATE TABLE IF NOT EXISTS payments(
             id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT REFERENCES users(id),
+            user_id BIGINT REFERENCES users(user_id),
             product_code TEXT NOT NULL,
             amount INTEGER NOT NULL,
             status TEXT DEFAULT 'waiting_receipt',
@@ -157,7 +209,7 @@ async def init_db():
         ALTER TABLE payments ADD COLUMN IF NOT EXISTS reviewed_by BIGINT;
         CREATE TABLE IF NOT EXISTS certificates(
             code TEXT PRIMARY KEY,
-            user_id BIGINT REFERENCES users(id),
+            user_id BIGINT REFERENCES users(user_id),
             cert_type TEXT NOT NULL,
             data JSONB NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW()
@@ -165,20 +217,20 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS battles(
             id BIGSERIAL PRIMARY KEY,
             code TEXT UNIQUE NOT NULL,
-            player1 BIGINT REFERENCES users(id),
-            player2 BIGINT REFERENCES users(id),
+            player1 BIGINT REFERENCES users(user_id),
+            player2 BIGINT REFERENCES users(user_id),
             status TEXT DEFAULT 'waiting',
             result JSONB,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS battle_payments(
             battle_id BIGINT REFERENCES battles(id) ON DELETE CASCADE,
-            user_id BIGINT REFERENCES users(id),
+            user_id BIGINT REFERENCES users(user_id),
             payment_id BIGINT REFERENCES payments(id),
             PRIMARY KEY(battle_id,user_id)
         );
         CREATE TABLE IF NOT EXISTS progress(
-            user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+            user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
             test_type TEXT NOT NULL,
             answers JSONB DEFAULT '[]',
             current_index INTEGER DEFAULT 0,
@@ -205,14 +257,24 @@ async def init_db():
 async def upsert_user(tg):
     p = await db()
     await p.execute("""
-        INSERT INTO users(id,username,first_name,last_name,last_seen)
-        VALUES($1,$2,$3,$4,NOW())
-        ON CONFLICT(id) DO UPDATE SET
-          username=EXCLUDED.username,
-          first_name=EXCLUDED.first_name,
-          last_name=EXCLUDED.last_name,
-          last_seen=NOW()
-    """, tg.id, tg.username, tg.first_name, tg.last_name)
+        INSERT INTO users(
+            user_id, username, first_name, last_name,
+            attempts, referrals, cert_claimed, referral_counted,
+            created_at, updated_at, last_seen, language
+        )
+        VALUES($1,$2,$3,$4,0,0,FALSE,FALSE,NOW(),NOW(),NOW(),'uz')
+        ON CONFLICT(user_id) DO UPDATE SET
+            username=EXCLUDED.username,
+            first_name=EXCLUDED.first_name,
+            last_name=EXCLUDED.last_name,
+            updated_at=NOW(),
+            last_seen=NOW()
+    """,
+        tg.id,
+        tg.username or "",
+        tg.first_name or "",
+        tg.last_name or "",
+    )
 
 async def get_setting(key, default=""):
     p = await db()
@@ -249,7 +311,7 @@ def lang_kb():
 async def start(message: Message):
     await upsert_user(message.from_user)
     p = await db()
-    row = await p.fetchrow("SELECT language FROM users WHERE id=$1", message.from_user.id)
+    row = await p.fetchrow("SELECT language FROM users WHERE user_id=$1", message.from_user.id)
     if not row or not row["language"]:
         await message.answer("🌐 Tilni tanlang / Выберите язык / Choose a language:", reply_markup=lang_kb())
         return
@@ -269,7 +331,7 @@ async def start(message: Message):
 async def language(callback: CallbackQuery):
     lang = callback.data.split(":")[1]
     p = await db()
-    await p.execute("UPDATE users SET language=$1 WHERE id=$2", lang, callback.from_user.id)
+    await p.execute("UPDATE users SET language=$1 WHERE user_id=$2", lang, callback.from_user.id)
     await callback.message.edit_text("✅ Til saqlandi.")
     await callback.message.answer(
         "👋 Xush kelibsiz!\n\n🧠 IQTestPro testlarini boshlashingiz mumkin.",
@@ -315,7 +377,7 @@ async def ranking(message: Message):
     p = await db()
     rows = await p.fetch("""
       SELECT u.first_name,u.username,r.score
-      FROM test_results r JOIN users u ON u.id=r.user_id
+      FROM test_results r JOIN users u ON u.user_id=r.user_id
       WHERE r.test_type='iq'
       AND r.id IN (SELECT MAX(id) FROM test_results WHERE test_type='iq' GROUP BY user_id)
       ORDER BY r.score DESC, r.created_at ASC LIMIT 30
@@ -446,7 +508,7 @@ async def notify_admin_payment(payment_id, user_id, file_id, kind):
     p = await db()
     row = await p.fetchrow("""
       SELECT p.*,u.username,u.first_name,u.last_name
-      FROM payments p JOIN users u ON u.id=p.user_id WHERE p.id=$1
+      FROM payments p JOIN users u ON u.user_id=p.user_id WHERE p.id=$1
     """, payment_id)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ To‘lov tushgan", callback_data=f"payok:{payment_id}")],
@@ -729,7 +791,7 @@ async def broadcast_receive(message: Message, state: FSMContext):
     if data["kind"] == "buyers":
         ids = await p.fetch("SELECT DISTINCT user_id FROM payments WHERE status='approved'")
     else:
-        ids = await p.fetch("SELECT id FROM users")
+        ids = await p.fetch("SELECT user_id FROM users")
     ok = fail = 0
     for r in ids:
         try:
@@ -1114,7 +1176,7 @@ async def api_test_submit(payload: dict, x_telegram_init_data: str = Header(defa
                     if winner == uid:
                         await bot.send_message(uid, f"⚔️ <b>BATTLE YAKUNLANDI!</b>\n\n🧠 Siz: <b>{myscore}</b>\n🧠 Do‘stingiz: <b>{oppscore}</b>\n\n🏆 <b>SIZ G‘OLIB BO‘LDINGIZ!</b>")
                         try:
-                            opponent = await p.fetchrow("SELECT first_name FROM users WHERE id=$1", oppid)
+                            opponent = await p.fetchrow("SELECT first_name FROM users WHERE user_id=$1", oppid)
                             opponent_name = opponent["first_name"] if opponent else "Do‘st"
                             vcode = "BT-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
                             await p.execute(
