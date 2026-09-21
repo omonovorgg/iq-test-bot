@@ -432,7 +432,7 @@ def validate_init_data(init_data: str, bot_token: str):
         for pair in init_data.split("&"):
             if "=" in pair:
                 k, v = pair.split("=", 1)
-                parsed[k] = unquote(v)
+                parsed[k] = unquote_plus(v)
 
         hash_val = parsed.pop("hash", None)
         if not hash_val:
