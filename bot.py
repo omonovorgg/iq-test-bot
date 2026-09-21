@@ -13,7 +13,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
-from urllib.parse import unquote
+from urllib.parse import unquote_plus
 
 import asyncpg
 from aiogram import Bot, Dispatcher, types, F
