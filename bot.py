@@ -429,25 +429,46 @@ def gen_battle_code():
 def validate_init_data(init_data: str, bot_token: str):
     try:
         if not init_data:
+            logger.warning("INITDATA_EMPTY")
             return None
+
         parsed = {}
         for pair in init_data.split("&"):
             if "=" in pair:
                 k, v = pair.split("=", 1)
                 parsed[k] = unquote(v)
+
         hash_val = parsed.pop("hash", None)
         if not hash_val:
+            logger.warning("NO_HASH")
             return None
+
+        # signature ni chiqarib tashlash
         parsed.pop("signature", None)
+
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+
+        # DEBUG
+        logger.warning(f"=== HMAC DEBUG ===")
+        logger.warning(f"token_len={len(bot_token)}")
+        logger.warning(f"token_first15={bot_token[:15]}")
+        logger.warning(f"token_last5={bot_token[-5:]}")
+        logger.warning(f"data_check={data_check[:200]}")
+        logger.warning(f"calc={calc}")
+        logger.warning(f"got ={hash_val}")
+        logger.warning(f"MATCH={calc == hash_val}")
+
         if calc != hash_val:
-            logger.warning(f"HMAC FAIL token={bot_token[:10]}...")
+            logger.warning("HMAC FAIL")
             return None
+
         auth_date = int(parsed.get("auth_date", "0"))
         if datetime.now(timezone.utc).timestamp() - auth_date > 86400 * 2:
+            logger.warning("EXPIRED")
             return None
+
         user = json.loads(parsed.get("user", "{}"))
         return user
     except Exception as e:
