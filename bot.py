@@ -350,19 +350,31 @@ def validate_init_data(init_data: str, bot_token: str):
         if not init_data:
             return None
         parsed = dict(pair.split("=", 1) for pair in init_data.split("&"))
+        
+        # hash ni olish
         hash_val = parsed.pop("hash", None)
         if not hash_val:
             return None
+        
+        # signature ni chiqarib tashlash (yangi Telegram)
+        parsed.pop("signature", None)
+        
+        # data_check_string
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
+        
+        # HMAC
         secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+        
         if calc != hash_val:
-            logger.warning("HMAC mismatch")
+            logger.warning(f"HMAC mismatch. calc={calc[:10]}..., got={hash_val[:10]}...")
             return None
+        
         auth_date = int(parsed.get("auth_date", "0"))
         if datetime.now(timezone.utc).timestamp() - auth_date > 86400 * 2:
             logger.warning("initData expired")
             return None
+        
         user = json.loads(parsed.get("user", "{}"))
         return user
     except Exception as e:
