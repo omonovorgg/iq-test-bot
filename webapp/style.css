@@ -244,12 +244,28 @@ body {
 .difficulty span.medium { background: #f59e0b; }
 .difficulty span.hard { background: #ef4444; }
 
-/* ============ Q5 CELEBRATION ============ */
-.celebrate { text-align: center; padding-top: 60px; }
+/* ============ CELEBRATION ============ */
+.celebrate { text-align: center; padding-top: 50px; }
 .celebrate-emoji { font-size: 72px; animation: bounce 1s infinite; }
 @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
 .celebrate-title { font-size: 24px; font-weight: 900; margin-top: 20px; color: #fff; }
 .celebrate-desc { font-size: 14px; color: #94a3b8; margin-top: 12px; line-height: 1.6; }
+.celebrate-desc b { color: #a78bfa; }
+
+.celebrate-progress {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  margin: 24px 0;
+}
+.cp-item {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #475569;
+}
+.cp-item.done {
+  background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.4);
+  color: #22c55e;
+}
 
 /* ============ LOADING ============ */
 .loading-wrap { text-align: center; padding-top: 100px; }
