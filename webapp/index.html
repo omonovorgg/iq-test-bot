@@ -10,23 +10,18 @@
 </head>
 <body>
 
-<!-- Animated background -->
 <div class="bg-orbs">
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
   <div class="orb orb-3"></div>
 </div>
 
-<!-- APP -->
 <div id="app">
 
   <!-- ==================== HOME ==================== -->
   <section id="screen-home" class="screen active">
     <header class="hero">
-      <div class="hero-brand">
-        <span class="brand-dot"></span>
-        IQ TEST BOT
-      </div>
+      <div class="hero-brand"><span class="brand-dot"></span> IQ TEST BOT</div>
       <div class="brain-wrap">
         <svg class="brain" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
           <defs>
@@ -52,13 +47,9 @@
             <circle cx="100" cy="75" r="3" fill="#a78bfa"/>
             <circle cx="100" cy="100" r="3" fill="#a78bfa"/>
             <circle cx="100" cy="125" r="3" fill="#a78bfa"/>
-            <circle cx="70" cy="100" r="2.5" fill="#60a5fa"/>
-            <circle cx="130" cy="100" r="2.5" fill="#60a5fa"/>
           </g>
         </svg>
-        <div class="brain-sparkles">
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
+        <div class="brain-sparkles"><span></span><span></span><span></span><span></span><span></span></div>
       </div>
       <h1 class="hero-title">IQ TEST BOT</h1>
       <div class="hero-puzzles">✦ ✦ ✦ ✦</div>
@@ -72,14 +63,10 @@
         <div class="live-num" id="live-total">0</div>
         <div class="live-label">Botga qo‘shilganlar</div>
       </div>
-      <div class="live-online">
-        <span class="online-dot"></span>
-        <span id="live-online">0</span> onlayn
-      </div>
+      <div class="live-online"><span class="online-dot"></span><span id="live-online">0</span> onlayn</div>
     </div>
 
     <div class="cards">
-      <!-- IQ -->
       <div class="test-card unlocked" data-test="iq">
         <div class="card-icon">🧠</div>
         <div class="card-body">
@@ -89,7 +76,6 @@
         <div class="card-state">✅</div>
       </div>
 
-      <!-- EQ -->
       <div class="test-card locked" data-test="eq" id="card-eq">
         <div class="card-icon">🎭</div>
         <div class="card-body">
@@ -100,7 +86,6 @@
         <div class="card-state">🔒</div>
       </div>
 
-      <!-- PQ -->
       <div class="test-card locked" data-test="pq" id="card-pq">
         <div class="card-icon">⏳</div>
         <div class="card-body">
@@ -111,7 +96,6 @@
         <div class="card-state">🔒</div>
       </div>
 
-      <!-- Profile -->
       <div class="test-card locked" data-test="profile" id="card-profile">
         <div class="card-icon">⭐</div>
         <div class="card-body">
@@ -123,7 +107,6 @@
       </div>
     </div>
 
-    <!-- Battle -->
     <div class="battle-card" id="battle-card">
       <div class="battle-icon">⚔️</div>
       <div class="battle-body">
@@ -168,9 +151,7 @@
       <div class="sample-badge">🧩 Namunaviy savol</div>
       <div class="sample-note">Bu savol natijaga qo‘shilmaydi</div>
     </div>
-    <div class="matrix-wrap">
-      <div class="matrix" id="sample-matrix"></div>
-    </div>
+    <div class="matrix-wrap"><div class="matrix" id="sample-matrix"></div></div>
     <div class="options" id="sample-options"></div>
     <button class="btn-primary" id="sample-next" disabled onclick="App.goTest()">DAVOM ETISH →</button>
   </section>
@@ -183,15 +164,12 @@
     </div>
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     <div class="difficulty" id="difficulty-bar"></div>
-
-    <div class="matrix-wrap">
-      <div class="matrix" id="test-matrix"></div>
-    </div>
+    <div class="matrix-wrap"><div class="matrix" id="test-matrix"></div></div>
     <div class="options" id="test-options"></div>
     <button class="btn-primary" id="test-next" disabled onclick="App.nextQuestion()">KEYINGISI →</button>
   </section>
 
-  <!-- ==================== Q5 CELEBRATION ==================== -->
+  <!-- ==================== Q5 ==================== -->
   <section id="screen-q5" class="screen">
     <div class="celebrate">
       <div class="celebrate-emoji">🎉</div>
@@ -238,7 +216,196 @@
       <button class="btn-secondary" onclick="App.getCertificate()">📜 Sertifikatni olish</button>
       <button class="btn-secondary" onclick="App.shareResult()">📤 Natijani ulashish</button>
       <button class="btn-secondary" onclick="App.retry()">🔄 IQ testni qayta ishlash</button>
+      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
     </div>
+  </section>
+
+  <!-- ==================== EQ INTRO ==================== -->
+  <section id="screen-eq-intro" class="screen">
+    <button class="back-btn" onclick="App.go('home')">←</button>
+    <div class="intro-hero">
+      <div class="intro-icon">🎭</div>
+      <h2 class="intro-title">HISSIY INTELLEKT</h2>
+      <p class="intro-desc">6 ta situatsion savol</p>
+    </div>
+    <div class="intro-features">
+      <div class="feature"><span>📄</span> 6 ta savol</div>
+      <div class="feature"><span>∞</span> Vaqt cheksiz</div>
+      <div class="feature"><span>🎭</span> Situatsion</div>
+      <div class="feature"><span>🏅</span> EQ natija</div>
+    </div>
+    <button class="btn-primary" onclick="App.goEQTest()">🚀 TESTNI BOSHLASH</button>
+  </section>
+
+  <!-- ==================== EQ TEST ==================== -->
+  <section id="screen-eq-test" class="screen">
+    <div class="test-top">
+      <div class="test-progress-text" id="eq-progress-text">Q1 / 6</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="eq-progress-fill"></div></div>
+    <div class="question-box">
+      <div class="question-text" id="eq-question-text"></div>
+    </div>
+    <div class="text-options" id="eq-options"></div>
+    <button class="btn-primary" id="eq-next" disabled onclick="App.nextEQQuestion()">KEYINGISI →</button>
+  </section>
+
+  <!-- ==================== EQ RESULT ==================== -->
+  <section id="screen-eq-result" class="screen">
+    <div class="result-head">
+      <div class="result-badge">✨ EQ TEST YAKUNLANDI</div>
+      <div class="result-label">EQ SCORE</div>
+      <div class="result-score" id="eq-res-score">0</div>
+      <div class="result-level" id="eq-res-level">—</div>
+    </div>
+    <div class="result-actions">
+      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
+    </div>
+  </section>
+
+  <!-- ==================== PQ INTRO ==================== -->
+  <section id="screen-pq-intro" class="screen">
+    <button class="back-btn" onclick="App.go('home')">←</button>
+    <div class="intro-hero">
+      <div class="intro-icon">⏳</div>
+      <h2 class="intro-title">PROKRASTINATSIYA</h2>
+      <p class="intro-desc">6 ta behavioral savol</p>
+    </div>
+    <div class="intro-features">
+      <div class="feature"><span>📄</span> 6 ta savol</div>
+      <div class="feature"><span>∞</span> Vaqt cheksiz</div>
+      <div class="feature"><span>⏳</span> Behavioral</div>
+      <div class="feature"><span>🏅</span> PQ natija</div>
+    </div>
+    <button class="btn-primary" onclick="App.goPQTest()">🚀 TESTNI BOSHLASH</button>
+  </section>
+
+  <!-- ==================== PQ TEST ==================== -->
+  <section id="screen-pq-test" class="screen">
+    <div class="test-top">
+      <div class="test-progress-text" id="pq-progress-text">Q1 / 6</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="pq-progress-fill"></div></div>
+    <div class="question-box">
+      <div class="question-text" id="pq-question-text"></div>
+    </div>
+    <div class="text-options" id="pq-options"></div>
+    <button class="btn-primary" id="pq-next" disabled onclick="App.nextPQQuestion()">KEYINGISI →</button>
+  </section>
+
+  <!-- ==================== PQ RESULT ==================== -->
+  <section id="screen-pq-result" class="screen">
+    <div class="result-head">
+      <div class="result-badge">✨ PQ TEST YAKUNLANDI</div>
+      <div class="result-label">PROKRASTINATSIYA SCORE</div>
+      <div class="result-score" id="pq-res-score">0</div>
+      <div class="result-level" id="pq-res-level">—</div>
+    </div>
+    <div class="result-actions">
+      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
+    </div>
+  </section>
+
+  <!-- ==================== PROFILE ==================== -->
+  <section id="screen-profile" class="screen">
+    <button class="back-btn" onclick="App.go('home')">←</button>
+    <div class="intro-hero">
+      <div class="intro-icon">⭐</div>
+      <h2 class="intro-title">SIZ QANDAY INSONSIZ?</h2>
+      <p class="intro-desc">To‘liq shaxsiy tahlil</p>
+    </div>
+    <div class="profile-scores">
+      <div class="prof-item"><div class="prof-label">🧠 IQ</div><div class="prof-val" id="prof-iq">0</div></div>
+      <div class="prof-item"><div class="prof-label">🎭 EQ</div><div class="prof-val" id="prof-eq">0%</div></div>
+      <div class="prof-item"><div class="prof-label">⏳ PQ</div><div class="prof-val" id="prof-pq">0%</div></div>
+    </div>
+    <div class="profile-section">
+      <div class="prof-sec-title">💪 KUCHLI TOMONLAR</div>
+      <ul class="prof-list" id="prof-strengths"></ul>
+    </div>
+    <div class="profile-section">
+      <div class="prof-sec-title">⚠️ RIVOJLANTIRISH KERAK</div>
+      <ul class="prof-list" id="prof-weaknesses"></ul>
+    </div>
+    <div class="profile-section overall-section">
+      <div class="prof-sec-title">📊 UMUMIY PROFIL</div>
+      <div class="prof-overall" id="prof-overall">0</div>
+      <div class="prof-summary" id="prof-summary">—</div>
+    </div>
+  </section>
+
+  <!-- ==================== BATTLE HOME ==================== -->
+  <section id="screen-battle-home" class="screen">
+    <button class="back-btn" onclick="App.go('home')">←</button>
+    <div class="intro-hero">
+      <div class="intro-icon">⚔️</div>
+      <h2 class="intro-title">DO‘ST BILAN BATTLE</h2>
+      <p class="intro-desc">7 500 so‘m / ishtirokchi</p>
+    </div>
+    <button class="btn-primary" onclick="App.createBattle()">➕ BATTLE YARATISH</button>
+    <div class="divider">yoki</div>
+    <div class="join-box">
+      <input type="text" id="battle-join-code" maxlength="4" placeholder="4 xonali kod" class="input-field">
+      <button class="btn-primary" onclick="App.joinBattle()">KODNI KIRITISH</button>
+    </div>
+  </section>
+
+  <!-- ==================== BATTLE WAIT ==================== -->
+  <section id="screen-battle-wait" class="screen">
+    <div class="celebrate">
+      <div class="celebrate-emoji">⏳</div>
+      <h2 class="celebrate-title">BATTLE KODI</h2>
+      <div class="battle-code-big" id="battle-code-display">----</div>
+      <p class="celebrate-desc">Kodni do‘stingizga yuboring.<br>Ikkalangiz ham to‘lovni amalga oshirishingiz kerak.</p>
+      <div id="battle-wait-status" class="wait-status">Kutilmoqda...</div>
+      <button class="btn-primary" onclick="App.createPayment('battle')">💳 TO‘LOVNI AMALGA OSHIRISH</button>
+      <button class="btn-secondary" onclick="App.checkBattle()">🔄 YANGILASH</button>
+    </div>
+  </section>
+
+  <!-- ==================== BATTLE TEST ==================== -->
+  <section id="screen-battle-test" class="screen">
+    <div class="test-top">
+      <div class="test-progress-text" id="battle-progress-text">Q1 / 18</div>
+    </div>
+    <div class="matrix-wrap"><div class="matrix" id="battle-matrix"></div></div>
+    <div class="options" id="battle-options"></div>
+    <button class="btn-primary" id="battle-next" disabled onclick="App.nextBattleQuestion()">KEYINGISI →</button>
+  </section>
+
+  <!-- ==================== BATTLE RESULT ==================== -->
+  <section id="screen-battle-result" class="screen">
+    <div class="result-head">
+      <div class="result-badge">⚔️ BATTLE NATIJASI</div>
+      <div class="battle-scores">
+        <div class="battle-player">
+          <div class="battle-player-label">SIZ</div>
+          <div class="battle-player-score" id="battle-my-score">0</div>
+        </div>
+        <div class="battle-vs">VS</div>
+        <div class="battle-player">
+          <div class="battle-player-label">DO‘STINGIZ</div>
+          <div class="battle-player-score" id="battle-opp-score">-</div>
+        </div>
+      </div>
+      <div class="battle-winner" id="battle-winner">⏳</div>
+    </div>
+    <div class="result-actions">
+      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
+    </div>
+  </section>
+
+  <!-- ==================== PAYMENT ==================== -->
+  <section id="screen-payment" class="screen">
+    <button class="back-btn" onclick="App.go('home')">←</button>
+    <div class="intro-hero">
+      <div class="intro-icon">💳</div>
+      <h2 class="intro-title">TO‘LOV</h2>
+      <div class="pay-amount-big" id="pay-amount">0 so‘m</div>
+    </div>
+    <div class="pay-cards" id="pay-cards"></div>
+    <div class="pay-note">To‘lovni amalga oshirib, chek rasmini Telegram botga yuboring.</div>
+    <button class="btn-primary" onclick="App.sendReceipt()">✅ CHEKNI YUBORDIM</button>
   </section>
 
 </div>
