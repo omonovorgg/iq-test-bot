@@ -36,6 +36,14 @@ load_dotenv()
 
 # ==================== ENV ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+# ===== STARTUP DEBUG =====
+logger.warning("=" * 60)
+logger.warning(f"STARTUP token_len={len(BOT_TOKEN)}")
+logger.warning(f"STARTUP token_repr={repr(BOT_TOKEN)}")
+logger.warning(f"STARTUP token_first15={BOT_TOKEN[:15]}")
+logger.warning(f"STARTUP token_last10={BOT_TOKEN[-10:]}")
+logger.warning("=" * 60)
+# ==========================
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/")
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
