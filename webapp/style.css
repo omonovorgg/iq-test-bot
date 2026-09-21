@@ -1568,6 +1568,155 @@ button:focus-visible {
     overflow: hidden;
 }
 
+
+/* =========================================================
+   PUZZLE VISUALS
+   (rendered by app.js into #question-visual / answer options —
+   these classes were missing before, which made every puzzle
+   render as tiny, unstyled, top-left-aligned icons instead of
+   the intended large centered visuals)
+   ========================================================= */
+
+/* Generic SVG puzzle graphic (produced by svgWrap()) */
+.puzzle-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100px;
+    max-height: 100px;
+}
+
+/* A single boxed visual (used standalone and inside sequences) */
+.puzzle-tile {
+    flex: 0 0 auto;
+
+    width: 68px;
+    height: 68px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.puzzle-tile .puzzle-svg {
+    max-width: 46px;
+    max-height: 46px;
+}
+
+/* A → B → C → ? row layout */
+.visual-sequence {
+    width: 100%;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.count-sequence .puzzle-tile {
+    width: 60px;
+    height: 60px;
+}
+
+.sequence-arrow {
+    flex: 0 0 auto;
+
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+/* Odd-one-out row of four shapes */
+.visual-options-row {
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.visual-options-row .puzzle-tile {
+    width: 56px;
+    height: 56px;
+}
+
+/* 3x3 matrix puzzles */
+.matrix-visual {
+    width: min(100%, 260px);
+
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+
+    margin: 0 auto;
+}
+
+.matrix-cell {
+    aspect-ratio: 1;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+
+    background: rgba(255, 255, 255, 0.028);
+
+    overflow: hidden;
+}
+
+.matrix-cell .puzzle-svg {
+    max-width: 70%;
+    max-height: 70%;
+}
+
+.matrix-cell.missing-cell {
+    border-color: rgba(139, 92, 246, 0.3);
+    background: rgba(139, 92, 246, 0.08);
+
+    color: var(--purple-light);
+    font-size: 22px;
+    font-weight: 800;
+}
+
+.hard-matrix .matrix-cell,
+.final-matrix .matrix-cell {
+    border-color: rgba(139, 92, 246, 0.1);
+}
+
+/* Cube rotation sequence (spatial puzzles) */
+.cube-sequence {
+    width: 100%;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.cube-sequence .puzzle-svg {
+    width: 64px;
+    height: 64px;
+}
+
+.puzzle-error {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-align: center;
+}
+
+
 .answer-options {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1642,6 +1791,21 @@ button:focus-visible {
 .answer-option.selected .answer-letter {
     color: white;
     background: var(--purple);
+}
+
+/* The visual shown inside each A/B/C/D answer button */
+.answer-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+    height: 100%;
+}
+
+.answer-visual .puzzle-svg {
+    max-width: 64px;
+    max-height: 64px;
 }
 
 .next-button {
@@ -2534,6 +2698,15 @@ button:focus-visible {
     .question-visual {
         min-height: 240px;
         padding: 12px;
+    }
+
+    .matrix-visual {
+        width: min(100%, 220px);
+    }
+
+    .puzzle-tile {
+        width: 56px;
+        height: 56px;
     }
 }
 
