@@ -345,34 +345,37 @@ def gen_session_id():
 def gen_battle_code():
     return "".join(random.choices(string.digits, k=4))
 
+from urllib.parse import unquote
+
 def validate_init_data(init_data: str, bot_token: str):
     try:
         if not init_data:
             return None
-        parsed = dict(pair.split("=", 1) for pair in init_data.split("&"))
         
-        # hash ni olish
+        parsed = {}
+        for pair in init_data.split("&"):
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                parsed[k] = unquote(v)   # <-- MUHIM: URL-decode
+        
         hash_val = parsed.pop("hash", None)
         if not hash_val:
             return None
         
-        # signature ni chiqarib tashlash (yangi Telegram)
+        # signature ni chiqarib tashlash
         parsed.pop("signature", None)
         
-        # data_check_string
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
-        
-        # HMAC
         secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
         
         if calc != hash_val:
-            logger.warning(f"HMAC mismatch. calc={calc[:10]}..., got={hash_val[:10]}...")
+            logger.warning(f"HMAC FAIL. token={bot_token[:10]}... calc={calc[:16]} got={hash_val[:16]}")
+            logger.warning(f"data_check={data_check[:200]}")
             return None
         
         auth_date = int(parsed.get("auth_date", "0"))
         if datetime.now(timezone.utc).timestamp() - auth_date > 86400 * 2:
-            logger.warning("initData expired")
             return None
         
         user = json.loads(parsed.get("user", "{}"))
