@@ -71,12 +71,9 @@ body {
 
 /* ============ LIVE COUNTER ============ */
 .live-counter {
-  margin-top: 20px;
-  display: flex; align-items: center; gap: 12px;
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.06);
-  border-radius: 16px; padding: 14px 16px;
-  backdrop-filter: blur(12px);
+  margin-top: 20px; display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+  border-radius: 16px; padding: 14px 16px; backdrop-filter: blur(12px);
 }
 .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 12px #22c55e; animation: pulse 1.5s infinite; }
 .live-info { flex: 1; }
@@ -92,8 +89,7 @@ body {
   padding: 16px; border-radius: 18px;
   background: rgba(255,255,255,.03);
   border: 1px solid rgba(255,255,255,.06);
-  transition: all .25s ease; position: relative; overflow: hidden;
-  cursor: pointer;
+  transition: all .25s ease; position: relative; overflow: hidden; cursor: pointer;
 }
 .test-card.unlocked {
   background: linear-gradient(135deg, rgba(124,58,237,.12), rgba(37,99,235,.08));
@@ -108,10 +104,9 @@ body {
 .card-hint { font-size: 10px; color: #a78bfa; margin-top: 4px; letter-spacing: 1px; }
 .card-state { font-size: 18px; }
 
-/* ============ BATTLE ============ */
+/* ============ BATTLE CARD ============ */
 .battle-card {
-  margin-top: 16px;
-  display: flex; align-items: center; gap: 14px;
+  margin-top: 16px; display: flex; align-items: center; gap: 14px;
   padding: 16px; border-radius: 18px;
   background: linear-gradient(135deg, rgba(220,38,38,.15), rgba(124,58,237,.15));
   border: 1px solid rgba(239,68,68,.25);
@@ -197,8 +192,7 @@ body {
 .cell {
   width: 78px; height: 78px; border-radius: 10px;
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
-  display: flex; align-items: center; justify-content: center;
-  position: relative;
+  display: flex; align-items: center; justify-content: center; position: relative;
 }
 .cell.question { background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.4); }
 .cell.question::after { content: "?"; font-size: 28px; font-weight: 900; color: #a78bfa; }
@@ -215,6 +209,30 @@ body {
 .option.correct { border-color: #22c55e; background: rgba(34,197,94,.15); }
 .option.wrong { border-color: #ef4444; background: rgba(239,68,68,.15); }
 
+/* Text options (EQ/PQ) */
+.text-options { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.text-option {
+  padding: 14px 16px; border-radius: 14px; cursor: pointer;
+  background: rgba(255,255,255,.03); border: 2px solid rgba(255,255,255,.06);
+  display: flex; align-items: center; gap: 12px; transition: all .2s;
+  text-align: left; font-size: 14px; color: #cbd5e1; line-height: 1.4;
+}
+.text-option:active { transform: scale(.98); }
+.text-option.selected { border-color: #a78bfa; background: rgba(167,139,250,.15); }
+.opt-letter {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(167,139,250,.15); color: #a78bfa;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 13px; flex-shrink: 0;
+}
+.opt-text { flex: 1; }
+
+.question-box {
+  padding: 18px; border-radius: 16px; margin-top: 14px;
+  background: rgba(167,139,250,.06); border: 1px solid rgba(167,139,250,.15);
+}
+.question-text { font-size: 15px; color: #e5e7eb; line-height: 1.5; font-weight: 600; }
+
 /* ============ TEST TOP ============ */
 .test-top { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: #94a3b8; }
 .test-timer { color: #a78bfa; }
@@ -227,7 +245,7 @@ body {
 .difficulty span.hard { background: #ef4444; }
 
 /* ============ Q5 CELEBRATION ============ */
-.celebrate { text-align: center; padding-top: 80px; }
+.celebrate { text-align: center; padding-top: 60px; }
 .celebrate-emoji { font-size: 72px; animation: bounce 1s infinite; }
 @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
 .celebrate-title { font-size: 24px; font-weight: 900; margin-top: 20px; color: #fff; }
@@ -285,3 +303,60 @@ body {
 .strongest-val { font-size: 16px; font-weight: 800; color: #fff; margin-top: 6px; }
 
 .result-actions { margin-top: 22px; }
+
+/* ============ PROFILE ============ */
+.profile-scores { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 20px; }
+.prof-item {
+  padding: 16px; border-radius: 14px; text-align: center;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+}
+.prof-label { font-size: 12px; color: #94a3b8; }
+.prof-val { font-size: 22px; font-weight: 800; color: #fff; margin-top: 6px; }
+.profile-section { margin-top: 18px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+.prof-sec-title { font-size: 13px; font-weight: 800; color: #a78bfa; letter-spacing: 1px; margin-bottom: 10px; }
+.prof-list { list-style: none; }
+.prof-list li { font-size: 14px; color: #cbd5e1; padding: 6px 0; line-height: 1.4; }
+.overall-section { text-align: center; background: rgba(167,139,250,.08); border-color: rgba(167,139,250,.2); }
+.prof-overall {
+  font-size: 56px; font-weight: 900;
+  background: linear-gradient(135deg,#fff,#a78bfa,#60a5fa);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.prof-summary { font-size: 14px; color: #cbd5e1; margin-top: 8px; line-height: 1.5; }
+
+/* ============ BATTLE ============ */
+.divider { text-align: center; color: #64748b; font-size: 12px; margin: 16px 0; letter-spacing: 2px; }
+.join-box { display: flex; flex-direction: column; gap: 10px; }
+.input-field {
+  width: 100%; padding: 16px; border-radius: 14px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1);
+  color: #fff; font-size: 18px; text-align: center; letter-spacing: 8px;
+  font-weight: 800; outline: none;
+}
+.input-field::placeholder { color: #475569; letter-spacing: 2px; font-size: 14px; font-weight: 400; }
+.input-field:focus { border-color: #a78bfa; }
+.battle-code-big {
+  font-size: 56px; font-weight: 900; letter-spacing: 12px;
+  color: #a78bfa; margin: 20px 0; text-shadow: 0 0 30px rgba(167,139,250,.5);
+}
+.wait-status { font-size: 13px; color: #94a3b8; margin: 16px 0; }
+.battle-scores { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: center; margin-top: 24px; }
+.battle-player { padding: 18px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); text-align: center; }
+.battle-player-label { font-size: 11px; color: #94a3b8; letter-spacing: 1px; }
+.battle-player-score { font-size: 32px; font-weight: 900; color: #a78bfa; margin-top: 6px; }
+.battle-vs { font-size: 14px; font-weight: 900; color: #64748b; letter-spacing: 2px; }
+.battle-winner { font-size: 22px; font-weight: 900; color: #fff; margin-top: 24px; letter-spacing: 2px; }
+
+/* ============ PAYMENT ============ */
+.pay-amount-big { font-size: 36px; font-weight: 900; color: #a78bfa; margin-top: 12px; letter-spacing: 1px; }
+.pay-cards { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.pay-card {
+  padding: 16px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(124,58,237,.15), rgba(37,99,235,.1));
+  border: 1px solid rgba(167,139,250,.25);
+}
+.pay-card-num { font-size: 16px; font-weight: 800; color: #fff; letter-spacing: 2px; }
+.pay-card-holder { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+.pay-card-bank { font-size: 11px; color: #a78bfa; margin-top: 4px; }
+.pay-note { font-size: 12px; color: #94a3b8; margin-top: 16px; line-height: 1.5; text-align: center; }
