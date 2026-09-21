@@ -1,9 +1,7 @@
 /* ============================================================
    IQ TEST BOT — app.js (FINAL)
-   IQ + EQ + PQ + Profile + Battle + Payment
    ============================================================ */
 
-// ==================== TELEGRAM ====================
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
@@ -15,12 +13,10 @@ if (tg) {
 }
 const initData = tg?.initData || "";
 
-// ==================== HAPTIC ====================
 function haptic(type = "light") {
   try { tg?.HapticFeedback?.impactOccurred(type); } catch {}
 }
 
-// ==================== API ====================
 async function api(path, body = null, method = "POST") {
   try {
     const res = await fetch(path, {
@@ -40,6 +36,7 @@ const State = {
   currentScreen: "home",
   user: null,
   completed: {},
+  settings: {},
   test: {
     type: "iq",
     sessionId: null,
@@ -49,28 +46,45 @@ const State = {
     startedAt: null,
     duration: 0,
     timerInterval: null,
+    resultData: null,
   },
-  settings: {},
-  totalUsers: 0,
-  onlineUsers: 0,
-  sampleAnswered: false,
-  battle: { id: null, code: null, role: null, players: [] },
-  payment: { id: null, product: null, amount: 0, cards: [] },
+  battle: {
+    id: null,
+    code: null,
+    role: null,
+    players: [],
+    sessionId: null,
+    current: 0,
+    answers: [],
+    startedAt: null,
+  },
+  payment: {
+    id: null,
+    product: null,
+    amount: 0,
+    cards: [],
+    pollInterval: null,
+  },
+  live: {
+    interval: null,
+    lastTotal: 0,
+  },
+  profile: {
+    full_name: "",
+    gender: null,
+    age: null,
+    country: null,
+  },
 };
 
 // ==================== LOCAL STORAGE ====================
-const LS_KEY = "iqtestbot_session_v2";
+const LS_KEY = "iqtestbot_state_v3";
 
 function saveLocal() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
-      type: State.test.type,
-      sessionId: State.test.sessionId,
-      attemptId: State.test.attemptId,
-      current: State.test.current,
-      answers: State.test.answers,
-      startedAt: State.test.startedAt,
-      duration: State.test.duration,
+      test: State.test,
+      battle: State.battle,
     }));
   } catch {}
 }
@@ -86,9 +100,9 @@ function clearLocal() {
   try { localStorage.removeItem(LS_KEY); } catch {}
 }
 
-// ==================== 18 TA IQ SAVOLI ====================
+// ==================== 18 TA IQ SAVOLI (MENSA DARAJASIDA) ====================
 const QUESTIONS = [
-  // ===== EASY (Q1-Q6) weight 1 =====
+  // ============ EASY (Q1-Q6) ============
   {
     id: 1, difficulty: "easy", weight: 1, category: "Raqamlar",
     matrix: [
@@ -133,13 +147,13 @@ const QUESTIONS = [
   {
     id: 4, difficulty: "easy", weight: 1, category: "Pattern",
     matrix: [
-      { type: "size", size: 10 }, { type: "size", size: 20 }, { type: "size", size: 30 },
-      { type: "size", size: 20 }, { type: "size", size: 30 }, { type: "size", size: 40 },
-      { type: "size", size: 30 }, { type: "size", size: 40 }, { type: "question" },
+      { type: "size", size: 12 }, { type: "size", size: 20 }, { type: "size", size: 28 },
+      { type: "size", size: 20 }, { type: "size", size: 28 }, { type: "size", size: 36 },
+      { type: "size", size: 28 }, { type: "size", size: 36 }, { type: "question" },
     ],
     options: [
-      { type: "size", size: 30 }, { type: "size", size: 40 },
-      { type: "size", size: 50 }, { type: "size", size: 60 },
+      { type: "size", size: 28 }, { type: "size", size: 36 },
+      { type: "size", size: 44 }, { type: "size", size: 52 },
     ],
     correct: 2,
   },
@@ -171,7 +185,7 @@ const QUESTIONS = [
     ],
     correct: 1,
   },
-  // ===== MEDIUM (Q7-Q12) weight 2 =====
+  // ============ MEDIUM (Q7-Q12) ============
   {
     id: 7, difficulty: "medium", weight: 2, category: "Pattern",
     matrix: [
@@ -242,8 +256,8 @@ const QUESTIONS = [
       { type: "dot", count: 9 }, { type: "dot", count: 16 }, { type: "question" },
     ],
     options: [
-      { type: "dot", count: 20 }, { type: "dot", count: 25 },
-      { type: "dot", count: 30 }, { type: "dot", count: 36 },
+      { type: "dot", count: 16 }, { type: "dot", count: 25 },
+      { type: "dot", count: 36 }, { type: "dot", count: 49 },
     ],
     correct: 1,
   },
@@ -260,7 +274,7 @@ const QUESTIONS = [
     ],
     correct: 2,
   },
-  // ===== HARD (Q13-Q18) weight 3 =====
+  // ============ HARD (Q13-Q18) ============
   {
     id: 13, difficulty: "hard", weight: 3, category: "Raqamlar",
     matrix: [
@@ -357,144 +371,24 @@ const QUESTIONS = [
   },
 ];
 
-// ==================== EQ SAVOLLARI (6 ta) ====================
+// ==================== EQ (6) ====================
 const EQ_QUESTIONS = [
-  {
-    id: 1, category: "stress",
-    text: "Ishingiz juda ko‘payib ketdi va boshliq yana yangi topshiriq berdi. Siz nima qilasiz?",
-    options: [
-      "Darhol ro‘yxat tuzaman va muhimini ajrataman",
-      "Asabiylashaman, lekin baribir boshlayman",
-      "Boshliqqa vaqt yetmasligini aytaman",
-      "Kechqurun qolib ishlayman",
-    ],
-    scores: [4, 2, 3, 1],
-  },
-  {
-    id: 2, category: "empathy",
-    text: "Do‘stingiz yig‘layapti va nima bo‘lganini aytmayapti. Siz:",
-    options: [
-      "Yoniga o‘tiraman va jim kutaman",
-      "Darhol savol bera boshlayman",
-      "Hazil qilib kayfiyatini ko‘taraman",
-      "Uydan ketsam bo‘ladi deb o‘ylayman",
-    ],
-    scores: [4, 1, 2, 1],
-  },
-  {
-    id: 3, category: "self-awareness",
-    text: "Siz xato qildingiz va buni birinchi bo‘lib kim payqadi?",
-    options: [
-      "O‘zim, darhol tan olaman",
-      "Boshqalar aytganda tan olaman",
-      "Inkor qilaman",
-      "Bahona topaman",
-    ],
-    scores: [4, 3, 1, 1],
-  },
-  {
-    id: 4, category: "conflict",
-    text: "Hamkasbingiz sizning fikringizni ochiq tanqid qildi. Siz:",
-    options: [
-      "Xotirjam tinglab, sababini so‘rayman",
-      "Darhol javob qaytaraman",
-      "Indamay qolaman",
-      "Boshqalardan yordam so‘rayman",
-    ],
-    scores: [4, 2, 1, 2],
-  },
-  {
-    id: 5, category: "emotion regulation",
-    text: "Kutilmagan yomon xabar oldingiz. Birinchi harakatingiz:",
-    options: [
-      "Chuqur nafas olib, o‘zimni tutaman",
-      "Darhol kimdirga aytaman",
-      "Yolg‘iz qolaman",
-      "Ishni tashlab ketaman",
-    ],
-    scores: [4, 2, 3, 1],
-  },
-  {
-    id: 6, category: "social perception",
-    text: "Suhbatdoshning ko‘zlari boshqa tomonga qarayapti. Bu nimani bildiradi?",
-    options: [
-      "U zerikkan yoki shoshilyapti",
-      "U yolg‘on gapiryapti",
-      "U sizni yoqtirmaydi",
-      "Hech narsa, shunchaki shunday",
-    ],
-    scores: [4, 2, 1, 2],
-  },
+  { id: 1, text: "Ishingiz juda ko‘payib ketdi va boshliq yana yangi topshiriq berdi. Siz nima qilasiz?", options: ["Darhol ro‘yxat tuzaman va muhimini ajrataman", "Asabiylashaman, lekin baribir boshlayman", "Boshliqqa vaqt yetmasligini aytaman", "Kechqurun qolib ishlayman"], scores: [4, 2, 3, 1] },
+  { id: 2, text: "Do‘stingiz yig‘layapti va nima bo‘lganini aytmayapti. Siz:", options: ["Yoniga o‘tiraman va jim kutaman", "Darhol savol bera boshlayman", "Hazil qilib kayfiyatini ko‘taraman", "Uydan ketsam bo‘ladi deb o‘ylayman"], scores: [4, 1, 2, 1] },
+  { id: 3, text: "Siz xato qildingiz va buni birinchi bo‘lib kim payqadi?", options: ["O‘zim, darhol tan olaman", "Boshqalar aytganda tan olaman", "Inkor qilaman", "Bahona topaman"], scores: [4, 3, 1, 1] },
+  { id: 4, text: "Hamkasbingiz sizning fikringizni ochiq tanqid qildi. Siz:", options: ["Xotirjam tinglab, sababini so‘rayman", "Darhol javob qaytaraman", "Indamay qolaman", "Boshqalardan yordam so‘rayman"], scores: [4, 2, 1, 2] },
+  { id: 5, text: "Kutilmagan yomon xabar oldingiz. Birinchi harakatingiz:", options: ["Chuqur nafas olib, o‘zimni tutaman", "Darhol kimdirga aytaman", "Yolg‘iz qolaman", "Ishni tashlab ketaman"], scores: [4, 2, 3, 1] },
+  { id: 6, text: "Suhbatdoshning ko‘zlari boshqa tomonga qarayapti. Bu nimani bildiradi?", options: ["U zerikkan yoki shoshilyapti", "U yolg‘on gapiryapti", "U sizni yoqtirmaydi", "Hech narsa, shunchaki shunday"], scores: [4, 2, 1, 2] },
 ];
 
-// ==================== PQ SAVOLLARI (6 ta) ====================
+// ==================== PQ (6) ====================
 const PQ_QUESTIONS = [
-  {
-    id: 1, category: "task avoidance",
-    text: "Muhim loyiha bor, lekin siz uni doim keyinga surasiz. Sabab:",
-    options: [
-      "Qiyin bo‘lgani uchun",
-      "Vaqt ko‘p deb o‘ylayman",
-      "Nima qilishni bilmayman",
-      "Kayfiyat yo‘q",
-    ],
-    scores: [2, 1, 2, 1],
-  },
-  {
-    id: 2, category: "delay",
-    text: "Imtihonga 7 kun qoldi. Siz:",
-    options: [
-      "Har kuni oz-oz tayyorlanaman",
-      "Oxirgi 2 kunda qattiq tayyorlanaman",
-      "Oxirgi kechada tayyorlanaman",
-      "Tayyorlanmayman, nima bo‘lsa bo‘lsin",
-    ],
-    scores: [4, 2, 1, 0],
-  },
-  {
-    id: 3, category: "motivation",
-    text: "Ishni boshlash uchun sizga nima kerak?",
-    options: [
-      "Aniq reja",
-      "Kayfiyat",
-      "Deadline",
-      "Mukofot",
-    ],
-    scores: [4, 1, 2, 2],
-  },
-  {
-    id: 4, category: "distraction",
-    text: "Ishlayotganingizda telefonni tez-tez tekshirasizmi?",
-    options: [
-      "Yo‘q, telefon boshqa xonada",
-      "Ba‘zan, lekin o‘zimni tutaman",
-      "Ha, har 10 daqiqada",
-      "Doim qo‘limda",
-    ],
-    scores: [4, 3, 1, 0],
-  },
-  {
-    id: 5, category: "deadline",
-    text: "Deadline yaqinlashganda siz:",
-    options: [
-      "Avvaldan tayyor bo‘laman",
-      "Oxirgi paytda tezlashaman",
-      "Kechikaman",
-      "Umuman bajarmayman",
-    ],
-    scores: [4, 2, 1, 0],
-  },
-  {
-    id: 6, category: "self-control",
-    text: "Rejangizni qanchalik bajarasiz?",
-    options: [
-      "Doim bajaraman",
-      "Ko‘pincha bajaraman",
-      "Ba‘zan bajaraman",
-      "Deyarli hech qachon",
-    ],
-    scores: [4, 3, 1, 0],
-  },
+  { id: 1, text: "Muhim loyiha bor, lekin siz uni doim keyinga surasiz. Sabab:", options: ["Qiyin bo‘lgani uchun", "Vaqt ko‘p deb o‘ylayman", "Nima qilishni bilmayman", "Kayfiyat yo‘q"], scores: [2, 1, 2, 1] },
+  { id: 2, text: "Imtihonga 7 kun qoldi. Siz:", options: ["Har kuni oz-oz tayyorlanaman", "Oxirgi 2 kunda qattiq tayyorlanaman", "Oxirgi kechada tayyorlanaman", "Tayyorlanmayman, nima bo‘lsa bo‘lsin"], scores: [4, 2, 1, 0] },
+  { id: 3, text: "Ishni boshlash uchun sizga nima kerak?", options: ["Aniq reja", "Kayfiyat", "Deadline", "Mukofot"], scores: [4, 1, 2, 2] },
+  { id: 4, text: "Ishlayotganingizda telefonni tez-tez tekshirasizmi?", options: ["Yo‘q, telefon boshqa xonada", "Ba‘zan, lekin o‘zimni tutaman", "Ha, har 10 daqiqada", "Doim qo‘limda"], scores: [4, 3, 1, 0] },
+  { id: 5, text: "Deadline yaqinlashganda siz:", options: ["Avvaldan tayyor bo‘laman", "Oxirgi paytda tezlashaman", "Kechikaman", "Umuman bajarmayman"], scores: [4, 2, 1, 0] },
+  { id: 6, text: "Rejangizni qanchalik bajarasiz?", options: ["Doim bajaraman", "Ko‘pincha bajaraman", "Ba‘zan bajaraman", "Deyarli hech qachon"], scores: [4, 3, 1, 0] },
 ];
 
 // ==================== RENDER HELPERS ====================
@@ -503,9 +397,9 @@ function renderCell(cell) {
   if (cell.type === "question") return "";
 
   if (cell.type === "dot") {
-    let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:40px;height:40px;align-items:center;justify-items:center;">';
-    for (let i = 0; i < cell.count; i++) {
-      html += '<div style="width:8px;height:8px;border-radius:50%;background:#a78bfa;box-shadow:0 0 6px #a78bfa;"></div>';
+    let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;width:44px;height:44px;align-items:center;justify-items:center;">';
+    for (let i = 0; i < Math.min(cell.count, 16); i++) {
+      html += '<div style="width:6px;height:6px;border-radius:50%;background:#a78bfa;box-shadow:0 0 6px #a78bfa;"></div>';
     }
     html += "</div>";
     return html;
@@ -518,39 +412,39 @@ function renderCell(cell) {
   if (cell.type === "shape") {
     const colors = { full: "#a78bfa", half: "rgba(167,139,250,.5)", empty: "transparent" };
     const fill = colors[cell.fill] || "transparent";
-    if (cell.shape === "circle") return `<svg width="40" height="40"><circle cx="20" cy="20" r="16" fill="${fill}" stroke="#a78bfa" stroke-width="2"/></svg>`;
-    if (cell.shape === "square") return `<svg width="40" height="40"><rect x="5" y="5" width="30" height="30" rx="4" fill="${fill}" stroke="#a78bfa" stroke-width="2"/></svg>`;
-    if (cell.shape === "triangle") return `<svg width="40" height="40"><polygon points="20,5 35,35 5,35" fill="${fill}" stroke="#a78bfa" stroke-width="2"/></svg>`;
-    if (cell.shape === "diamond") return `<svg width="40" height="40"><polygon points="20,4 36,20 20,36 4,20" fill="${fill}" stroke="#a78bfa" stroke-width="2"/></svg>`;
+    if (cell.shape === "circle") return `<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="14" fill="${fill}" stroke="#a78bfa" stroke-width="2"/></svg>`;
+    if (cell.shape === "square") return `<svg width="44" height="44" viewBox="0 0 44 44"><rect x="7" y="7" width="30" height="30" rx="4" fill="${fill}" stroke="#a78bfa" stroke-width="2"/></svg>`;
+    if (cell.shape === "triangle") return `<svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,7 37,37 7,37" fill="${fill}" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    if (cell.shape === "diamond") return `<svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,6 38,22 22,38 6,22" fill="${fill}" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/></svg>`;
   }
 
   if (cell.type === "rotate") {
-    return `<svg width="40" height="40" style="transform:rotate(${cell.angle}deg)"><path d="M10 20 L30 20 M25 15 L30 20 L25 25" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`;
+    return `<svg width="44" height="44" viewBox="0 0 44 44"><g transform="rotate(${cell.angle} 22 22)"><path d="M12 22 L32 22 M27 17 L32 22 L27 27" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
   }
 
   if (cell.type === "combo") {
     const colors = { full: "#a78bfa", half: "rgba(167,139,250,.5)", empty: "transparent" };
     const fill = colors[cell.fill] || "transparent";
-    let svg = '<svg width="44" height="44">';
-    if (cell.shapes.includes("circle")) svg += `<circle cx="22" cy="22" r="16" fill="${fill}" stroke="#a78bfa" stroke-width="2"/>`;
-    if (cell.shapes.includes("square")) svg += `<rect x="8" y="8" width="28" height="28" rx="3" fill="none" stroke="#60a5fa" stroke-width="2"/>`;
-    if (cell.shapes.includes("triangle")) svg += `<polygon points="22,6 38,38 6,38" fill="none" stroke="#f59e0b" stroke-width="2"/>`;
+    let svg = '<svg width="44" height="44" viewBox="0 0 44 44">';
+    if (cell.shapes.includes("triangle")) svg += `<polygon points="22,8 36,36 8,36" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>`;
+    if (cell.shapes.includes("square")) svg += `<rect x="9" y="9" width="26" height="26" rx="3" fill="none" stroke="#60a5fa" stroke-width="2"/>`;
+    if (cell.shapes.includes("circle")) svg += `<circle cx="22" cy="22" r="13" fill="${fill}" stroke="#a78bfa" stroke-width="2"/>`;
     svg += "</svg>";
     return svg;
   }
 
   if (cell.type === "size") {
-    const s = cell.size;
-    return `<svg width="40" height="40"><circle cx="20" cy="20" r="${s / 2}" fill="none" stroke="#a78bfa" stroke-width="2"/></svg>`;
+    const s = Math.min(cell.size, 36);
+    return `<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="${s/2}" fill="none" stroke="#a78bfa" stroke-width="2"/></svg>`;
   }
 
   if (cell.type === "grid") {
     const pos = cell.pos;
     const row = Math.floor(pos / 3);
     const col = pos % 3;
-    return `<svg width="40" height="40">
-      <rect x="2" y="2" width="36" height="36" rx="3" fill="none" stroke="rgba(167,139,250,.3)" stroke-width="1.5"/>
-      <circle cx="${8 + col * 12}" cy="${8 + row * 12}" r="5" fill="#a78bfa"/>
+    return `<svg width="44" height="44" viewBox="0 0 44 44">
+      <rect x="3" y="3" width="38" height="38" rx="4" fill="none" stroke="rgba(167,139,250,.3)" stroke-width="1.5"/>
+      <circle cx="${10 + col * 12}" cy="${10 + row * 12}" r="5" fill="#a78bfa"/>
     </svg>`;
   }
 
@@ -595,6 +489,7 @@ const App = {
     if (cfg.ok) State.settings = cfg.settings;
 
     await this.refreshLive();
+    this.startLiveLoop();
 
     if (initData) {
       const me = await api("/api/me", { initData });
@@ -602,14 +497,31 @@ const App = {
         State.user = me.user;
         State.completed = me.completed || {};
         this.applyUnlocks();
+        // Profile to'ldirilganmi?
+        if (me.user.full_name) {
+          State.profile.full_name = me.user.full_name;
+          State.profile.gender = me.user.gender;
+          State.profile.age = me.user.age;
+          State.profile.country = me.user.country;
+        }
+        // Active battle bormi?
+        if (me.active_battles && me.active_battles.length > 0) {
+          State.battle.id = me.active_battles[0].id;
+          State.battle.code = me.active_battles[0].battle_code;
+          setTimeout(() => {
+            if (confirm("Battle davom etmoqda. Ochishni xohlaysizmi?")) {
+              App.openBattleDetail();
+            }
+          }, 600);
+        }
       }
     }
 
     const local = loadLocal();
-    if (local && local.sessionId && local.current > 0 && local.current < 18 && local.type === "iq") {
+    if (local && local.test && local.test.sessionId && local.test.current > 0 && local.test.current < 18 && local.test.type === "iq") {
       setTimeout(() => {
         if (confirm("Test davom etmoqda. Davom ettirishni xohlaysizmi?")) {
-          State.test = Object.assign({}, State.test, local);
+          State.test = Object.assign({}, State.test, local.test);
           if (!Array.isArray(State.test.answers) || State.test.answers.length !== 18) {
             State.test.answers = new Array(18).fill(null);
           }
@@ -626,24 +538,33 @@ const App = {
   async refreshLive() {
     const res = await api("/api/stats/live", null, "GET");
     if (res.ok) {
-      State.totalUsers = res.total;
-      State.onlineUsers = res.online;
       this.animateNumber("live-total", res.total);
-      const onlineEl = document.getElementById("live-online");
-      if (onlineEl) onlineEl.textContent = res.online;
+      this.animateNumber("live-online", res.online);
     }
+  },
+
+  startLiveLoop() {
+    if (State.live.interval) clearInterval(State.live.interval);
+    State.live.interval = setInterval(() => {
+      this.refreshLive();
+    }, 5000);
   },
 
   animateNumber(id, target) {
     const el = document.getElementById(id);
     if (!el) return;
-    let cur = 0;
-    const step = Math.max(1, Math.floor(target / 40));
+    let cur = parseInt(el.textContent.replace(/\D/g, "")) || 0;
+    if (cur === target) return;
+    const diff = target - cur;
+    const step = diff > 0 ? Math.max(1, Math.floor(diff / 10)) : Math.min(-1, Math.ceil(diff / 10));
     const timer = setInterval(() => {
       cur += step;
-      if (cur >= target) { cur = target; clearInterval(timer); }
+      if ((step > 0 && cur >= target) || (step < 0 && cur <= target)) {
+        cur = target;
+        clearInterval(timer);
+      }
       el.textContent = cur.toLocaleString();
-    }, 25);
+    }, 40);
   },
 
   go(screen) {
@@ -686,9 +607,64 @@ const App = {
     }
   },
 
-  // ==================== IQ ====================
+  // ==================== PROFILE SAVE ====================
+  async saveProfile() {
+    const fullName = document.getElementById("profile-fullname")?.value.trim();
+    const gender = State.profile.gender;
+    const age = parseInt(document.getElementById("profile-age")?.value) || null;
+    const country = State.profile.country;
+
+    if (!fullName || fullName.length < 3) { alert("Ism-familiyani to‘liq kiriting."); return; }
+    if (!gender) { alert("Jinsni tanlang."); return; }
+    if (!age || age < 8 || age > 100) { alert("Yoshni to‘g‘ri kiriting (8-100)."); return; }
+    if (!country) { alert("Davlatni tanlang."); return; }
+
+    State.profile.full_name = fullName;
+    State.profile.age = age;
+
+    if (initData) {
+      const res = await api("/api/profile/save", {
+        initData,
+        full_name: fullName,
+        gender: gender,
+        age: age,
+        country: country,
+      });
+      if (!res.ok) {
+        alert("Saqlashda xatolik.");
+        return;
+      }
+    }
+    haptic("medium");
+    this.go("iq-intro");
+  },
+
+  selectGender(g) {
+    State.profile.gender = g;
+    document.querySelectorAll("#gender-selector .option").forEach(el => el.classList.remove("selected"));
+    document.querySelector(`#gender-selector [data-gender="${g}"]`)?.classList.add("selected");
+    haptic("light");
+  },
+
+  selectCountry(c) {
+    State.profile.country = c;
+    document.querySelectorAll("#country-selector .option").forEach(el => el.classList.remove("selected"));
+    document.querySelector(`#country-selector [data-country="${c}"]`)?.classList.add("selected");
+    haptic("light");
+  },
+
+  // ==================== IQ FLOW ====================
   async startIQ() {
     haptic("medium");
+    // Profil to'liq bo'lsa, to'g'ridan-to'g'ri IQ introsiga
+    if (!State.profile.full_name || !State.profile.gender || !State.profile.age || !State.profile.country) {
+      this.go("profile-name");
+      return;
+    }
+    this.go("iq-intro");
+  },
+
+  async startIQTest() {
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "iq" });
       if (res.ok) {
@@ -720,11 +696,9 @@ const App = {
       correct: 1,
     };
     renderMatrix(document.getElementById("sample-matrix"), sample.matrix);
-    State.sampleAnswered = false;
     const nextBtn = document.getElementById("sample-next");
     if (nextBtn) nextBtn.disabled = true;
     renderOptions(document.getElementById("sample-options"), sample.options, (idx) => {
-      State.sampleAnswered = true;
       if (nextBtn) nextBtn.disabled = false;
       const opts = document.querySelectorAll("#sample-options .option");
       opts.forEach((o, i) => {
@@ -795,11 +769,8 @@ const App = {
   nextQuestion() {
     haptic("light");
     const cur = State.test.current;
-    // Celebration 1 (Q6 dan keyin)
     if (cur === 5) { this.go("q6"); return; }
-    // Celebration 2 (Q12 dan keyin)
     if (cur === 11) { this.go("q12"); return; }
-    // Test tugadi
     if (cur === 17) { this.finish(); return; }
     State.test.current++;
     saveLocal();
@@ -822,10 +793,10 @@ const App = {
 
   async finish() {
     clearInterval(State.test.timerInterval);
-    this.go("loading");
-    await new Promise(r => setTimeout(r, 2200));
+    this.go("iq-loading");
+    await new Promise(r => setTimeout(r, 3500));
 
-    let score = 0, correct = 0, level = "—";
+    let score = 0, correct = 0, level = "—", resultVisible = true, paymentRequired = false, attemptId = null;
     if (initData && State.test.sessionId) {
       const res = await api("/api/test/submit", {
         initData,
@@ -837,10 +808,12 @@ const App = {
         score = res.score;
         correct = res.correct;
         level = res.level;
+        resultVisible = res.result_visible;
+        paymentRequired = res.payment_required;
+        attemptId = res.attempt_id;
         State.completed.iq = score;
       }
     } else {
-      // Offline fallback
       let weighted = 0, maxW = 0;
       QUESTIONS.forEach((q, i) => {
         maxW += q.weight;
@@ -851,8 +824,15 @@ const App = {
       level = score >= 115 ? "YUQORI DARAJA" : score >= 100 ? "O‘RTA DARAJA" : "RIVOJLANTIRISH";
     }
 
-    this.renderResult(score, correct, level);
-    this.go("result");
+    State.test.resultData = { score, correct, level, attemptId };
+
+    if (paymentRequired) {
+      // To'lov oynasi
+      this.go("payment-required");
+    } else {
+      this.renderResult(score, correct, level);
+      this.go("result");
+    }
     clearLocal();
     this.applyUnlocks();
   },
@@ -893,7 +873,7 @@ const App = {
   shareResult() {
     const score = document.getElementById("res-score")?.textContent || "0";
     const text = `🧠 IQ TEST BOT\n\nMen IQ-style testda ${score} ball oldim!\nSiz ham sinab ko‘ring 👇`;
-    const url = `https://t.me/${window.__BOT_USERNAME__ || "IQTestBot"}`;
+    const url = `https://t.me/${window.__BOT_USERNAME__ || "iqtest_ubot"}`;
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
     } else {
@@ -903,12 +883,73 @@ const App = {
 
   retry() {
     clearLocal();
-    State.test = { type: "iq", sessionId: null, attemptId: null, current: 0, answers: [], startedAt: null, duration: 0, timerInterval: null };
-    this.go("intro");
+    State.test = { type: "iq", sessionId: null, attemptId: null, current: 0, answers: [], startedAt: null, duration: 0, timerInterval: null, resultData: null };
+    this.go("iq-intro");
+  },
+
+  // ==================== PAYMENT ====================
+  async createPayment(product, extra = {}) {
+    if (!initData) { alert("To‘lov faqat Telegram orqali."); return; }
+    haptic("medium");
+    const res = await api("/api/payment/create", { initData, product, ...extra });
+    if (res.ok) {
+      if (res.free) {
+        // Bepul — darhol davom et
+        alert("✅ Bepul!");
+        if (product === "iq") {
+          this.renderResult(State.test.resultData.score, State.test.resultData.correct, State.test.resultData.level);
+          this.go("result");
+        }
+        return;
+      }
+      State.payment.id = res.payment_id;
+      State.payment.product = product;
+      State.payment.amount = res.amount;
+      State.payment.cards = res.cards;
+      document.getElementById("pay-amount").textContent = res.amount.toLocaleString() + " so‘m";
+      const cardsEl = document.getElementById("pay-cards");
+      if (cardsEl) {
+        cardsEl.innerHTML = res.cards.map(c =>
+          `<div class="pay-card"><div class="pay-card-num">${c.card_number}</div><div class="pay-card-holder">${c.holder}</div><div class="pay-card-bank">${c.bank || ""}</div></div>`
+        ).join("") || "<div>Karta mavjud emas. Admin bilan bog‘laning.</div>";
+      }
+      this.go("payment");
+      this.startPaymentPoll();
+    } else {
+      alert("To‘lov yaratishda xatolik.");
+    }
+  },
+
+  startPaymentPoll() {
+    if (State.payment.pollInterval) clearInterval(State.payment.pollInterval);
+    State.payment.pollInterval = setInterval(async () => {
+      if (!State.payment.id) return;
+      const res = await api(`/api/payment/${State.payment.id}`, { initData });
+      if (res.ok && res.payment && res.payment.status === "approved") {
+        clearInterval(State.payment.pollInterval);
+        State.payment.pollInterval = null;
+        alert("✅ To‘lov tasdiqlandi!");
+        if (State.payment.product === "iq") {
+          this.renderResult(State.test.resultData.score, State.test.resultData.correct, State.test.resultData.level);
+          this.go("result");
+        }
+      }
+    }, 5000);
+  },
+
+  async sendReceipt() {
+    alert("Chekni Telegram botga yuboring:\n\n/start → to‘lov bo‘limi → chek rasmini yuboring");
   },
 
   // ==================== EQ ====================
   async startEQ() {
+    if (State.completed.eq) {
+      // Retry
+      const retryPrice = parseInt(State.settings.eq_retry_price || "0");
+      if (retryPrice > 0) {
+        if (!confirm(`EQ qayta ishlash ${retryPrice} so‘m. To‘lashni xohlaysizmi?`)) return;
+      }
+    }
     haptic("medium");
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "eq" });
@@ -957,17 +998,14 @@ const App = {
 
   nextEQQuestion() {
     haptic("light");
-    if (State.test.current === EQ_QUESTIONS.length - 1) {
-      this.finishEQ();
-      return;
-    }
+    if (State.test.current === EQ_QUESTIONS.length - 1) { this.finishEQ(); return; }
     State.test.current++;
     this.renderEQQuestion();
   },
 
   async finishEQ() {
-    this.go("loading");
-    await new Promise(r => setTimeout(r, 2000));
+    this.go("iq-loading");
+    await new Promise(r => setTimeout(r, 2500));
 
     let score = 0;
     EQ_QUESTIONS.forEach((q, i) => {
@@ -978,7 +1016,16 @@ const App = {
     const percent = Math.round((score / maxScore) * 100);
     State.completed.eq = percent;
 
-    document.getElementById("eq-res-score").textContent = percent;
+    if (initData && State.test.sessionId) {
+      await api("/api/test/submit", {
+        initData,
+        session_id: State.test.sessionId,
+        answers: State.test.answers,
+        duration: Math.floor((Date.now() - State.test.startedAt) / 1000),
+      });
+    }
+
+    document.getElementById("eq-res-score").textContent = percent + "%";
     document.getElementById("eq-res-level").textContent =
       percent >= 80 ? "JUDA YUQORI" : percent >= 60 ? "YUQORI" : percent >= 40 ? "O‘RTA" : "RIVOJLANTIRISH";
     this.go("eq-result");
@@ -987,6 +1034,12 @@ const App = {
 
   // ==================== PQ ====================
   async startPQ() {
+    if (State.completed.pq) {
+      const retryPrice = parseInt(State.settings.pq_retry_price || "0");
+      if (retryPrice > 0) {
+        if (!confirm(`PQ qayta ishlash ${retryPrice} so‘m. To‘lashni xohlaysizmi?`)) return;
+      }
+    }
     haptic("medium");
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "pq" });
@@ -998,6 +1051,7 @@ const App = {
     State.test.type = "pq";
     State.test.current = 0;
     State.test.answers = new Array(PQ_QUESTIONS.length).fill(null);
+    State.test.startedAt = Date.now();
     this.go("pq-intro");
   },
 
@@ -1034,17 +1088,14 @@ const App = {
 
   nextPQQuestion() {
     haptic("light");
-    if (State.test.current === PQ_QUESTIONS.length - 1) {
-      this.finishPQ();
-      return;
-    }
+    if (State.test.current === PQ_QUESTIONS.length - 1) { this.finishPQ(); return; }
     State.test.current++;
     this.renderPQQuestion();
   },
 
   async finishPQ() {
-    this.go("loading");
-    await new Promise(r => setTimeout(r, 2000));
+    this.go("iq-loading");
+    await new Promise(r => setTimeout(r, 2500));
 
     let score = 0;
     PQ_QUESTIONS.forEach((q, i) => {
@@ -1055,7 +1106,16 @@ const App = {
     const percent = Math.round((score / maxScore) * 100);
     State.completed.pq = percent;
 
-    document.getElementById("pq-res-score").textContent = percent;
+    if (initData && State.test.sessionId) {
+      await api("/api/test/submit", {
+        initData,
+        session_id: State.test.sessionId,
+        answers: State.test.answers,
+        duration: Math.floor((Date.now() - State.test.startedAt) / 1000),
+      });
+    }
+
+    document.getElementById("pq-res-score").textContent = percent + "%";
     document.getElementById("pq-res-level").textContent =
       percent >= 80 ? "JUDA YAXSHI" : percent >= 60 ? "YAXSHI" : percent >= 40 ? "O‘RTA" : "RIVOJLANTIRISH KERAK";
     this.go("pq-result");
@@ -1100,11 +1160,11 @@ const App = {
 
   // ==================== BATTLE ====================
   openBattle() {
+    if (!initData) { alert("Battle faqat Telegram orqali."); return; }
     this.go("battle-home");
   },
 
   async createBattle() {
-    if (!initData) { alert("Battle faqat Telegram orqali."); return; }
     haptic("medium");
     const res = await api("/api/battle/create", { initData });
     if (res.ok) {
@@ -1112,16 +1172,23 @@ const App = {
       State.battle.code = res.code;
       State.battle.role = "creator";
       document.getElementById("battle-code-display").textContent = res.code;
+      const priceEl = document.getElementById("battle-price-display");
+      if (priceEl) priceEl.textContent = res.price.toLocaleString() + " so‘m";
       this.go("battle-wait");
+      this.startBattlePoll();
+    } else if (res.error === "ACTIVE_BATTLE_EXISTS") {
+      State.battle.id = res.battle_id;
+      State.battle.code = res.code;
+      this.go("battle-wait");
+      this.startBattlePoll();
     } else {
       alert("Battle yaratishda xatolik.");
     }
   },
 
   async joinBattle() {
-    if (!initData) { alert("Battle faqat Telegram orqali."); return; }
-    const code = document.getElementById("battle-join-code").value.trim();
-    if (!/^\d{4}$/.test(code)) { alert("4 xonali kod kiriting."); return; }
+    const code = document.getElementById("battle-join-code").value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(code)) { alert("4 xonali kod kiriting."); return; }
     haptic("medium");
     const res = await api("/api/battle/join", { initData, code });
     if (res.ok) {
@@ -1129,9 +1196,22 @@ const App = {
       State.battle.code = code;
       State.battle.role = "opponent";
       this.go("battle-wait");
+      this.startBattlePoll();
     } else {
-      alert("Kod topilmadi yoki xatolik.");
+      const errs = {
+        NOT_FOUND: "Kod topilmadi.",
+        OWN_BATTLE: "O‘z battlingizga qo‘shila olmaysiz.",
+        BATTLE_NOT_OPEN: "Battle allaqachon boshlangan.",
+        BATTLE_FULL: "Battle to‘lgan.",
+        ACTIVE_BATTLE_EXISTS: "Sizda faol battle bor.",
+      };
+      alert(errs[res.error] || "Xatolik.");
     }
+  },
+
+  startBattlePoll() {
+    if (State.battle.pollInterval) clearInterval(State.battle.pollInterval);
+    State.battle.pollInterval = setInterval(() => this.checkBattle(), 5000);
   },
 
   async checkBattle() {
@@ -1139,93 +1219,180 @@ const App = {
     const res = await api(`/api/battle/${State.battle.id}`, { initData });
     if (res.ok) {
       State.battle.players = res.players || [];
-      const bothJoined = State.battle.players.length >= 2;
-      const bothPaid = State.battle.players.every(p => p.payment_status === "approved");
       const statusEl = document.getElementById("battle-wait-status");
-      if (bothJoined && bothPaid) {
-        this.startBattleTest();
-      } else if (bothJoined) {
-        if (statusEl) statusEl.textContent = "To‘lovni kuting...";
+      const myPlayer = res.players.find(p => p.is_me);
+      const oppPlayer = res.players.find(p => !p.is_me);
+
+      if (statusEl) {
+        if (res.battle.status === "waiting_for_player") {
+          statusEl.innerHTML = "⏳ Do‘stingiz kodni kiritishini kuting...";
+        } else if (res.battle.status === "waiting_for_payment") {
+          statusEl.innerHTML = "💳 To‘lovni amalga oshiring";
+        } else if (res.battle.status === "ready") {
+          statusEl.innerHTML = "🎉 Ikkalangiz tayyorsiz! Testni boshlashingiz mumkin.";
+        } else if (res.battle.status === "in_progress") {
+          statusEl.innerHTML = "🧠 Test davom etmoqda";
+        } else if (res.battle.status === "completed" || res.battle.status === "draw") {
+          this.openBattleResult(res);
+        }
+      }
+
+      // Playerlarni ko'rsatish
+      const playersEl = document.getElementById("battle-players-list");
+      if (playersEl) {
+        playersEl.innerHTML = res.players.map(p => `
+          <div class="battle-player-row ${p.is_me ? 'me' : ''}">
+            <span class="bp-name">${p.is_me ? "👤 SIZ" : "👤 " + p.name}</span>
+            <span class="bp-progress">${p.current_question}/18</span>
+            <span class="bp-status">${p.test_status === 'completed' ? '✅' : p.test_status === 'in_progress' ? '⏳' : '—'}</span>
+          </div>
+        `).join("");
+      }
+
+      // Agar ikkalasi ham payment approved va test boshlansa
+      if (res.battle.status === "ready" && myPlayer && myPlayer.test_status === "not_started") {
+        const startBtn = document.getElementById("battle-start-btn");
+        if (startBtn) startBtn.style.display = "block";
+      }
+      if (myPlayer && myPlayer.test_status === "in_progress") {
+        const continueBtn = document.getElementById("battle-continue-btn");
+        if (continueBtn) continueBtn.style.display = "block";
       }
     }
   },
 
-  startBattleTest() {
-    this.go("battle-test");
-    State.test.type = "battle";
-    State.test.current = 0;
-    State.test.answers = new Array(18).fill(null);
-    State.test.startedAt = Date.now();
-    this.renderBattleQuestion();
+  async startBattleTest() {
+    const res = await api(`/api/battle/${State.battle.id}/start`, { initData });
+    if (res.ok) {
+      State.battle.sessionId = res.session_id;
+      State.battle.current = 0;
+      State.battle.answers = new Array(18).fill(null);
+      State.battle.startedAt = Date.now();
+      this.go("battle-test");
+      this.renderBattleQuestion();
+    } else {
+      alert(res.error || "Boshlanmadi");
+    }
   },
 
   renderBattleQuestion() {
-    const q = QUESTIONS[State.test.current];
+    const q = QUESTIONS[State.battle.current];
     if (!q) return;
-    document.getElementById("battle-progress-text").textContent = `Q${State.test.current + 1} / 18`;
+    document.getElementById("battle-progress-text").textContent = `Q${State.battle.current + 1} / 18`;
+    const pf = document.getElementById("battle-progress-fill");
+    if (pf) pf.style.width = ((State.battle.current / 18) * 100) + "%";
     renderMatrix(document.getElementById("battle-matrix"), q.matrix);
     const nextBtn = document.getElementById("battle-next");
     if (nextBtn) {
       nextBtn.disabled = true;
-      nextBtn.textContent = State.test.current === 17 ? "YAKUNLASH →" : "KEYINGISI →";
+      nextBtn.textContent = State.battle.current === 17 ? "YAKUNLASH →" : "KEYINGISI →";
     }
     renderOptions(document.getElementById("battle-options"), q.options, (idx) => {
-      State.test.answers[State.test.current] = idx;
+      State.battle.answers[State.battle.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
+      this.syncBattle();
     });
+    if (State.battle.answers[State.battle.current] !== null && State.battle.answers[State.battle.current] !== undefined) {
+      const prev = State.battle.answers[State.battle.current];
+      const el = document.querySelectorAll("#battle-options .option")[prev];
+      if (el) el.classList.add("selected");
+      if (nextBtn) nextBtn.disabled = false;
+    }
+  },
+
+  async syncBattle() {
+    if (!State.battle.id) return;
+    try {
+      await api(`/api/battle/${State.battle.id}/sync`, {
+        initData,
+        current_question: State.battle.current + 1,
+        answers: State.battle.answers,
+      });
+    } catch {}
   },
 
   nextBattleQuestion() {
     haptic("light");
-    if (State.test.current === 17) { this.finishBattle(); return; }
-    State.test.current++;
+    if (State.battle.current === 17) { this.finishBattle(); return; }
+    State.battle.current++;
+    this.syncBattle();
     this.renderBattleQuestion();
   },
 
   async finishBattle() {
-    const correct = State.test.answers.filter((a, i) => a === QUESTIONS[i].correct).length;
-    const score = Math.round(70 + (correct / 18) * 60);
+    this.go("iq-loading");
+    await new Promise(r => setTimeout(r, 3000));
+
     const res = await api(`/api/battle/${State.battle.id}/finish`, {
-      initData, score, answers: State.test.answers
+      initData,
+      answers: State.battle.answers,
+      duration: Math.floor((Date.now() - State.battle.startedAt) / 1000),
     });
-    this.go("battle-result");
-    document.getElementById("battle-my-score").textContent = score;
-    if (res.ok && res.opponent_score) {
-      document.getElementById("battle-opp-score").textContent = res.opponent_score;
-      if (score > res.opponent_score) document.getElementById("battle-winner").textContent = "🏆 SIZ";
-      else if (score < res.opponent_score) document.getElementById("battle-winner").textContent = "😔 DO‘STINGIZ";
-      else document.getElementById("battle-winner").textContent = "🤝 DURANG";
-    } else {
-      document.getElementById("battle-opp-score").textContent = "Kutilyapti...";
-      document.getElementById("battle-winner").textContent = "⏳";
-    }
-  },
 
-  // ==================== PAYMENT ====================
-  async createPayment(product) {
-    if (!initData) { alert("To‘lov faqat Telegram orqali."); return; }
-    haptic("medium");
-    const res = await api("/api/payment/create", { initData, product });
     if (res.ok) {
-      State.payment.id = res.payment_id;
-      State.payment.product = product;
-      State.payment.amount = res.amount;
-      State.payment.cards = res.cards;
-      document.getElementById("pay-amount").textContent = res.amount.toLocaleString() + " so‘m";
-      const cardsEl = document.getElementById("pay-cards");
-      if (cardsEl) {
-        cardsEl.innerHTML = res.cards.map(c =>
-          `<div class="pay-card"><div class="pay-card-num">${c.card_number}</div><div class="pay-card-holder">${c.holder}</div><div class="pay-card-bank">${c.bank || ""}</div></div>`
-        ).join("") || "<div>Karta mavjud emas. Admin bilan bog‘laning.</div>";
-      }
-      this.go("payment");
+      this.openBattleResult({
+        battle: { id: State.battle.id, status: res.final_status, winner_id: res.winner_id },
+        players: [
+          { user_id: State.user.user_id, is_me: true, score: res.score, name: "SIZ" },
+          { user_id: 0, is_me: false, score: res.opponent_score, name: "DO‘STINGIZ" },
+        ],
+      });
     } else {
-      alert("To‘lov yaratishda xatolik.");
+      alert("Yakunlashda xatolik.");
+      this.go("battle-home");
     }
   },
 
-  async sendReceipt() {
-    alert("Chekni Telegram botga yuboring:\n\n/start → to‘lov bo‘limi → chek rasmini yuboring");
+  openBattleResult(data) {
+    if (State.battle.pollInterval) {
+      clearInterval(State.battle.pollInterval);
+      State.battle.pollInterval = null;
+    }
+    const myPlayer = data.players.find(p => p.is_me);
+    const oppPlayer = data.players.find(p => !p.is_me);
+
+    document.getElementById("battle-my-score").textContent = myPlayer?.score ?? "—";
+    document.getElementById("battle-opp-score").textContent = oppPlayer?.score ?? "—";
+
+    const winnerEl = document.getElementById("battle-winner");
+    if (data.battle.status === "draw") {
+      winnerEl.textContent = "🤝 DURANG";
+      winnerEl.className = "battle-winner draw";
+    } else if (data.battle.winner_id === State.user?.user_id) {
+      winnerEl.textContent = "🏆 SIZ G‘OLIB";
+      winnerEl.className = "battle-winner win";
+    } else {
+      winnerEl.textContent = "😔 DO‘STINGIZ G‘OLIB";
+      winnerEl.className = "battle-winner lose";
+    }
+
+    this.go("battle-result");
+    this.refreshLive();
+  },
+
+  async openBattleDetail() {
+    if (!State.battle.id) return;
+    await this.checkBattle();
+    this.go("battle-wait");
+    this.startBattlePoll();
+  },
+
+  async continueBattle() {
+    if (!State.battle.id) return;
+    const res = await api(`/api/battle/${State.battle.id}`, { initData });
+    if (res.ok) {
+      State.battle.players = res.players;
+      const myPlayer = res.players.find(p => p.is_me);
+      if (myPlayer && myPlayer.test_status === "in_progress") {
+        State.battle.current = myPlayer.current_question || 0;
+        State.battle.answers = myPlayer.answers || new Array(18).fill(null);
+        State.battle.startedAt = Date.now();
+        this.go("battle-test");
+        this.renderBattleQuestion();
+      } else if (myPlayer && myPlayer.test_status === "not_started") {
+        this.startBattleTest();
+      }
+    }
   },
 };
 
@@ -1233,34 +1400,45 @@ const App = {
 document.addEventListener("DOMContentLoaded", () => {
   App.init();
 
+  // IQ card
   document.querySelector('[data-test="iq"]')?.addEventListener("click", () => {
     haptic("medium");
-    App.go("intro");
+    App.startIQ();
   });
 
+  // EQ card
   document.getElementById("card-eq")?.addEventListener("click", () => {
     const el = document.getElementById("card-eq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
-    haptic("medium");
     App.startEQ();
   });
 
+  // PQ card
   document.getElementById("card-pq")?.addEventListener("click", () => {
     const el = document.getElementById("card-pq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
-    haptic("medium");
     App.startPQ();
   });
 
+  // Profile card
   document.getElementById("card-profile")?.addEventListener("click", () => {
     const el = document.getElementById("card-profile");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
-    haptic("medium");
     App.openProfile();
   });
 
+  // Battle card
   document.getElementById("battle-card")?.addEventListener("click", () => {
-    haptic("medium");
     App.openBattle();
+  });
+
+  // Gender tanlash
+  document.querySelectorAll("#gender-selector [data-gender]").forEach(el => {
+    el.addEventListener("click", () => App.selectGender(el.dataset.gender));
+  });
+
+  // Country tanlash
+  document.querySelectorAll("#country-selector [data-country]").forEach(el => {
+    el.addEventListener("click", () => App.selectCountry(el.dataset.country));
   });
 });
