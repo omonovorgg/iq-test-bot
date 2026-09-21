@@ -454,9 +454,17 @@
                 const message =
                     data?.message ||
                     data?.error ||
+                    data?.detail ||
                     `HTTP ${response.status}`;
 
-                throw new Error(message);
+                const err = new Error(
+                    typeof message === "string" ? message : JSON.stringify(message)
+                );
+
+                err.status = response.status;
+                err.data = data;
+
+                throw err;
             }
 
             return data;
@@ -838,6 +846,10 @@
      * correct
      *
      * Options themselves are visual SVG/HTML objects.
+     *
+     * IMPORTANT: the `correct` index for every question below MUST be
+     * kept identical to CORRECT_ANSWERS in bot.py (same order). If a
+     * question is edited here, update bot.py in the same change.
      */
 
     const IQ_QUESTIONS = [
@@ -2389,6 +2401,14 @@
         haptic("light");
 
         saveLocalState();
+
+        /*
+         * Best-effort background sync of progress after every answer.
+         * This is fire-and-forget: the test never waits for the network
+         * (spec section 22/23). If it fails (offline), the full answer
+         * set is synced again at finish time.
+         */
+        syncAnswersInBackground();
     }
 
     function selectAnswerUI(
@@ -2827,15 +2847,22 @@
         const elapsed =
             getElapsedSeconds();
 
-        const result =
+        /*
+         * Local, offline-safe result. This gives the metric breakdown
+         * (logic/pattern/number/spatial) shown in the UI, and acts as a
+         * provisional score if the backend cannot be reached yet.
+         * The authoritative score/correct/elapsed always come from the
+         * server once synced — see submitResultToBackend() below.
+         */
+        const localResult =
             calculateResult(
                 state.test.answers,
                 elapsed
             );
 
-        state.lastResult = result;
+        state.lastResult = localResult;
 
-        saveLastResult(result);
+        saveLastResult(localResult);
         saveLocalState();
 
         showScreen("analyzing");
@@ -2843,20 +2870,148 @@
         notificationHaptic("success");
 
         /*
-         * Small visual analysis period.
-         * This is intentionally local and does not
-         * depend on server response.
+         * Small visual analysis period. Runs the real sync underneath it,
+         * so the delay is not wasted time.
          */
-        await wait(1800);
+        const [finalResult] = await Promise.all([
+            submitResultToBackend(localResult),
+            wait(1600)
+        ]);
 
-        renderResult(result);
+        state.lastResult = finalResult;
+
+        saveLastResult(finalResult);
+        saveLocalState();
+
+        renderResult(finalResult);
 
         showScreen("result");
 
-        /*
-         * Sync only AFTER local result is ready.
-         */
-        syncTestResult(result);
+        if (!finalResult.synced) {
+            showToast(
+                "Internet yo‘q — natija vaqtinchalik. Internet qaytganda yakunlanadi.",
+                "⚡",
+                3500
+            );
+        }
+    }
+
+    /*
+     * Sends the full answer set to the backend and asks it to compute
+     * the authoritative score (spec sections 29-31, 78, 93). The backend
+     * is the only source of truth for score/correct/elapsed; this
+     * function overlays those authoritative fields on top of the local
+     * result (which still supplies the category breakdown).
+     *
+     * Returns the merged result. Never throws — on any failure it
+     * returns the local result unchanged with `synced: false`, so the
+     * offline flow (spec section 25/79) keeps working.
+     */
+    async function submitResultToBackend(localResult) {
+        try {
+            // Make sure a session exists server-side even if the initial
+            // /session/start call failed earlier while offline.
+            await apiPost(
+                "/session/start",
+                { language: state.language },
+                6000
+            );
+
+            await apiPost(
+                "/session/sync",
+                { answers: localResult.answers },
+                8000
+            );
+
+            const battleId =
+                state.test.battleId || null;
+
+            const finish = await apiPost(
+                "/session/finish",
+                battleId ? { battle_id: battleId } : {},
+                10000
+            );
+
+            state.backend.available = true;
+
+            return {
+                ...localResult,
+                score: Number(finish.iq ?? localResult.score),
+                level: finish.level || localResult.level,
+                correct: Number(finish.correct ?? localResult.correct),
+                elapsedSeconds: Number(finish.elapsed ?? localResult.elapsedSeconds),
+                elapsed: formatTime(
+                    Number(finish.elapsed ?? localResult.elapsedSeconds)
+                ),
+                rank: finish.rank ?? null,
+                synced: true
+            };
+        } catch (error) {
+            console.info(
+                "[IQ TEST BOT] Result sync failed, will retry when online.",
+                error
+            );
+
+            return {
+                ...localResult,
+                synced: false
+            };
+        }
+    }
+
+    /*
+     * Retries a pending (unsynced) result. Called when connectivity
+     * returns (spec section 25: "Internet qaytgach: local state -> sync
+     * -> backend").
+     */
+    async function retryPendingSync() {
+        const result = state.lastResult;
+
+        if (!result || result.synced) {
+            return;
+        }
+
+        const finalResult =
+            await submitResultToBackend(result);
+
+        state.lastResult = finalResult;
+
+        saveLastResult(finalResult);
+        saveLocalState();
+
+        if (finalResult.synced) {
+            if (state.currentScreen === "result") {
+                renderResult(finalResult);
+            }
+
+            showToast(
+                "Natijangiz serverga yuklandi.",
+                "✓"
+            );
+        }
+    }
+
+    /*
+     * Best-effort per-answer sync. Never blocks the UI and never surfaces
+     * errors — the full answer set is re-sent (and is authoritative) at
+     * finish time regardless of whether these succeed.
+     */
+    async function syncAnswersInBackground() {
+        if (!state.test.active) {
+            return;
+        }
+
+        try {
+            await apiPost(
+                "/session/sync",
+                { answers: state.test.answers },
+                4000
+            );
+
+            state.backend.available = true;
+        } catch (_) {
+            // Ignored on purpose — offline-first.
+        }
     }
 
     function calculateResult(
@@ -2937,16 +3092,19 @@
          * IQ-style score.
          *
          * This is intentionally NOT a clinical/
-         * standardized IQ measurement.
+         * standardized IQ measurement. It mirrors the
+         * backend's formula (70..145) so the provisional
+         * offline score is close to what the server will
+         * confirm once synced.
          */
         const score =
             clamp(
                 Math.round(
-                    80 +
-                    percentage * 80
+                    70 +
+                    percentage * 75
                 ),
-                80,
-                160
+                70,
+                145
             );
 
         const metrics =
@@ -2987,6 +3145,8 @@
             completedAt: Date.now(),
 
             iqCompleted: true,
+
+            synced: false,
 
             /*
              * Used later by EQ/PQ unlock logic.
@@ -3058,10 +3218,6 @@
                 );
             };
 
-        /*
-         * Slightly richer metrics than simply
-         * showing raw correct-answer percentage.
-         */
         const logic =
             clamp(
                 getPercentage("logic"),
@@ -3090,10 +3246,6 @@
                 100
             );
 
-        /*
-         * If a category has fewer questions, we keep
-         * its raw score instead of inventing data.
-         */
         return {
             logic,
             pattern,
@@ -3103,19 +3255,19 @@
     }
 
     function getScoreLevel(score) {
-        if (score >= 140) {
+        if (score >= 135) {
             return "JUDA YUQORI DARAJA";
         }
 
-        if (score >= 125) {
+        if (score >= 120) {
             return "YUQORI DARAJA";
         }
 
-        if (score >= 110) {
+        if (score >= 105) {
             return "YAXSHI DARAJA";
         }
 
-        if (score >= 95) {
+        if (score >= 90) {
             return "O‘RTACHA DARAJA";
         }
 
@@ -3379,45 +3531,28 @@
             return;
         }
 
-        /*
-         * Backend certificate generation.
-         *
-         * For now the endpoint is optional.
-         * If backend is not deployed yet, the user gets
-         * a clear message instead of fake certificate data.
-         */
+        if (!result.synced) {
+            showToast(
+                "Sertifikat uchun internet kerak. Ulanish tiklangach qayta urinib ko‘ring.",
+                "!"
+            );
+
+            return;
+        }
+
         try {
             const response =
                 await apiPost(
                     "/certificate/create",
-                    {
-                        resultId: result.id,
-                        sessionId: result.sessionId
-                    },
+                    {},
                     10000
                 );
 
-            if (
-                response?.certificateUrl
-            ) {
-                openExternal(
-                    response.certificateUrl
-                );
-
+            if (response?.code) {
                 showToast(
-                    "Sertifikat tayyor.",
-                    "✓"
-                );
-
-                return;
-            }
-
-            if (
-                response?.code
-            ) {
-                showToast(
-                    `Sertifikat kodi: ${response.code}`,
-                    "📜"
+                    `📜 Sertifikat tayyor: ${response.code}. To‘liq faylni Telegram botdan oling.`,
+                    "✓",
+                    4000
                 );
 
                 return;
@@ -3429,7 +3564,7 @@
             );
         } catch (error) {
             showToast(
-                "Sertifikat hozircha serverga bog‘langan.",
+                "Sertifikatni olishda xatolik. Birozdan so‘ng qayta urinib ko‘ring.",
                 "!"
             );
         }
@@ -3470,7 +3605,7 @@
 
         if (unlocked) {
             showToast(
-                "EQ testi keyingi modulda ochiladi.",
+                "EQ testi keyingi bosqichda ochiladi.",
                 "🎭"
             );
 
@@ -3490,7 +3625,7 @@
 
         if (unlocked) {
             showToast(
-                "Prokrastinatsiya testi keyingi modulda ochiladi.",
+                "Prokrastinatsiya testi keyingi bosqichda ochiladi.",
                 "⏳"
             );
 
@@ -3510,7 +3645,7 @@
 
         if (unlocked) {
             showToast(
-                "Shaxsiy tahlil keyingi modulda ochiladi.",
+                "Shaxsiy tahlil keyingi bosqichda ochiladi.",
                 "⭐"
             );
 
@@ -3553,14 +3688,15 @@
 
         /*
          * Battle UI is deliberately not faked.
-         * When backend battle module is connected,
-         * this handler will call /api/battle/create.
+         * The full battle flow (create/join/payment/compare) is a
+         * separate build stage — see project notes. This only wires
+         * up battle creation so the code exists end-to-end.
          */
         openModal({
             icon: "⚔️",
             title: "DO‘ST BILAN BATTLE",
             message:
-                "Battle rejimida do‘stingiz bilan IQ-style Score natijangizni solishtirasiz. Har bir ishtirokchi: 7 500 so‘m.",
+                "Battle rejimida do‘stingiz bilan IQ-style Score natijangizni solishtirasiz. Har bir ishtirokchi to‘lov qiladi.",
 
             confirmText: "BATTLE YARATISH",
             cancelText: "BEKOR QILISH",
@@ -3582,16 +3718,17 @@
                 response?.code
             ) {
                 showToast(
-                    `Battle kodi: ${response.code}`,
-                    "⚔️"
+                    `Battle kodi: ${response.code}. To‘lovni bot orqali amalga oshiring.`,
+                    "⚔️",
+                    4000
                 );
 
                 return;
             }
 
             showToast(
-                "Battle yaratish oynasi backend bilan ulanadi.",
-                "⚔️"
+                "Battle yaratishda xatolik.",
+                "!"
             );
         } catch (_) {
             showToast(
@@ -3737,21 +3874,11 @@
        ======================================================== */
 
     async function syncSessionStart() {
-        if (!state.user.id) {
-            return;
-        }
-
         try {
             await apiPost(
                 "/session/start",
                 {
-                    sessionId:
-                        state.test.sessionId,
-
-                    testType: "iq",
-
-                    startedAt:
-                        state.test.startedAt
+                    language: state.language
                 },
                 5000
             );
@@ -3761,72 +3888,9 @@
         } catch (_) {
             /*
              * Intentionally ignored.
-             * Local test continues.
+             * Local test continues; session/start is retried
+             * from submitResultToBackend() at finish time.
              */
-        }
-    }
-
-    async function syncTestResult(result) {
-        if (!result) {
-            return;
-        }
-
-        try {
-            const response =
-                await apiPost(
-                    "/test/submit",
-                    {
-                        sessionId:
-                            result.sessionId,
-
-                        testType: "iq",
-
-                        answers:
-                            result.answers,
-
-                        elapsedSeconds:
-                            result.elapsedSeconds,
-
-                        score:
-                            result.score,
-
-                        correct:
-                            result.correct,
-
-                        metrics:
-                            result.metrics
-                    },
-                    10000
-                );
-
-            state.backend.available =
-                true;
-
-            if (
-                response?.result
-            ) {
-                state.lastResult = {
-                    ...state.lastResult,
-                    ...response.result
-                };
-
-                saveLocalState();
-                saveLastResult(
-                    state.lastResult
-                );
-
-                renderResult(
-                    state.lastResult
-                );
-            }
-        } catch (error) {
-            /*
-             * The local result is already safe.
-             * The result can be synchronized later.
-             */
-            console.info(
-                "[IQ TEST BOT] Result sync delayed."
-            );
         }
     }
 
@@ -3841,14 +3905,7 @@
             1800
         );
 
-        if (
-            state.lastResult &&
-            state.lastResult.sessionId
-        ) {
-            await syncTestResult(
-                state.lastResult
-            );
-        }
+        await retryPendingSync();
 
         await loadLiveStats();
     }
@@ -3903,6 +3960,17 @@
         updateHomeUI();
 
         state.initialized = true;
+
+        /*
+         * If a previous result never made it to the server
+         * (app was closed offline right after finishing), retry now.
+         */
+        if (
+            state.lastResult &&
+            state.lastResult.synced === false
+        ) {
+            retryPendingSync();
+        }
 
         /*
          * If the app was closed during a test,
@@ -4054,9 +4122,6 @@
             }
         );
 
-        /*
-         * LOCKED
-         */
         /*
          * Error
          */
