@@ -1,5 +1,5 @@
 /* ============================================================
-   IQ TEST BOT — app.js (FINAL v2.0)
+   IQ TEST BOT — app.js (FINAL v5.0)
    ============================================================ */
 
 const tg = window.Telegram?.WebApp;
@@ -12,29 +12,19 @@ if (tg) {
   } catch {}
 }
 
-// initData — har safar tekshirish
 let initData = "";
 function getInitData() {
-  if (tg?.initData && tg.initData.length > 0) {
-    initData = tg.initData;
-  }
+  if (tg?.initData && tg.initData.length > 0) initData = tg.initData;
   return initData;
 }
 getInitData();
 
-// 5 sekund davomida initData kutish
 let initAttempts = 0;
 const initInterval = setInterval(() => {
   initAttempts++;
   const v = getInitData();
-  if (v && v.length > 0) {
-    console.log("[initData] loaded:", v.length, "belgi");
-    clearInterval(initInterval);
-  }
-  if (initAttempts > 50) {
-    clearInterval(initInterval);
-    console.warn("[initData] bo'sh qoldi");
-  }
+  if (v && v.length > 0) { clearInterval(initInterval); console.log("[initData] loaded"); }
+  if (initAttempts > 50) clearInterval(initInterval);
 }, 100);
 
 function haptic(type = "light") {
@@ -44,9 +34,7 @@ function haptic(type = "light") {
 async function api(path, body = null, method = "POST") {
   try {
     const currentInitData = getInitData() || tg?.initData || "";
-    const payload = body
-      ? { ...body, initData: currentInitData }
-      : { initData: currentInitData };
+    const payload = body ? { ...body, initData: currentInitData } : { initData: currentInitData };
     const res = await fetch(path, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -66,43 +54,21 @@ const State = {
   completed: {},
   settings: {},
   test: {
-    type: "iq",
-    sessionId: null,
-    attemptId: null,
-    current: 0,
-    answers: [],
-    startedAt: null,
-    duration: 0,
-    timerInterval: null,
-    resultData: null,
+    type: "iq", sessionId: null, attemptId: null,
+    current: 0, answers: [], startedAt: null, duration: 0,
+    timerInterval: null, resultData: null,
   },
   battle: {
-    id: null,
-    code: null,
-    role: null,
-    players: [],
-    sessionId: null,
-    current: 0,
-    answers: [],
-    startedAt: null,
+    id: null, code: null, role: null, players: [],
+    sessionId: null, current: 0, answers: [], startedAt: null,
     pollInterval: null,
   },
   payment: {
-    id: null,
-    product: null,
-    amount: 0,
-    cards: [],
-    pollInterval: null,
-    attemptId: null,
-    battleId: null,
+    id: null, product: null, amount: 0, cards: [],
+    pollInterval: null, attemptId: null, battleId: null,
   },
   live: { interval: null },
-  profile: {
-    full_name: "",
-    gender: null,
-    age: null,
-    country: null,
-  },
+  profile: { full_name: "", gender: null, age: null, country: null },
 };
 
 // ==================== 18 IQ QUESTIONS ====================
@@ -351,9 +317,7 @@ function renderCell(cell) {
     html += "</div>";
     return html;
   }
-  if (cell.type === "num") {
-    return `<span style="font-size:22px;font-weight:800;color:#a78bfa;">${cell.val}</span>`;
-  }
+  if (cell.type === "num") return `<span style="font-size:22px;font-weight:800;color:#a78bfa;">${cell.val}</span>`;
   if (cell.type === "shape") {
     const colors = { full: "#a78bfa", half: "rgba(167,139,250,.5)", empty: "transparent" };
     const fill = colors[cell.fill] || "transparent";
@@ -362,9 +326,7 @@ function renderCell(cell) {
     if (cell.shape === "triangle") return `<svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,7 37,37 7,37" fill="${fill}" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/></svg>`;
     if (cell.shape === "diamond") return `<svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,6 38,22 22,38 6,22" fill="${fill}" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/></svg>`;
   }
-  if (cell.type === "rotate") {
-    return `<svg width="44" height="44" viewBox="0 0 44 44"><g transform="rotate(${cell.angle} 22 22)"><path d="M12 22 L32 22 M27 17 L32 22 L27 27" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
-  }
+  if (cell.type === "rotate") return `<svg width="44" height="44" viewBox="0 0 44 44"><g transform="rotate(${cell.angle} 22 22)"><path d="M12 22 L32 22 M27 17 L32 22 L27 27" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
   if (cell.type === "combo") {
     const colors = { full: "#a78bfa", half: "rgba(167,139,250,.5)", empty: "transparent" };
     const fill = colors[cell.fill] || "transparent";
@@ -425,10 +387,8 @@ function renderTextOptions(el, options, onSelect) {
 // ==================== APP ====================
 const App = {
   async init() {
-    console.log("[init] start");
     const cfg = await api("/api/config", null, "GET");
     if (cfg.ok) State.settings = cfg.settings;
-
     await this.refreshLive();
     this.startLiveLoop();
 
@@ -490,35 +450,26 @@ const App = {
 
   applyUnlocks() {
     const c = State.completed || {};
-    console.log("[applyUnlocks]", c);
     if (c.iq) {
       const el = document.getElementById("card-eq");
-      if (el) {
-        el.classList.remove("locked"); el.classList.add("unlocked");
+      if (el) { el.classList.remove("locked"); el.classList.add("unlocked");
         const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
-      }
+        const h = el.querySelector(".card-hint"); if (h) h.textContent = ""; }
     }
     if (c.eq) {
       const el = document.getElementById("card-pq");
-      if (el) {
-        el.classList.remove("locked"); el.classList.add("unlocked");
+      if (el) { el.classList.remove("locked"); el.classList.add("unlocked");
         const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
-      }
+        const h = el.querySelector(".card-hint"); if (h) h.textContent = ""; }
     }
     if (c.iq && c.eq && c.pq) {
       const el = document.getElementById("card-profile");
-      if (el) {
-        el.classList.remove("locked"); el.classList.add("unlocked");
-        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-      }
+      if (el) { el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓"; }
     }
   },
 
-  // ============ IQ START — HAR SAFAR PROFIL ============
   startIQ() {
-    // Har safar profil so'rash
     State.profile.gender = null;
     State.profile.age = null;
     State.profile.country = null;
@@ -530,27 +481,15 @@ const App = {
     const gender = State.profile.gender;
     const age = parseInt(document.getElementById("profile-age")?.value);
     const country = State.profile.country;
-
     if (!fullName || fullName.length < 3) { alert("Ism-familiyani to‘liq kiriting."); return; }
     if (!gender) { alert("Jinsni tanlang."); return; }
     if (!age || age < 8 || age > 100) { alert("Yoshni to‘g‘ri kiriting (8-100)."); return; }
     if (!country) { alert("Davlatni tanlang."); return; }
-
     State.profile.full_name = fullName;
     State.profile.age = age;
-
     if (initData) {
-      const res = await api("/api/profile/save", {
-        initData,
-        full_name: fullName,
-        gender: gender,
-        age: age,
-        country: country,
-      });
-      if (!res.ok) {
-        alert("Saqlashda xatolik.");
-        return;
-      }
+      const res = await api("/api/profile/save", { initData, full_name: fullName, gender, age, country });
+      if (!res.ok) { alert("Saqlashda xatolik."); return; }
     }
     haptic("medium");
     this.go("iq-intro");
@@ -594,8 +533,7 @@ const App = {
       options: [
         { type: "dot", count: 4 }, { type: "dot", count: 5 },
         { type: "dot", count: 3 }, { type: "dot", count: 6 },
-      ],
-      correct: 1,
+      ], correct: 1,
     };
     renderMatrix(document.getElementById("sample-matrix"), sample.matrix);
     const nextBtn = document.getElementById("sample-next");
@@ -609,11 +547,7 @@ const App = {
     });
   },
 
-  goTest() {
-    this.go("test");
-    this.renderQuestion();
-    this.startTimer();
-  },
+  goTest() { this.go("test"); this.renderQuestion(); this.startTimer(); },
 
   startTimer() {
     if (State.test.timerInterval) clearInterval(State.test.timerInterval);
@@ -678,10 +612,8 @@ const App = {
     let score = 0, correct = 0, level = "—", resultVisible = true, paymentRequired = false, attemptId = null;
     if (initData && State.test.sessionId) {
       const res = await api("/api/test/submit", {
-        initData,
-        session_id: State.test.sessionId,
-        answers: State.test.answers,
-        duration: State.test.duration,
+        initData, session_id: State.test.sessionId,
+        answers: State.test.answers, duration: State.test.duration,
       });
       if (res.ok) {
         score = res.score; correct = res.correct; level = res.level;
@@ -744,10 +676,7 @@ const App = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ initData }),
       });
-      if (!res.ok) {
-        alert("Sertifikat topilmadi. Avval IQ testni yakunlang.");
-        return;
-      }
+      if (!res.ok) { alert("Sertifikat topilmadi."); return; }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -757,15 +686,12 @@ const App = {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
-      alert("Sertifikat yuklashda xatolik.");
-    }
+    } catch (e) { console.error(e); alert("Xatolik."); }
   },
 
   shareResult() {
     const score = document.getElementById("res-score")?.textContent || "0";
-    const text = `🧠 IQ TEST BOT\n\nMen IQ-style testda ${score} ball oldim!\nSiz ham sinab ko‘ring 👇`;
+    const text = `🧠 IQ TEST BOT\n\nMen IQ-style testda ${score} ball oldim!`;
     const url = `https://t.me/iqtest_ubot`;
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
@@ -794,8 +720,7 @@ const App = {
     haptic("medium");
     const res = await api("/api/payment/create", {
       initData, product,
-      attempt_id: attemptId,
-      battle_id: battleId,
+      attempt_id: attemptId, battle_id: battleId,
     });
     if (res.ok) {
       if (res.free) {
@@ -815,16 +740,48 @@ const App = {
       State.payment.attemptId = attemptId;
       State.payment.battleId = battleId;
       document.getElementById("pay-amount").textContent = res.amount.toLocaleString() + " so‘m";
-      const cardsEl = document.getElementById("pay-cards");
-      if (cardsEl) {
-        cardsEl.innerHTML = res.cards.map(c =>
-          `<div class="pay-card"><div class="pay-card-num">${c.card_number}</div><div class="pay-card-holder">${c.holder}</div><div class="pay-card-bank">${c.bank || ""}</div></div>`
-        ).join("") || "<div>Karta mavjud emas.</div>";
-      }
+      this.renderPaymentCards(res.cards);
       this.go("payment");
       this.startPaymentPoll();
     } else {
       alert("To‘lov yaratishda xatolik.");
+    }
+  },
+
+  renderPaymentCards(cards) {
+    const cardsEl = document.getElementById("pay-cards");
+    if (!cardsEl) return;
+    if (!cards || cards.length === 0) {
+      cardsEl.innerHTML = "<div style='text-align:center;color:#94a3b8'>Karta mavjud emas. Admin bilan bog‘laning.</div>";
+      return;
+    }
+    cardsEl.innerHTML = cards.map((c, i) => `
+      <div class="pay-card">
+        <div class="pay-card-num" id="card-num-${i}">${c.card_number}</div>
+        <div class="pay-card-holder">${c.holder}</div>
+        <div class="pay-card-bank">${c.bank || ""}</div>
+        <button class="pay-card-copy" onclick="App.copyCard('${c.card_number}')">📋 Nusxa olish</button>
+      </div>
+    `).join("");
+  },
+
+  async copyCard(num) {
+    try {
+      await navigator.clipboard.writeText(num);
+      haptic("medium");
+      alert("✅ Karta raqami nusxa olindi!");
+    } catch {
+      alert("Karta raqami: " + num);
+    }
+  },
+
+  async shareBattleCode() {
+    if (!State.battle.code) return;
+    const text = `⚔️ IQ TEST BOT Battle\n\nKod: ${State.battle.code}\n\nBot: @iqtest_ubot`;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/iqtest_ubot')}&text=${encodeURIComponent(text)}`);
+    } else {
+      try { await navigator.clipboard.writeText(text); alert("Kod nusxa olindi!"); } catch { alert(text); }
     }
   },
 
@@ -849,7 +806,12 @@ const App = {
   },
 
   async sendReceipt() {
-    alert("Chek rasmini Telegram botga yuboring:\n\nBot → chek rasmini yuboring.");
+    const text = "Chek rasmini botga yuboring:\n\nBot: @iqtest_ubot";
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(`https://t.me/iqtest_ubot`);
+    } else {
+      alert(text);
+    }
   },
 
   // ============ EQ ============
@@ -1008,9 +970,7 @@ const App = {
   },
 
   // ============ BATTLE ============
-  openBattle() {
-    this.go("battle-home");
-  },
+  openBattle() { this.go("battle-home"); },
 
   async createBattle() {
     haptic("medium");
@@ -1045,13 +1005,9 @@ const App = {
       this.go("battle-wait");
       this.startBattlePoll();
     } else {
-      const errs = {
-        NOT_FOUND: "Kod topilmadi.",
-        OWN_BATTLE: "O‘z battlingizga qo‘shila olmaysiz.",
-        BATTLE_NOT_OPEN: "Battle allaqachon boshlangan.",
-        BATTLE_FULL: "Battle to‘lgan.",
-        ACTIVE_BATTLE_EXISTS: "Sizda faol battle bor.",
-      };
+      const errs = { NOT_FOUND: "Kod topilmadi.", OWN_BATTLE: "O‘z battlingizga qo‘shila olmaysiz.",
+        BATTLE_NOT_OPEN: "Battle allaqachon boshlangan.", BATTLE_FULL: "Battle to‘lgan.",
+        ACTIVE_BATTLE_EXISTS: "Sizda faol battle bor." };
       alert(errs[res.error] || "Xatolik.");
     }
   },
@@ -1071,7 +1027,7 @@ const App = {
     if (statusEl) {
       if (res.battle.status === "waiting_for_player") statusEl.innerHTML = "⏳ Do‘stingiz kodni kiritishini kuting...";
       else if (res.battle.status === "waiting_for_payment") statusEl.innerHTML = "💳 To‘lovni amalga oshiring";
-      else if (res.battle.status === "ready") statusEl.innerHTML = "🎉 Ikkalangiz tayyorsiz! Testni boshlashingiz mumkin.";
+      else if (res.battle.status === "ready") statusEl.innerHTML = "🎉 Ikkalangiz tayyorsiz!";
       else if (res.battle.status === "in_progress") statusEl.innerHTML = "🧠 Test davom etmoqda";
       else if (res.battle.status === "completed" || res.battle.status === "draw") { this.openBattleResult(res); return; }
     }
@@ -1143,9 +1099,7 @@ const App = {
     if (!State.battle.id) return;
     try {
       await api(`/api/battle/${State.battle.id}/sync`, {
-        initData,
-        current_question: State.battle.current + 1,
-        answers: State.battle.answers,
+        initData, current_question: State.battle.current + 1, answers: State.battle.answers,
       });
     } catch {}
   },
@@ -1162,8 +1116,7 @@ const App = {
     this.go("iq-loading");
     await new Promise(r => setTimeout(r, 3000));
     const res = await api(`/api/battle/${State.battle.id}/finish`, {
-      initData,
-      answers: State.battle.answers,
+      initData, answers: State.battle.answers,
       duration: Math.floor((Date.now() - State.battle.startedAt) / 1000),
     });
     if (res.ok) {
@@ -1199,13 +1152,9 @@ const App = {
     document.getElementById("battle-my-score").textContent = mp?.score ?? "—";
     document.getElementById("battle-opp-score").textContent = op?.score ?? "—";
     const wEl = document.getElementById("battle-winner");
-    if (data.battle.status === "draw") {
-      wEl.textContent = "🤝 DURANG"; wEl.className = "battle-winner draw";
-    } else if (data.battle.winner_id === State.user?.user_id) {
-      wEl.textContent = "🏆 SIZ G‘OLIB"; wEl.className = "battle-winner win";
-    } else {
-      wEl.textContent = "😔 DO‘STINGIZ G‘OLIB"; wEl.className = "battle-winner lose";
-    }
+    if (data.battle.status === "draw") { wEl.textContent = "🤝 DURANG"; wEl.className = "battle-winner draw"; }
+    else if (data.battle.winner_id === State.user?.user_id) { wEl.textContent = "🏆 SIZ G‘OLIB"; wEl.className = "battle-winner win"; }
+    else { wEl.textContent = "😔 DO‘STINGIZ G‘OLIB"; wEl.className = "battle-winner lose"; }
     this.go("battle-result");
   },
 };
@@ -1214,30 +1163,24 @@ const App = {
 document.addEventListener("DOMContentLoaded", () => {
   App.init();
 
-  // IQ card — HAR SAFAR profil so'raladi
   document.querySelector('[data-test="iq"]')?.addEventListener("click", () => {
-    haptic("medium");
-    App.startIQ();
+    haptic("medium"); App.startIQ();
   });
-
   document.getElementById("card-eq")?.addEventListener("click", () => {
     const el = document.getElementById("card-eq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.startEQ();
   });
-
   document.getElementById("card-pq")?.addEventListener("click", () => {
     const el = document.getElementById("card-pq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.startPQ();
   });
-
   document.getElementById("card-profile")?.addEventListener("click", () => {
     const el = document.getElementById("card-profile");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.openProfile();
   });
-
   document.getElementById("battle-card")?.addEventListener("click", () => App.openBattle());
 
   document.querySelectorAll("#gender-selector [data-gender]").forEach(el => {
