@@ -8,514 +8,1705 @@
 <link rel="stylesheet" href="/static/style.css">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
+
 <body>
 
 <div class="bg-orbs">
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-  <div class="orb orb-3"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
 </div>
 
 <div id="app">
 
-  <!-- ========== HOME ========== -->
-  <section id="screen-home" class="screen active">
-    <header class="hero">
-      <div class="hero-top">
-        <div class="hero-brand"><span class="brand-dot"></span> IQ TEST BOT</div>
-        <button class="lang-btn" onclick="App.go('home')">UZ</button>
-      </div>
-      <div class="brain-wrap">
-        <div class="brain-halo"></div>
-        <svg class="brain" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="brainGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.8"/>
-              <stop offset="60%" stop-color="#6366f1" stop-opacity="0.3"/>
-              <stop offset="100%" stop-color="#0a0e1a" stop-opacity="0"/>
+<!-- ==================== HOME ==================== -->
+
+<section id="screen-home" class="screen active">
+
+<header class="hero">
+
+<div class="hero-top">
+    <div class="hero-brand">
+        <span class="brand-dot"></span>
+        IQ TEST BOT
+    </div>
+
+    <button class="lang-btn" onclick="App.go('home')">UZ</button>
+</div>
+
+<div class="brain-wrap">
+
+    <div class="brain-halo"></div>
+
+    <svg class="brain"
+         viewBox="0 0 200 200"
+         xmlns="http://www.w3.org/2000/svg">
+
+        <defs>
+
+            <radialGradient id="brainGlow"
+                            cx="50%"
+                            cy="50%"
+                            r="50%">
+
+                <stop offset="0%"
+                      stop-color="#a78bfa"
+                      stop-opacity="0.8"/>
+
+                <stop offset="60%"
+                      stop-color="#6366f1"
+                      stop-opacity="0.3"/>
+
+                <stop offset="100%"
+                      stop-color="#0a0e1a"
+                      stop-opacity="0"/>
+
             </radialGradient>
-            <linearGradient id="brainStroke" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#c4b5fd"/>
-              <stop offset="100%" stop-color="#60a5fa"/>
+
+            <linearGradient id="brainStroke"
+                            x1="0"
+                            y1="0"
+                            x2="1"
+                            y2="1">
+
+                <stop offset="0%"
+                      stop-color="#c4b5fd"/>
+
+                <stop offset="100%"
+                      stop-color="#60a5fa"/>
+
             </linearGradient>
-          </defs>
-          <circle cx="100" cy="100" r="70" fill="url(#brainGlow)" class="glow-pulse"/>
-          <g class="brain-lines" stroke="url(#brainStroke)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+
+        </defs>
+
+        <circle
+            cx="100"
+            cy="100"
+            r="70"
+            fill="url(#brainGlow)"
+            class="glow-pulse"/>
+
+        <g class="brain-lines"
+           stroke="url(#brainStroke)"
+           stroke-width="2.5"
+           fill="none"
+           stroke-linecap="round"
+           stroke-linejoin="round">
+
             <path d="M65 75 Q80 55 100 70 Q120 55 135 75"/>
             <path d="M60 95 Q75 80 100 95 Q125 80 140 95"/>
             <path d="M65 115 Q80 135 100 120 Q120 135 135 115"/>
+
             <path d="M75 65 Q65 95 75 125"/>
             <path d="M125 65 Q135 95 125 125"/>
+
             <path d="M90 60 Q85 95 90 130"/>
             <path d="M110 60 Q115 95 110 130"/>
+
             <circle cx="100" cy="70" r="3.5" fill="#c4b5fd"/>
             <circle cx="100" cy="95" r="3.5" fill="#c4b5fd"/>
             <circle cx="100" cy="120" r="3.5" fill="#c4b5fd"/>
+
             <circle cx="75" cy="95" r="3" fill="#60a5fa"/>
             <circle cx="125" cy="95" r="3" fill="#60a5fa"/>
-          </g>
-        </svg>
-        <div class="brain-sparkles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      </div>
-      <p class="hero-sub">18 TA MANTIQIY PUZZLE</p>
-      <h1 class="hero-title">IQ darajangizni sinab ko‘ring</h1>
-      <p class="hero-desc">18 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.</p>
-    </header>
 
-    <div class="cards">
-      <div class="test-card unlocked" data-test="iq">
+        </g>
+
+    </svg>
+
+    <div class="brain-sparkles">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+
+</div>
+
+<p class="hero-sub">18 TA MANTIQIY PUZZLE</p>
+
+<h1 class="hero-title">
+    IQ darajangizni sinab ko‘ring
+</h1>
+
+<p class="hero-desc">
+    18 ta mantiqiy puzzle orqali fikrlash qobiliyatingizni sinang.
+</p>
+
+</header>
+
+
+<div class="cards">
+
+    <div class="test-card unlocked" data-test="iq">
+
         <div class="card-icon">🧠</div>
+
         <div class="card-body">
-          <div class="card-title">IQ</div>
-          <div class="card-desc">Mantiqiy fikrlash darajangiz</div>
+            <div class="card-title">IQ</div>
+            <div class="card-desc">
+                Mantiqiy fikrlash darajangiz
+            </div>
         </div>
+
         <div class="card-arrow">›</div>
-      </div>
 
-      <div class="test-card locked" data-test="eq" id="card-eq">
-        <div class="card-icon">🎭</div>
+    </div>
+
+
+    <div class="test-card locked"
+         data-test="eq"
+         id="card-eq">
+
+        <div class="card-icon">❤️</div>
+
         <div class="card-body">
-          <div class="card-title">EQ</div>
-          <div class="card-desc">His-tuyg‘ularni tushunish qobiliyati</div>
-          <div class="card-hint">IQ dan keyin</div>
-        </div>
-        <div class="card-state">🔒</div>
-      </div>
+            <div class="card-title">EQ</div>
 
-      <div class="test-card locked" data-test="pq" id="card-pq">
+            <div class="card-desc">
+                His-tuyg‘ularni tushunish qobiliyati
+            </div>
+
+            <div class="card-hint">
+                IQ dan keyin
+            </div>
+        </div>
+
+        <div class="card-state">🔒</div>
+
+    </div>
+
+
+    <div class="test-card locked"
+         data-test="pq"
+         id="card-pq">
+
         <div class="card-icon">⏳</div>
+
         <div class="card-body">
-          <div class="card-title">PROKRASTINATSIYA</div>
-          <div class="card-desc">Erinchoqlik darajasi va ishni keyinga surish odati</div>
-          <div class="card-hint">EQ dan keyin</div>
-        </div>
-        <div class="card-state">🔒</div>
-      </div>
 
-      <div class="test-card locked" data-test="profile" id="card-profile">
-        <div class="card-icon">⭐</div>
+            <div class="card-title">
+                PROKRASTINATSIYA
+            </div>
+
+            <div class="card-desc">
+                Erinchoqlik darajasi va ishni keyinga
+                surish odati
+            </div>
+
+            <div class="card-hint">
+                EQ dan keyin
+            </div>
+
+        </div>
+
+        <div class="card-state">🔒</div>
+
+    </div>
+
+
+    <div class="test-card locked"
+         data-test="profile"
+         id="card-profile">
+
+        <div class="card-icon">👤</div>
+
         <div class="card-body">
-          <div class="card-title">Siz qanday insonsiz</div>
-          <div class="card-desc">Uchala test topshirilgach ochiladi</div>
+
+            <div class="card-title">
+                Siz qanday insonsiz
+            </div>
+
+            <div class="card-desc">
+                Uchala test topshirilgach ochiladi
+            </div>
+
         </div>
+
         <div class="card-state">🔒</div>
-      </div>
+
     </div>
 
-    <div class="battle-card" id="battle-card">
-      <div class="battle-icon">⚔️</div>
-      <div class="battle-body">
-        <div class="battle-title">Do‘st bilan battle</div>
-        <div class="battle-desc">Do‘stingiz bilan IQ natijangizni solishtiring</div>
-      </div>
-      <div class="battle-arrow">→</div>
-    </div>
+</div>
 
-    <div class="live-counter">
-      <div class="live-badge"><span class="live-dot"></span> JONLI</div>
-      <div class="live-label">Botga qo‘shilganlar soni</div>
-      <div class="live-digits"><span id="live-total">0</span></div>
-      <div class="live-online"><span class="online-icon">👥</span> Hozir <b id="live-online">0</b> kishi onlayn</div>
-    </div>
 
-    <div class="footer-note">Bugungi bilim — ertangi imkoniyat</div>
-  </section>
+<div class="battle-card" id="battle-card">
 
-  <!-- ========== PROFILE NAME ========== -->
-  <section id="screen-profile-name" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="profile-card">
-      <div class="profile-avatar">👤</div>
-      <h2 class="profile-title">Ism va Familiya</h2>
-      <p class="profile-desc">Sertifikatda ko‘rsatish uchun to‘liq ismingizni kiriting.</p>
-      <div class="form-group">
-        <label class="form-label">ISM VA FAMILIYA</label>
-        <input type="text" id="profile-fullname" class="input-field" placeholder="Masalan: Omonov Muhammad Ali" autocomplete="off">
-      </div>
-      <button class="btn-primary" onclick="App.go('profile-details')">Davom Etish →</button>
-      <button class="btn-text" onclick="App.go('home')">← Orqaga</button>
-    </div>
-  </section>
+    <div class="battle-icon">⚔️</div>
 
-  <!-- ========== PROFILE DETAILS ========== -->
-  <section id="screen-profile-details" class="screen">
-    <button class="back-btn" onclick="App.go('profile-name')">←</button>
-    <div class="profile-card">
-      <div class="profile-avatar">📋</div>
-      <h2 class="profile-title">Bir oz ma'lumot</h2>
-      <p class="profile-desc">Natijani aniqroq taqqoslash uchun.</p>
+    <div class="battle-body">
 
-      <div class="form-group">
-        <label class="form-label">JINS</label>
-        <div class="option-grid" id="gender-selector">
-          <div class="option gender-opt" data-gender="male">
-            <div class="opt-emoji">👦</div>
-            <div class="opt-label">O‘g‘il bola</div>
-          </div>
-          <div class="option gender-opt" data-gender="female">
-            <div class="opt-emoji">👧</div>
-            <div class="opt-label">Qiz bola</div>
-          </div>
+        <div class="battle-title">
+            Do‘st bilan battle
         </div>
-      </div>
 
-      <div class="form-group">
-        <label class="form-label">YOSH</label>
-        <input type="number" id="profile-age" class="input-field" placeholder="Masalan: 23" min="8" max="100">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">DAVLAT</label>
-        <div class="option-grid country-grid" id="country-selector">
-          <div class="option country-opt" data-country="uz"><div class="opt-emoji">🇺🇿</div><div class="opt-label">O‘zbekiston</div></div>
-          <div class="option country-opt" data-country="ru"><div class="opt-emoji">🇷🇺</div><div class="opt-label">Rossiya</div></div>
-          <div class="option country-opt" data-country="en"><div class="opt-emoji">🇬🇧</div><div class="opt-label">English</div></div>
-          <div class="option country-opt" data-country="kz"><div class="opt-emoji">🇰🇿</div><div class="opt-label">Qozog‘iston</div></div>
-          <div class="option country-opt" data-country="kg"><div class="opt-emoji">🇰🇬</div><div class="opt-label">Qirg‘iziston</div></div>
-          <div class="option country-opt" data-country="tr"><div class="opt-emoji">🇹🇷</div><div class="opt-label">Turkiya</div></div>
+        <div class="battle-desc">
+            Do‘stingiz bilan IQ natijangizni solishtiring
         </div>
-      </div>
 
-      <button class="btn-primary" onclick="App.saveProfile()">Testni Boshlash →</button>
-      <button class="btn-text" onclick="App.go('profile-name')">← Orqaga</button>
     </div>
-  </section>
 
-  <!-- ========== IQ INTRO ========== -->
-  <section id="screen-iq-intro" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">🧠</div>
-      <h2 class="intro-title">AQL DARAJANGIZNI ANIQLANG</h2>
-      <p class="intro-desc">18 ta tasviriy mantiq savoli</p>
+    <div class="battle-arrow">→</div>
+
+</div>
+
+
+<div class="live-counter">
+
+    <div class="live-badge">
+        <span class="live-dot"></span>
+        JONLI
     </div>
-    <div class="intro-features">
-      <div class="feature"><span>📄</span> 18 ta savol</div>
-      <div class="feature"><span>∞</span> Vaqt cheksiz</div>
-      <div class="feature"><span>🔷</span> Tasviriy mantiq</div>
-      <div class="feature"><span>🏅</span> IQ-style natija</div>
+
+    <div class="live-label">
+        Botga qo‘shilganlar soni
     </div>
-    <div class="how-card">
-      <div class="how-title">💡 Qanday ishlaydi?</div>
-      <ol class="how-list">
+
+    <div class="live-digits">
+        <span id="live-total">0</span>
+    </div>
+
+    <div class="live-online">
+        <span class="online-icon">●</span>
+        Hozir <b id="live-online">0</b> kishi onlayn
+    </div>
+
+</div>
+
+
+<div class="footer-note">
+    Bugungi bilim — ertangi imkoniyat
+</div>
+
+</section>
+
+
+<!-- ==================== PROFILE NAME ==================== -->
+
+<section id="screen-profile-name" class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="profile-card">
+
+    <div class="profile-avatar">👤</div>
+
+    <h2 class="profile-title">
+        Ism va Familiya
+    </h2>
+
+    <p class="profile-desc">
+        Sertifikatda ko‘rsatish uchun to‘liq ismingizni kiriting.
+    </p>
+
+    <div class="form-group">
+
+        <label class="form-label">
+            ISM VA FAMILIYA
+        </label>
+
+        <input
+            type="text"
+            id="profile-fullname"
+            class="input-field"
+            placeholder="Masalan: Omonov Muhammad Ali"
+            autocomplete="off">
+
+    </div>
+
+    <button class="btn-primary"
+            onclick="App.go('profile-details')">
+        Davom Etish →
+    </button>
+
+    <button class="btn-text"
+            onclick="App.go('home')">
+        ← Orqaga
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== PROFILE DETAILS ==================== -->
+
+<section id="screen-profile-details" class="screen">
+
+<button class="back-btn"
+        onclick="App.go('profile-name')">
+    ←
+</button>
+
+<div class="profile-card">
+
+    <div class="profile-avatar">🧑</div>
+
+    <h2 class="profile-title">
+        Bir oz ma'lumot
+    </h2>
+
+    <p class="profile-desc">
+        Natijani aniqroq taqqoslash uchun.
+    </p>
+
+
+    <div class="form-group">
+
+        <label class="form-label">
+            JINS
+        </label>
+
+        <div class="option-grid"
+             id="gender-selector">
+
+            <div class="option gender-opt"
+                 data-gender="male">
+
+                <div class="opt-emoji">👦</div>
+
+                <div class="opt-label">
+                    O‘g‘il bola
+                </div>
+
+            </div>
+
+
+            <div class="option gender-opt"
+                 data-gender="female">
+
+                <div class="opt-emoji">👧</div>
+
+                <div class="opt-label">
+                    Qiz bola
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label class="form-label">
+            YOSH
+        </label>
+
+        <input
+            type="number"
+            id="profile-age"
+            class="input-field"
+            placeholder="Masalan: 23"
+            min="8"
+            max="100">
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label class="form-label">
+            DAVLAT
+        </label>
+
+        <div class="option-grid country-grid"
+             id="country-selector">
+
+            <div class="option country-opt"
+                 data-country="uz">
+                <div class="opt-emoji">🇺🇿</div>
+                <div class="opt-label">O‘zbekiston</div>
+            </div>
+
+            <div class="option country-opt"
+                 data-country="ru">
+                <div class="opt-emoji">🇷🇺</div>
+                <div class="opt-label">Rossiya</div>
+            </div>
+
+            <div class="option country-opt"
+                 data-country="en">
+                <div class="opt-emoji">🇬🇧</div>
+                <div class="opt-label">English</div>
+            </div>
+
+            <div class="option country-opt"
+                 data-country="kz">
+                <div class="opt-emoji">🇰🇿</div>
+                <div class="opt-label">Qozog‘iston</div>
+            </div>
+
+            <div class="option country-opt"
+                 data-country="kg">
+                <div class="opt-emoji">🇰🇬</div>
+                <div class="opt-label">Qirg‘iziston</div>
+            </div>
+
+            <div class="option country-opt"
+                 data-country="tr">
+                <div class="opt-emoji">🇹🇷</div>
+                <div class="opt-label">Turkiya</div>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <button class="btn-primary"
+            onclick="App.saveProfile()">
+        Testni Boshlash →
+    </button>
+
+    <button class="btn-text"
+            onclick="App.go('profile-name')">
+        ← Orqaga
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== IQ INTRO ==================== -->
+
+<section id="screen-iq-intro" class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">🧠</div>
+
+    <h2 class="intro-title">
+        AQL DARAJANGIZNI ANIQLANG
+    </h2>
+
+    <p class="intro-desc">
+        18 ta tasviriy mantiq savoli
+    </p>
+
+</div>
+
+
+<div class="intro-features">
+
+    <div class="feature">
+        <span>🧩</span>
+        18 ta savol
+    </div>
+
+    <div class="feature">
+        <span>∞</span>
+        Vaqt cheksiz
+    </div>
+
+    <div class="feature">
+        <span>🧠</span>
+        Tasviriy mantiq
+    </div>
+
+    <div class="feature">
+        <span>📊</span>
+        IQ-style natija
+    </div>
+
+</div>
+
+
+<div class="how-card">
+
+    <div class="how-title">
+        💡 Qanday ishlaydi?
+    </div>
+
+    <ol class="how-list">
         <li>18 ta savolga javob bering</li>
         <li>Har bir puzzle mantiqiy fikrlashni tekshiradi</li>
         <li>Natijangiz test yakunida hisoblanadi</li>
         <li>Sertifikatingizni olishingiz mumkin</li>
-      </ol>
-    </div>
-    <button class="btn-primary" onclick="App.startIQTest()">🚀 TESTNI BOSHLASH</button>
-  </section>
-
-  <!-- ========== SAMPLE ========== -->
-  <section id="screen-sample" class="screen">
-    <div class="sample-head">
-      <div class="sample-badge">🧩 Namunaviy savol</div>
-      <div class="sample-note">Bu savol natijaga qo‘shilmaydi</div>
-    </div>
-    <div class="matrix-wrap"><div class="matrix" id="sample-matrix"></div></div>
-    <div class="options" id="sample-options"></div>
-    <button class="btn-primary" id="sample-next" disabled onclick="App.goTest()">DAVOM ETISH →</button>
-  </section>
-
-  <!-- ========== TEST ========== -->
-  <section id="screen-test" class="screen">
-    <div class="test-top">
-      <div class="test-progress-text" id="test-progress-text">Q1 / 18</div>
-      <div class="test-timer" id="test-timer">00:00</div>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-    <div class="difficulty" id="difficulty-bar"></div>
-    <div class="matrix-wrap"><div class="matrix" id="test-matrix"></div></div>
-    <div class="options" id="test-options"></div>
-    <button class="btn-primary" id="test-next" disabled onclick="App.nextQuestion()">KEYINGISI →</button>
-  </section>
-
-  <!-- ========== Q6 ========== -->
-  <section id="screen-q6" class="screen">
-    <div class="celebrate">
-      <div class="celebrate-emoji">🎉</div>
-      <h2 class="celebrate-title">AJOYIB BOSHLADINGIZ! 🚀</h2>
-      <p class="celebrate-desc">Birinchi <b>6 ta savol</b> ortda.<br>Shu zaylda davom eting!</p>
-      <button class="btn-primary" onclick="App.continueAfterQ6()">Davom etish →</button>
-    </div>
-  </section>
-
-  <!-- ========== Q12 ========== -->
-  <section id="screen-q12" class="screen">
-    <div class="celebrate">
-      <div class="celebrate-emoji">🔥</div>
-      <h2 class="celebrate-title">YARIM YO‘L ORTDA! 💪</h2>
-      <p class="celebrate-desc"><b>12 ta savol</b> tugadi.<br>Endi eng qiyin qismi boshlanadi!</p>
-      <button class="btn-primary" onclick="App.continueAfterQ12()">Davom etish →</button>
-    </div>
-  </section>
-
-  <!-- ========== IQ LOADING ========== -->
-  <section id="screen-iq-loading" class="screen">
-    <div class="loading-wrap">
-      <div class="loading-brain">
-        <svg viewBox="0 0 100 100" width="100" height="100">
-          <defs>
-            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#fbbf24"/>
-              <stop offset="50%" stop-color="#a78bfa"/>
-              <stop offset="100%" stop-color="#3b82f6"/>
-            </linearGradient>
-          </defs>
-          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="4"/>
-          <circle cx="50" cy="50" r="42" fill="none" stroke="url(#ringGrad)" stroke-width="4"
-                  stroke-dasharray="80 200" stroke-linecap="round" class="ring-rotate"/>
-          <text x="50" y="58" text-anchor="middle" font-size="32">🧠</text>
-        </svg>
-      </div>
-      <h2 class="loading-title">Natijangiz shakllanmoqda...</h2>
-      <ul class="loading-checklist">
-        <li class="done">✅ Mantiqiy fikrlash tahlili</li>
-        <li class="done">✅ Naqsh aniqlash qobiliyati</li>
-        <li class="done">✅ Fazoviy tasavvur ko'rsatkichi</li>
-        <li class="pending">⏳ Dunyo reytingi bilan solishtirilmoqda</li>
-      </ul>
-      <div class="loading-progress"><div class="loading-progress-fill"></div></div>
-    </div>
-  </section>
-
-  <!-- ========== RESULT ========== -->
-  <section id="screen-result" class="screen">
-    <div class="result-head">
-      <div class="result-badge">✨ TEST YAKUNLANDI</div>
-      <div class="result-label">IQ-STYLE SCORE</div>
-      <div class="result-score" id="res-score">0</div>
-      <div class="result-level" id="res-level">—</div>
-    </div>
-    <div class="result-stats">
-      <div class="stat"><div class="stat-val" id="res-correct">0 / 18</div><div class="stat-label">To‘g‘ri javob</div></div>
-      <div class="stat"><div class="stat-val" id="res-time">00:00</div><div class="stat-label">Test vaqti</div></div>
-    </div>
-    <div class="directions">
-      <div class="dir-title">📊 YO‘NALISHLAR</div>
-      <div class="dir" data-label="Mantiq"><div class="dir-bar"><div class="dir-fill" style="width:0%"></div></div><span>0%</span></div>
-      <div class="dir" data-label="Pattern"><div class="dir-bar"><div class="dir-fill" style="width:0%"></div></div><span>0%</span></div>
-      <div class="dir" data-label="Raqamlar"><div class="dir-bar"><div class="dir-fill" style="width:0%"></div></div><span>0%</span></div>
-      <div class="dir" data-label="Fazoviy fikr"><div class="dir-bar"><div class="dir-fill" style="width:0%"></div></div><span>0%</span></div>
-    </div>
-    <div class="strongest">
-      <div class="strongest-title">💡 KUCHLI TOMONINGIZ</div>
-      <div class="strongest-val" id="res-strongest">—</div>
-    </div>
-    <div class="result-actions">
-      <button class="btn-secondary" onclick="App.getCertificate()">📜 Sertifikatni olish</button>
-      <button class="btn-secondary" onclick="App.shareResult()">📤 Natijani ulashish</button>
-      <button class="btn-secondary" onclick="App.retry()">🔄 IQ testni qayta ishlash</button>
-      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
-    </div>
-  </section>
-
-  <!-- ========== PAYMENT REQUIRED ========== -->
-  <section id="screen-payment-required" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="payreq-wrap">
-      <div class="payreq-icon">🔒</div>
-      <h2 class="payreq-title">Natijani olish uchun to‘lov</h2>
-      <p class="payreq-desc">Test yakunlandi. Natijani ko‘rish va reytingga kirish uchun to‘lovni amalga oshiring.</p>
-      <div class="payreq-price" id="payreq-price">10 000 so‘m</div>
-      <button class="btn-primary" onclick="App.startIQPayment()">💳 TO‘LOVNI AMALGA OSHIRISH</button>
-      <p class="payreq-note">To‘lov admin tomonidan 1-2 daqiqada tasdiqlanadi.</p>
-    </div>
-  </section>
-
-  <!-- ========== PAYMENT ========== -->
-  <section id="screen-payment" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">💳</div>
-      <h2 class="intro-title">TO‘LOV</h2>
-      <div class="pay-amount-big" id="pay-amount">0 so‘m</div>
-    </div>
-    <div class="pay-cards" id="pay-cards"></div>
-    <div class="pay-note">To‘lovni amalga oshirib, chek rasmini Telegram botga yuboring.</div>
-    <button class="btn-primary" onclick="App.sendReceipt()">✅ CHEKNI YUBORDIM</button>
-  </section>
-
-  <!-- ========== EQ INTRO ========== -->
-  <section id="screen-eq-intro" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">🎭</div>
-      <h2 class="intro-title">HISSIY INTELLEKT</h2>
-      <p class="intro-desc">6 ta situatsion savol</p>
-    </div>
-    <div class="intro-features">
-      <div class="feature"><span>📄</span> 6 ta savol</div>
-      <div class="feature"><span>∞</span> Vaqt cheksiz</div>
-      <div class="feature"><span>🎭</span> Situatsion</div>
-      <div class="feature"><span>🏅</span> EQ natija</div>
-    </div>
-    <button class="btn-primary" onclick="App.goEQTest()">🚀 TESTNI BOSHLASH</button>
-  </section>
-
-  <section id="screen-eq-test" class="screen">
-    <div class="test-top">
-      <div class="test-progress-text" id="eq-progress-text">Q1 / 6</div>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" id="eq-progress-fill"></div></div>
-    <div class="question-box"><div class="question-text" id="eq-question-text"></div></div>
-    <div class="text-options" id="eq-options"></div>
-    <button class="btn-primary" id="eq-next" disabled onclick="App.nextEQQuestion()">KEYINGISI →</button>
-  </section>
-
-  <section id="screen-eq-result" class="screen">
-    <div class="result-head">
-      <div class="result-badge">✨ EQ TEST YAKUNLANDI</div>
-      <div class="result-label">EQ SCORE</div>
-      <div class="result-score" id="eq-res-score">0%</div>
-      <div class="result-level" id="eq-res-level">—</div>
-    </div>
-    <div class="result-actions">
-      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
-    </div>
-  </section>
-
-  <!-- ========== PQ INTRO ========== -->
-  <section id="screen-pq-intro" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">⏳</div>
-      <h2 class="intro-title">PROKRASTINATSIYA</h2>
-      <p class="intro-desc">6 ta behavioral savol</p>
-    </div>
-    <div class="intro-features">
-      <div class="feature"><span>📄</span> 6 ta savol</div>
-      <div class="feature"><span>∞</span> Vaqt cheksiz</div>
-      <div class="feature"><span>⏳</span> Behavioral</div>
-      <div class="feature"><span>🏅</span> PQ natija</div>
-    </div>
-    <button class="btn-primary" onclick="App.goPQTest()">🚀 TESTNI BOSHLASH</button>
-  </section>
-
-  <section id="screen-pq-test" class="screen">
-    <div class="test-top">
-      <div class="test-progress-text" id="pq-progress-text">Q1 / 6</div>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" id="pq-progress-fill"></div></div>
-    <div class="question-box"><div class="question-text" id="pq-question-text"></div></div>
-    <div class="text-options" id="pq-options"></div>
-    <button class="btn-primary" id="pq-next" disabled onclick="App.nextPQQuestion()">KEYINGISI →</button>
-  </section>
-
-  <section id="screen-pq-result" class="screen">
-    <div class="result-head">
-      <div class="result-badge">✨ PQ TEST YAKUNLANDI</div>
-      <div class="result-label">PROKRASTINATSIYA SCORE</div>
-      <div class="result-score" id="pq-res-score">0%</div>
-      <div class="result-level" id="pq-res-level">—</div>
-    </div>
-    <div class="result-actions">
-      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
-    </div>
-  </section>
-
-  <!-- ========== PROFILE ========== -->
-  <section id="screen-profile" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">⭐</div>
-      <h2 class="intro-title">SIZ QANDAY INSONSIZ?</h2>
-      <p class="intro-desc">To‘liq shaxsiy tahlil</p>
-    </div>
-    <div class="profile-scores">
-      <div class="prof-item"><div class="prof-label">🧠 IQ</div><div class="prof-val" id="prof-iq">0</div></div>
-      <div class="prof-item"><div class="prof-label">🎭 EQ</div><div class="prof-val" id="prof-eq">0%</div></div>
-      <div class="prof-item"><div class="prof-label">⏳ PQ</div><div class="prof-val" id="prof-pq">0%</div></div>
-    </div>
-    <div class="profile-section">
-      <div class="prof-sec-title">💪 KUCHLI TOMONLAR</div>
-      <ul class="prof-list" id="prof-strengths"></ul>
-    </div>
-    <div class="profile-section">
-      <div class="prof-sec-title">⚠️ RIVOJLANTIRISH KERAK</div>
-      <ul class="prof-list" id="prof-weaknesses"></ul>
-    </div>
-    <div class="profile-section overall-section">
-      <div class="prof-sec-title">📊 UMUMIY PROFIL</div>
-      <div class="prof-overall" id="prof-overall">0</div>
-      <div class="prof-summary" id="prof-summary">—</div>
-    </div>
-  </section>
-
-  <!-- ========== BATTLE HOME ========== -->
-  <section id="screen-battle-home" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">⚔️</div>
-      <h2 class="intro-title">Do‘st bilan battle</h2>
-      <p class="intro-desc">Ikkalangiz alohida ishlaysiz. Do‘stingizning javoblari ko‘rinmaydi — faqat nechanchi savolga kelgani ko‘rinadi. Oxirida kim aqlliroq ekani aniqlanadi. Har biringiz <b>7 500 so‘m</b>.</p>
-    </div>
-    <button class="btn-primary" onclick="App.createBattle()">🔑 Kod yaratish</button>
-    <div class="divider">yoki</div>
-    <div class="join-box">
-      <input type="text" id="battle-join-code" maxlength="4" placeholder="0000" class="input-field input-code" autocomplete="off">
-      <button class="btn-primary" onclick="App.joinBattle()">Kod bilan kirish</button>
-    </div>
-    <button class="btn-text" onclick="App.go('home')">← Orqaga</button>
-  </section>
-
-  <!-- ========== BATTLE WAIT ========== -->
-  <section id="screen-battle-wait" class="screen">
-    <button class="back-btn" onclick="App.go('battle-home')">←</button>
-    <div class="intro-hero">
-      <div class="intro-icon">⚔️</div>
-      <h2 class="intro-title">Do‘st bilan battle</h2>
-      <p class="intro-desc">Kodni do‘stingizga yuboring. Ikkalangiz ham to‘lovni amalga oshirishingiz kerak.</p>
-    </div>
-    <div class="battle-code-box">
-      <div class="battle-code" id="battle-code-display">0000</div>
-      <div class="battle-code-label">Bu kodni do‘stingizga yuboring</div>
-    </div>
-    <div class="battle-players" id="battle-players-list"></div>
-    <div class="battle-wait-status" id="battle-wait-status">⏳ Kutilmoqda...</div>
-    <div class="battle-price-row">Har biringiz: <b id="battle-price-display">7 500 so‘m</b></div>
-    <button class="btn-primary" onclick="App.startBattlePayment()">💳 TO‘LOVNI AMALGA OSHIRISH</button>
-    <button class="btn-primary" id="battle-start-btn" style="display:none;background:linear-gradient(135deg,#22c55e,#16a34a)" onclick="App.startBattleTest()">🚀 BOSHLASH</button>
-    <button class="btn-secondary" id="battle-continue-btn" style="display:none" onclick="App.continueBattle()">▶️ DAVOM ETTIRISH</button>
-  </section>
-
-  <!-- ========== BATTLE TEST ========== -->
-  <section id="screen-battle-test" class="screen">
-    <div class="test-top">
-      <div class="test-progress-text" id="battle-progress-text">Q1 / 18</div>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" id="battle-progress-fill"></div></div>
-    <div class="matrix-wrap"><div class="matrix" id="battle-matrix"></div></div>
-    <div class="options" id="battle-options"></div>
-    <button class="btn-primary" id="battle-next" disabled onclick="App.nextBattleQuestion()">KEYINGISI →</button>
-  </section>
-
-  <!-- ========== BATTLE RESULT ========== -->
-  <section id="screen-battle-result" class="screen">
-    <button class="back-btn" onclick="App.go('home')">←</button>
-    <div class="result-head">
-      <div class="result-badge">⚔️ BATTLE NATIJASI</div>
-      <div class="battle-scores">
-        <div class="battle-player-card">
-          <div class="battle-player-label">SIZ</div>
-          <div class="battle-player-score" id="battle-my-score">0</div>
-        </div>
-        <div class="battle-vs">VS</div>
-        <div class="battle-player-card">
-          <div class="battle-player-label">DO‘STINGIZ</div>
-          <div class="battle-player-score" id="battle-opp-score">0</div>
-        </div>
-      </div>
-      <div class="battle-winner" id="battle-winner">⏳</div>
-    </div>
-    <div class="result-actions">
-      <button class="btn-secondary" onclick="App.go('home')">🏠 Bosh sahifa</button>
-    </div>
-  </section>
+    </ol>
 
 </div>
 
+
+<button class="btn-primary"
+        onclick="App.startIQTest()">
+    TESTNI BOSHLASH
+</button>
+
+</section>
+
+
+<!-- ==================== SAMPLE ==================== -->
+
+<section id="screen-sample" class="screen">
+
+<div class="sample-head">
+
+    <div class="sample-badge">
+        Namunaviy savol
+    </div>
+
+    <div class="sample-note">
+        Bu savol natijaga qo‘shilmaydi
+    </div>
+
+</div>
+
+
+<div class="matrix-wrap">
+    <div class="matrix"
+         id="sample-matrix"></div>
+</div>
+
+
+<div class="options"
+     id="sample-options"></div>
+
+
+<button class="btn-primary"
+        id="sample-next"
+        disabled
+        onclick="App.goTest()">
+    DAVOM ETISH →
+</button>
+
+</section>
+
+
+<!-- ==================== IQ TEST ==================== -->
+
+<section id="screen-test" class="screen">
+
+<div class="test-top">
+
+    <div class="test-progress-text"
+         id="test-progress-text">
+        Q1 / 18
+    </div>
+
+    <div class="test-timer"
+         id="test-timer">
+        00:00
+    </div>
+
+</div>
+
+
+<div class="progress-bar">
+
+    <div class="progress-fill"
+         id="progress-fill"></div>
+
+</div>
+
+
+<div class="difficulty"
+     id="difficulty-bar"></div>
+
+
+<div class="matrix-wrap">
+
+    <div class="matrix"
+         id="test-matrix"></div>
+
+</div>
+
+
+<div class="options"
+     id="test-options"></div>
+
+
+<button class="btn-primary"
+        id="test-next"
+        disabled
+        onclick="App.nextQuestion()">
+    KEYINGISI →
+</button>
+
+</section>
+
+
+<!-- ==================== Q6 ==================== -->
+
+<section id="screen-q6" class="screen">
+
+<div class="celebrate">
+
+    <div class="celebrate-emoji">🎉</div>
+
+    <h2 class="celebrate-title">
+        AJOYIB BOSHLADINGIZ!
+    </h2>
+
+    <p class="celebrate-desc">
+        Birinchi <b>6 ta savol</b> ortda.<br>
+        Shu zaylda davom eting!
+    </p>
+
+    <button class="btn-primary"
+            onclick="App.continueAfterQ6()">
+        Davom etish →
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== Q12 ==================== -->
+
+<section id="screen-q12" class="screen">
+
+<div class="celebrate">
+
+    <div class="celebrate-emoji">🔥</div>
+
+    <h2 class="celebrate-title">
+        YARIM YO‘L ORTDA!
+    </h2>
+
+    <p class="celebrate-desc">
+        <b>12 ta savol</b> tugadi.<br>
+        Endi eng qiyin qismi boshlanadi!
+    </p>
+
+    <button class="btn-primary"
+            onclick="App.continueAfterQ12()">
+        Davom etish →
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== IQ LOADING ==================== -->
+
+<section id="screen-iq-loading" class="screen">
+
+<div class="loading-wrap">
+
+    <div class="loading-brain">
+
+        <svg viewBox="0 0 100 100"
+             width="100"
+             height="100">
+
+            <defs>
+
+                <linearGradient id="ringGrad"
+                                x1="0"
+                                y1="0"
+                                x2="1"
+                                y2="1">
+
+                    <stop offset="0%"
+                          stop-color="#fbbf24"/>
+
+                    <stop offset="50%"
+                          stop-color="#a78bfa"/>
+
+                    <stop offset="100%"
+                          stop-color="#3b82f6"/>
+
+                </linearGradient>
+
+            </defs>
+
+            <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="rgba(255,255,255,.06)"
+                stroke-width="4"/>
+
+            <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="url(#ringGrad)"
+                stroke-width="4"
+                stroke-dasharray="80 200"
+                stroke-linecap="round"
+                class="ring-rotate"/>
+
+            <text
+                x="50"
+                y="58"
+                text-anchor="middle"
+                font-size="32">
+                🧠
+            </text>
+
+        </svg>
+
+    </div>
+
+
+    <h2 class="loading-title">
+        Natijangiz shakllanmoqda...
+    </h2>
+
+
+    <ul class="loading-checklist">
+
+        <li class="done">
+            ✓ Mantiqiy fikrlash tahlili
+        </li>
+
+        <li class="done">
+            ✓ Naqsh aniqlash qobiliyati
+        </li>
+
+        <li class="done">
+            ✓ Fazoviy tasavvur ko‘rsatkichi
+        </li>
+
+        <li class="pending">
+            Dunyo reytingi bilan solishtirilmoqda
+        </li>
+
+    </ul>
+
+
+    <div class="loading-progress">
+        <div class="loading-progress-fill"></div>
+    </div>
+
+</div>
+
+</section>
+
+
+<!-- ==================== RESULT ==================== -->
+
+<section id="screen-result" class="screen">
+
+<div class="result-head">
+
+    <div class="result-badge">
+        TEST YAKUNLANDI
+    </div>
+
+    <div class="result-label">
+        IQ-STYLE SCORE
+    </div>
+
+    <div class="result-score"
+         id="res-score">
+        0
+    </div>
+
+    <div class="result-level"
+         id="res-level">
+        —
+    </div>
+
+</div>
+
+
+<div class="result-stats">
+
+    <div class="stat">
+
+        <div class="stat-val"
+             id="res-correct">
+            0 / 18
+        </div>
+
+        <div class="stat-label">
+            To‘g‘ri javob
+        </div>
+
+    </div>
+
+
+    <div class="stat">
+
+        <div class="stat-val"
+             id="res-time">
+            00:00
+        </div>
+
+        <div class="stat-label">
+            Test vaqti
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="directions">
+
+    <div class="dir-title">
+        📊 YO‘NALISHLAR
+    </div>
+
+
+    <div class="dir"
+         data-label="Mantiq">
+
+        <div class="dir-bar">
+            <div class="dir-fill"
+                 style="width:0%">
+            </div>
+        </div>
+
+        <span>0%</span>
+
+    </div>
+
+
+    <div class="dir"
+         data-label="Pattern">
+
+        <div class="dir-bar">
+            <div class="dir-fill"
+                 style="width:0%">
+            </div>
+        </div>
+
+        <span>0%</span>
+
+    </div>
+
+
+    <div class="dir"
+         data-label="Raqamlar">
+
+        <div class="dir-bar">
+            <div class="dir-fill"
+                 style="width:0%">
+            </div>
+        </div>
+
+        <span>0%</span>
+
+    </div>
+
+
+    <div class="dir"
+         data-label="Fazoviy fikr">
+
+        <div class="dir-bar">
+            <div class="dir-fill"
+                 style="width:0%">
+            </div>
+        </div>
+
+        <span>0%</span>
+
+    </div>
+
+</div>
+
+
+<div class="strongest">
+
+    <div class="strongest-title">
+        💪 KUCHLI TOMONINGIZ
+    </div>
+
+    <div class="strongest-val"
+         id="res-strongest">
+        —
+    </div>
+
+</div>
+
+
+<div class="result-actions">
+
+    <button class="btn-secondary"
+            onclick="App.getCertificate()">
+        📜 Sertifikatni olish
+    </button>
+
+    <button class="btn-secondary"
+            onclick="App.shareResult()">
+        📤 Natijani ulashish
+    </button>
+
+    <button class="btn-secondary"
+            onclick="App.retry()">
+        🔄 IQ testni qayta ishlash
+    </button>
+
+    <button class="btn-secondary"
+            onclick="App.go('home')">
+        🏠 Bosh sahifa
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== PAYMENT REQUIRED ==================== -->
+
+<section id="screen-payment-required"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="payreq-wrap">
+
+    <div class="payreq-icon">💳</div>
+
+    <h2 class="payreq-title">
+        Natijani olish uchun to‘lov
+    </h2>
+
+    <p class="payreq-desc">
+        Test yakunlandi. Natijani ko‘rish va reytingga
+        kirish uchun to‘lovni amalga oshiring.
+    </p>
+
+    <div class="payreq-price"
+         id="payreq-price">
+        10 000 so‘m
+    </div>
+
+    <button class="btn-primary"
+            onclick="App.startIQPayment()">
+        TO‘LOVNI AMALGA OSHIRISH
+    </button>
+
+    <p class="payreq-note">
+        To‘lov admin tomonidan 1-2 daqiqada tasdiqlanadi.
+    </p>
+
+</div>
+
+</section>
+
+
+<!-- ==================== PAYMENT ==================== -->
+
+<section id="screen-payment"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">💳</div>
+
+    <h2 class="intro-title">
+        TO‘LOV
+    </h2>
+
+    <div class="pay-amount-big"
+         id="pay-amount">
+        0 so‘m
+    </div>
+
+</div>
+
+
+<div class="pay-cards"
+     id="pay-cards"></div>
+
+
+<div class="pay-note">
+    To‘lovni amalga oshirib, chek rasmini Telegram botga yuboring.
+</div>
+
+
+<button class="btn-primary"
+        onclick="App.sendReceipt()">
+    CHEKNI YUBORDIM
+</button>
+
+</section>
+
+
+<!-- ==================== EQ INTRO ==================== -->
+
+<section id="screen-eq-intro"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">❤️</div>
+
+    <h2 class="intro-title">
+        HISSIY INTELLEKT
+    </h2>
+
+    <p class="intro-desc">
+        6 ta situatsion savol
+    </p>
+
+</div>
+
+
+<div class="intro-features">
+
+    <div class="feature">
+        <span>📝</span>
+        6 ta savol
+    </div>
+
+    <div class="feature">
+        <span>∞</span>
+        Vaqt cheksiz
+    </div>
+
+    <div class="feature">
+        <span>🎭</span>
+        Situatsion
+    </div>
+
+    <div class="feature">
+        <span>❤️</span>
+        EQ natija
+    </div>
+
+</div>
+
+
+<button class="btn-primary"
+        onclick="App.goEQTest()">
+    TESTNI BOSHLASH
+</button>
+
+</section>
+
+
+<!-- ==================== EQ TEST ==================== -->
+
+<section id="screen-eq-test"
+         class="screen">
+
+<div class="test-top">
+
+    <div class="test-progress-text"
+         id="eq-progress-text">
+        Q1 / 6
+    </div>
+
+</div>
+
+
+<div class="progress-bar">
+
+    <div class="progress-fill"
+         id="eq-progress-fill">
+    </div>
+
+</div>
+
+
+<div class="question-box">
+
+    <div class="question-text"
+         id="eq-question-text">
+    </div>
+
+</div>
+
+
+<div class="text-options"
+     id="eq-options">
+</div>
+
+
+<button class="btn-primary"
+        id="eq-next"
+        disabled
+        onclick="App.nextEQQuestion()">
+    KEYINGISI →
+</button>
+
+</section>
+
+
+<!-- ==================== EQ RESULT ==================== -->
+
+<section id="screen-eq-result"
+         class="screen">
+
+<div class="result-head">
+
+    <div class="result-badge">
+        EQ TEST YAKUNLANDI
+    </div>
+
+    <div class="result-label">
+        EQ SCORE
+    </div>
+
+    <div class="result-score"
+         id="eq-res-score">
+        0%
+    </div>
+
+    <div class="result-level"
+         id="eq-res-level">
+        —
+    </div>
+
+</div>
+
+
+<div class="result-actions">
+
+    <button class="btn-secondary"
+            onclick="App.go('home')">
+        🏠 Bosh sahifa
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== PQ INTRO ==================== -->
+
+<section id="screen-pq-intro"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">⏳</div>
+
+    <h2 class="intro-title">
+        PROKRASTINATSIYA
+    </h2>
+
+    <p class="intro-desc">
+        6 ta behavioral savol
+    </p>
+
+</div>
+
+
+<div class="intro-features">
+
+    <div class="feature">
+        <span>📝</span>
+        6 ta savol
+    </div>
+
+    <div class="feature">
+        <span>∞</span>
+        Vaqt cheksiz
+    </div>
+
+    <div class="feature">
+        <span>🎯</span>
+        Behavioral
+    </div>
+
+    <div class="feature">
+        <span>⏳</span>
+        PQ natija
+    </div>
+
+</div>
+
+
+<button class="btn-primary"
+        onclick="App.goPQTest()">
+    TESTNI BOSHLASH
+</button>
+
+</section>
+
+
+<!-- ==================== PQ TEST ==================== -->
+
+<section id="screen-pq-test"
+         class="screen">
+
+<div class="test-top">
+
+    <div class="test-progress-text"
+         id="pq-progress-text">
+        Q1 / 6
+    </div>
+
+</div>
+
+
+<div class="progress-bar">
+
+    <div class="progress-fill"
+         id="pq-progress-fill">
+    </div>
+
+</div>
+
+
+<div class="question-box">
+
+    <div class="question-text"
+         id="pq-question-text">
+    </div>
+
+</div>
+
+
+<div class="text-options"
+     id="pq-options">
+</div>
+
+
+<button class="btn-primary"
+        id="pq-next"
+        disabled
+        onclick="App.nextPQQuestion()">
+    KEYINGISI →
+</button>
+
+</section>
+
+
+<!-- ==================== PQ RESULT ==================== -->
+
+<section id="screen-pq-result"
+         class="screen">
+
+<div class="result-head">
+
+    <div class="result-badge">
+        PQ TEST YAKUNLANDI
+    </div>
+
+    <div class="result-label">
+        PROKRASTINATSIYA SCORE
+    </div>
+
+    <div class="result-score"
+         id="pq-res-score">
+        0%
+    </div>
+
+    <div class="result-level"
+         id="pq-res-level">
+        —
+    </div>
+
+</div>
+
+
+<div class="result-actions">
+
+    <button class="btn-secondary"
+            onclick="App.go('home')">
+        🏠 Bosh sahifa
+    </button>
+
+</div>
+
+</section>
+
+
+<!-- ==================== PROFILE RESULT ==================== -->
+
+<section id="screen-profile"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">👤</div>
+
+    <h2 class="intro-title">
+        SIZ QANDAY INSONSIZ?
+    </h2>
+
+    <p class="intro-desc">
+        To‘liq shaxsiy tahlil
+    </p>
+
+</div>
+
+
+<div class="profile-scores">
+
+    <div class="prof-item">
+        <div class="prof-label">IQ</div>
+        <div class="prof-val"
+             id="prof-iq">
+            0
+        </div>
+    </div>
+
+    <div class="prof-item">
+        <div class="prof-label">EQ</div>
+        <div class="prof-val"
+             id="prof-eq">
+            0%
+        </div>
+    </div>
+
+    <div class="prof-item">
+        <div class="prof-label">PQ</div>
+        <div class="prof-val"
+             id="prof-pq">
+            0%
+        </div>
+    </div>
+
+</div>
+
+
+<div class="profile-section">
+
+    <div class="prof-sec-title">
+        💪 KUCHLI TOMONLAR
+    </div>
+
+    <ul class="prof-list"
+        id="prof-strengths">
+    </ul>
+
+</div>
+
+
+<div class="profile-section">
+
+    <div class="prof-sec-title">
+        🔧 RIVOJLANTIRISH KERAK
+    </div>
+
+    <ul class="prof-list"
+        id="prof-weaknesses">
+    </ul>
+
+</div>
+
+
+<div class="profile-section overall-section">
+
+    <div class="prof-sec-title">
+        📊 UMUMIY PROFIL
+    </div>
+
+    <div class="prof-overall"
+         id="prof-overall">
+        0
+    </div>
+
+    <div class="prof-summary"
+         id="prof-summary">
+        —
+    </div>
+
+</div>
+
+</section>
+
+
+<!-- ==================== BATTLE HOME ==================== -->
+
+<section id="screen-battle-home"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">⚔️</div>
+
+    <h2 class="intro-title">
+        Do‘st bilan battle
+    </h2>
+
+    <p class="intro-desc">
+        Ikkalangiz alohida ishlaysiz. Do‘stingizning
+        javoblari ko‘rinmaydi — faqat nechanchi savolga
+        kelgani ko‘rinadi. Oxirida kim aqlliroq ekani
+        aniqlanadi. Har biringiz <b>7 500 so‘m</b>.
+    </p>
+
+</div>
+
+
+<button class="btn-primary"
+        onclick="App.createBattle()">
+    Kod yaratish
+</button>
+
+
+<div class="divider">
+    yoki
+</div>
+
+
+<div class="join-box">
+
+    <input
+        type="text"
+        id="battle-join-code"
+        maxlength="4"
+        placeholder="0000"
+        class="input-field input-code"
+        autocomplete="off">
+
+    <button class="btn-primary"
+            onclick="App.joinBattle()">
+        Kod bilan kirish
+    </button>
+
+</div>
+
+
+<button class="btn-text"
+        onclick="App.go('home')">
+    ← Orqaga
+</button>
+
+</section>
+
+
+<!-- ==================== BATTLE WAIT ==================== -->
+
+<section id="screen-battle-wait"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('battle-home')">
+    ←
+</button>
+
+<div class="intro-hero">
+
+    <div class="intro-icon">⚔️</div>
+
+    <h2 class="intro-title">
+        Do‘st bilan battle
+    </h2>
+
+    <p class="intro-desc">
+        Kodni do‘stingizga yuboring. Ikkalangiz ham
+        to‘lovni amalga oshirishingiz kerak.
+    </p>
+
+</div>
+
+
+<div class="battle-code-box">
+
+    <div class="battle-code"
+         id="battle-code-display">
+        0000
+    </div>
+
+    <div class="battle-code-label">
+        Bu kodni do‘stingizga yuboring
+    </div>
+
+</div>
+
+
+<div class="battle-players"
+     id="battle-players-list">
+</div>
+
+
+<div class="battle-wait-status"
+     id="battle-wait-status">
+    ⏳ Kutilmoqda...
+</div>
+
+
+<div class="battle-price-row">
+    Har biringiz:
+    <b id="battle-price-display">
+        7 500 so‘m
+    </b>
+</div>
+
+
+<button class="btn-primary"
+        onclick="App.startBattlePayment()">
+    TO‘LOVNI AMALGA OSHIRISH
+</button>
+
+
+<button class="btn-primary"
+        id="battle-start-btn"
+        style="display:none;background:linear-gradient(135deg,#22c55e,#16a34a)"
+        onclick="App.startBattleTest()">
+    BOSHLASH
+</button>
+
+
+<button class="btn-secondary"
+        id="battle-continue-btn"
+        style="display:none"
+        onclick="App.continueBattle()">
+    DAVOM ETTIRISH
+</button>
+
+</section>
+
+
+<!-- ==================== BATTLE TEST ==================== -->
+
+<section id="screen-battle-test"
+         class="screen">
+
+<div class="test-top">
+
+    <div class="test-progress-text"
+         id="battle-progress-text">
+        Q1 / 18
+    </div>
+
+</div>
+
+
+<div class="progress-bar">
+
+    <div class="progress-fill"
+         id="battle-progress-fill">
+    </div>
+
+</div>
+
+
+<div class="matrix-wrap">
+
+    <div class="matrix"
+         id="battle-matrix">
+    </div>
+
+</div>
+
+
+<div class="options"
+     id="battle-options">
+</div>
+
+
+<button class="btn-primary"
+        id="battle-next"
+        disabled
+        onclick="App.nextBattleQuestion()">
+    KEYINGISI →
+</button>
+
+</section>
+
+
+<!-- ==================== BATTLE RESULT ==================== -->
+
+<section id="screen-battle-result"
+         class="screen">
+
+<button class="back-btn"
+        onclick="App.go('home')">
+    ←
+</button>
+
+<div class="result-head">
+
+    <div class="result-badge">
+        BATTLE NATIJASI
+    </div>
+
+
+    <div class="battle-scores">
+
+        <div class="battle-player-card">
+
+            <div class="battle-player-label">
+                SIZ
+            </div>
+
+            <div class="battle-player-score"
+                 id="battle-my-score">
+                0
+            </div>
+
+        </div>
+
+
+        <div class="battle-vs">
+            VS
+        </div>
+
+
+        <div class="battle-player-card">
+
+            <div class="battle-player-label">
+                DO‘STINGIZ
+            </div>
+
+            <div class="battle-player-score"
+                 id="battle-opp-score">
+                0
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="battle-winner"
+         id="battle-winner">
+    </div>
+
+</div>
+
+
+<div class="result-actions">
+
+    <button class="btn-secondary"
+            onclick="App.go('home')">
+        🏠 Bosh sahifa
+    </button>
+
+</div>
+
+</section>
+
+</div>
+
+
 <script src="/static/app.js"></script>
+
 </body>
 </html>
