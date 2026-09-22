@@ -244,7 +244,7 @@ def gen_battle_code():
     chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return "".join(random.choices(chars, k=4))
 
-def validate_init_data(init_data, bot_token):
+def validate_init_data(init_data: str, bot_token: str):
     try:
         if not init_data:
             return None
@@ -253,20 +253,28 @@ def validate_init_data(init_data, bot_token):
             if "=" in pair:
                 k, v = pair.split("=", 1)
                 parsed[k] = v  # UNQUOTE YO'Q
+
         hash_val = parsed.pop("hash", None)
         if not hash_val:
             return None
+
+        # signature VA query_id ni chiqarib tashlash
         parsed.pop("signature", None)
+        parsed.pop("query_id", None)  # <-- QO'SHILDI
+
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+
         if calc != hash_val:
             logger.warning(f"HMAC FAIL calc={calc[:16]} got={hash_val[:16]}")
-            logger.warning(f"data_check={data_check[:150]}")
+            logger.warning(f"data_check={data_check[:200]}")
             return None
+
         auth_date = int(parsed.get("auth_date", "0"))
         if datetime.now(timezone.utc).timestamp() - auth_date > 86400 * 2:
             return None
+
         user_raw = parsed.get("user", "%7B%7D")
         user = json.loads(unquote(user_raw))
         return user
