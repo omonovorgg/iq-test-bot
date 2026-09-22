@@ -1,6 +1,7 @@
 /* ============================================================
-   IQ TEST BOT — app.js (FINAL v1.0)
+   IQ TEST BOT — app.js (FINAL v2.0)
    ============================================================ */
+
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
@@ -11,29 +12,28 @@ if (tg) {
   } catch {}
 }
 
-// initData ni olish — kechikish bilan, har 100ms tekshirish
+// initData — har safar tekshirish
 let initData = "";
 function getInitData() {
   if (tg?.initData && tg.initData.length > 0) {
     initData = tg.initData;
-    return initData;
   }
   return initData;
 }
 getInitData();
 
-// 5 sekund davomida tekshirish
+// 5 sekund davomida initData kutish
 let initAttempts = 0;
 const initInterval = setInterval(() => {
   initAttempts++;
   const v = getInitData();
   if (v && v.length > 0) {
-    console.log("[initData] loaded:", v.length, "belgi, attempt:", initAttempts);
+    console.log("[initData] loaded:", v.length, "belgi");
     clearInterval(initInterval);
   }
   if (initAttempts > 50) {
     clearInterval(initInterval);
-    console.warn("[initData] 5 sekunddan keyin ham bo'sh!");
+    console.warn("[initData] bo'sh qoldi");
   }
 }, 100);
 
@@ -105,32 +105,9 @@ const State = {
   },
 };
 
-const LS_KEY = "iqtestbot_state_v4";
-
-function saveLocal() {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify({
-      test: State.test,
-      battle: State.battle,
-      profile: State.profile,
-    }));
-  } catch {}
-}
-
-function loadLocal() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function clearLocal() {
-  try { localStorage.removeItem(LS_KEY); } catch {}
-}
-
 // ==================== 18 IQ QUESTIONS ====================
 const QUESTIONS = [
-  { id: 1, difficulty: "easy", weight: 1,
+  { id: 1, weight: 1,
     matrix: [
       { type: "dot", count: 1 }, { type: "dot", count: 2 }, { type: "dot", count: 3 },
       { type: "dot", count: 2 }, { type: "dot", count: 3 }, { type: "dot", count: 4 },
@@ -140,17 +117,19 @@ const QUESTIONS = [
       { type: "dot", count: 3 }, { type: "dot", count: 4 },
       { type: "dot", count: 5 }, { type: "dot", count: 6 },
     ], correct: 2 },
-  { id: 2, difficulty: "easy", weight: 1,
+  { id: 2, weight: 1,
     matrix: [
       { type: "shape", shape: "circle", fill: "empty" }, { type: "shape", shape: "square", fill: "empty" }, { type: "shape", shape: "triangle", fill: "empty" },
       { type: "shape", shape: "square", fill: "empty" }, { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" },
       { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" }, { type: "question" },
     ],
     options: [
-      { type: "shape", shape: "square", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" },
-      { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "diamond", fill: "empty" },
+      { type: "shape", shape: "square", fill: "empty" },
+      { type: "shape", shape: "circle", fill: "empty" },
+      { type: "shape", shape: "triangle", fill: "empty" },
+      { type: "shape", shape: "diamond", fill: "empty" },
     ], correct: 0 },
-  { id: 3, difficulty: "easy", weight: 1,
+  { id: 3, weight: 1,
     matrix: [
       { type: "rotate", angle: 0 }, { type: "rotate", angle: 90 }, { type: "rotate", angle: 180 },
       { type: "rotate", angle: 90 }, { type: "rotate", angle: 180 }, { type: "rotate", angle: 270 },
@@ -160,7 +139,7 @@ const QUESTIONS = [
       { type: "rotate", angle: 0 }, { type: "rotate", angle: 90 },
       { type: "rotate", angle: 270 }, { type: "rotate", angle: 360 },
     ], correct: 3 },
-  { id: 4, difficulty: "easy", weight: 1,
+  { id: 4, weight: 1,
     matrix: [
       { type: "size", size: 12 }, { type: "size", size: 20 }, { type: "size", size: 28 },
       { type: "size", size: 20 }, { type: "size", size: 28 }, { type: "size", size: 36 },
@@ -170,7 +149,7 @@ const QUESTIONS = [
       { type: "size", size: 28 }, { type: "size", size: 36 },
       { type: "size", size: 44 }, { type: "size", size: 52 },
     ], correct: 2 },
-  { id: 5, difficulty: "easy", weight: 1,
+  { id: 5, weight: 1,
     matrix: [
       { type: "grid", pos: 0 }, { type: "grid", pos: 1 }, { type: "grid", pos: 2 },
       { type: "grid", pos: 3 }, { type: "grid", pos: 4 }, { type: "grid", pos: 5 },
@@ -180,17 +159,19 @@ const QUESTIONS = [
       { type: "grid", pos: 4 }, { type: "grid", pos: 6 },
       { type: "grid", pos: 7 }, { type: "grid", pos: 8 },
     ], correct: 3 },
-  { id: 6, difficulty: "easy", weight: 1,
+  { id: 6, weight: 1,
     matrix: [
       { type: "shape", shape: "circle", fill: "full" }, { type: "shape", shape: "square", fill: "full" }, { type: "shape", shape: "triangle", fill: "full" },
       { type: "shape", shape: "square", fill: "full" }, { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "circle", fill: "full" },
       { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "circle", fill: "full" }, { type: "question" },
     ],
     options: [
-      { type: "shape", shape: "circle", fill: "full" }, { type: "shape", shape: "square", fill: "full" },
-      { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "diamond", fill: "full" },
+      { type: "shape", shape: "circle", fill: "full" },
+      { type: "shape", shape: "square", fill: "full" },
+      { type: "shape", shape: "triangle", fill: "full" },
+      { type: "shape", shape: "diamond", fill: "full" },
     ], correct: 1 },
-  { id: 7, difficulty: "medium", weight: 2,
+  { id: 7, weight: 2,
     matrix: [
       { type: "combo", shapes: ["circle"], fill: "full" },
       { type: "combo", shapes: ["circle", "square"], fill: "full" },
@@ -208,17 +189,19 @@ const QUESTIONS = [
       { type: "combo", shapes: ["circle", "square"], fill: "half" },
       { type: "combo", shapes: ["triangle", "square"], fill: "half" },
     ], correct: 1 },
-  { id: 8, difficulty: "medium", weight: 2,
+  { id: 8, weight: 2,
     matrix: [
       { type: "shape", shape: "circle", fill: "full" }, { type: "shape", shape: "circle", fill: "half" }, { type: "shape", shape: "circle", fill: "empty" },
       { type: "shape", shape: "square", fill: "full" }, { type: "shape", shape: "square", fill: "half" }, { type: "shape", shape: "square", fill: "empty" },
       { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "triangle", fill: "half" }, { type: "question" },
     ],
     options: [
-      { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "triangle", fill: "half" },
-      { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" },
+      { type: "shape", shape: "triangle", fill: "full" },
+      { type: "shape", shape: "triangle", fill: "half" },
+      { type: "shape", shape: "triangle", fill: "empty" },
+      { type: "shape", shape: "circle", fill: "empty" },
     ], correct: 2 },
-  { id: 9, difficulty: "medium", weight: 2,
+  { id: 9, weight: 2,
     matrix: [
       { type: "num", val: 2 }, { type: "num", val: 4 }, { type: "num", val: 6 },
       { type: "num", val: 3 }, { type: "num", val: 6 }, { type: "num", val: 9 },
@@ -228,7 +211,7 @@ const QUESTIONS = [
       { type: "num", val: 10 }, { type: "num", val: 12 },
       { type: "num", val: 14 }, { type: "num", val: 16 },
     ], correct: 1 },
-  { id: 10, difficulty: "medium", weight: 2,
+  { id: 10, weight: 2,
     matrix: [
       { type: "rotate", angle: 45 }, { type: "rotate", angle: 90 }, { type: "rotate", angle: 135 },
       { type: "rotate", angle: 90 }, { type: "rotate", angle: 135 }, { type: "rotate", angle: 180 },
@@ -238,7 +221,7 @@ const QUESTIONS = [
       { type: "rotate", angle: 180 }, { type: "rotate", angle: 225 },
       { type: "rotate", angle: 270 }, { type: "rotate", angle: 315 },
     ], correct: 1 },
-  { id: 11, difficulty: "medium", weight: 2,
+  { id: 11, weight: 2,
     matrix: [
       { type: "dot", count: 1 }, { type: "dot", count: 4 }, { type: "dot", count: 9 },
       { type: "dot", count: 4 }, { type: "dot", count: 9 }, { type: "dot", count: 16 },
@@ -248,7 +231,7 @@ const QUESTIONS = [
       { type: "dot", count: 16 }, { type: "dot", count: 25 },
       { type: "dot", count: 36 }, { type: "dot", count: 49 },
     ], correct: 1 },
-  { id: 12, difficulty: "medium", weight: 2,
+  { id: 12, weight: 2,
     matrix: [
       { type: "grid", pos: 0 }, { type: "grid", pos: 2 }, { type: "grid", pos: 4 },
       { type: "grid", pos: 2 }, { type: "grid", pos: 4 }, { type: "grid", pos: 6 },
@@ -258,7 +241,7 @@ const QUESTIONS = [
       { type: "grid", pos: 6 }, { type: "grid", pos: 7 },
       { type: "grid", pos: 8 }, { type: "grid", pos: 5 },
     ], correct: 2 },
-  { id: 13, difficulty: "hard", weight: 3,
+  { id: 13, weight: 3,
     matrix: [
       { type: "num", val: 1 }, { type: "num", val: 1 }, { type: "num", val: 2 },
       { type: "num", val: 3 }, { type: "num", val: 5 }, { type: "num", val: 8 },
@@ -268,7 +251,7 @@ const QUESTIONS = [
       { type: "num", val: 30 }, { type: "num", val: 34 },
       { type: "num", val: 38 }, { type: "num", val: 42 },
     ], correct: 1 },
-  { id: 14, difficulty: "hard", weight: 3,
+  { id: 14, weight: 3,
     matrix: [
       { type: "combo", shapes: ["circle"], fill: "full" },
       { type: "combo", shapes: ["circle", "square"], fill: "half" },
@@ -286,7 +269,7 @@ const QUESTIONS = [
       { type: "combo", shapes: ["circle", "square"], fill: "half" },
       { type: "combo", shapes: ["triangle", "square"], fill: "empty" },
     ], correct: 0 },
-  { id: 15, difficulty: "hard", weight: 3,
+  { id: 15, weight: 3,
     matrix: [
       { type: "rotate", angle: 0 }, { type: "rotate", angle: 45 }, { type: "rotate", angle: 90 },
       { type: "rotate", angle: 45 }, { type: "rotate", angle: 90 }, { type: "rotate", angle: 135 },
@@ -296,7 +279,7 @@ const QUESTIONS = [
       { type: "rotate", angle: 135 }, { type: "rotate", angle: 180 },
       { type: "rotate", angle: 225 }, { type: "rotate", angle: 270 },
     ], correct: 1 },
-  { id: 16, difficulty: "hard", weight: 3,
+  { id: 16, weight: 3,
     matrix: [
       { type: "num", val: 3 }, { type: "num", val: 9 }, { type: "num", val: 27 },
       { type: "num", val: 2 }, { type: "num", val: 4 }, { type: "num", val: 8 },
@@ -306,7 +289,7 @@ const QUESTIONS = [
       { type: "num", val: 100 }, { type: "num", val: 125 },
       { type: "num", val: 150 }, { type: "num", val: 625 },
     ], correct: 1 },
-  { id: 17, difficulty: "hard", weight: 3,
+  { id: 17, weight: 3,
     matrix: [
       { type: "grid", pos: 0 }, { type: "grid", pos: 1 }, { type: "grid", pos: 3 },
       { type: "grid", pos: 1 }, { type: "grid", pos: 3 }, { type: "grid", pos: 5 },
@@ -316,7 +299,7 @@ const QUESTIONS = [
       { type: "grid", pos: 5 }, { type: "grid", pos: 6 },
       { type: "grid", pos: 7 }, { type: "grid", pos: 8 },
     ], correct: 2 },
-  { id: 18, difficulty: "hard", weight: 3,
+  { id: 18, weight: 3,
     matrix: [
       { type: "combo", shapes: ["circle", "square"], fill: "full" },
       { type: "combo", shapes: ["square", "triangle"], fill: "half" },
@@ -442,16 +425,12 @@ function renderTextOptions(el, options, onSelect) {
 // ==================== APP ====================
 const App = {
   async init() {
+    console.log("[init] start");
     const cfg = await api("/api/config", null, "GET");
     if (cfg.ok) State.settings = cfg.settings;
 
     await this.refreshLive();
     this.startLiveLoop();
-
-    const local = loadLocal();
-    if (local && local.profile) {
-      State.profile = local.profile;
-    }
 
     if (initData) {
       const me = await api("/api/me", { initData });
@@ -468,29 +447,8 @@ const App = {
         if (me.active_battles && me.active_battles.length > 0) {
           State.battle.id = me.active_battles[0].id;
           State.battle.code = me.active_battles[0].battle_code;
-          setTimeout(() => {
-            if (confirm("Battle davom etmoqda. Ochishni xohlaysizmi?")) {
-              App.openBattleDetail();
-            }
-          }, 600);
         }
       }
-    }
-
-    if (local && local.test && local.test.sessionId && local.test.current > 0 && local.test.current < 18 && local.test.type === "iq") {
-      setTimeout(() => {
-        if (confirm("Test davom etmoqda. Davom ettirishni xohlaysizmi?")) {
-          State.test = Object.assign({}, State.test, local.test);
-          if (!Array.isArray(State.test.answers) || State.test.answers.length !== 18) {
-            State.test.answers = new Array(18).fill(null);
-          }
-          this.go("test");
-          this.renderQuestion();
-          this.startTimer();
-        } else {
-          clearLocal();
-        }
-      }, 600);
     }
   },
 
@@ -533,48 +491,66 @@ const App = {
   applyUnlocks() {
     const c = State.completed || {};
     console.log("[applyUnlocks]", c);
-    // IQ → EQ unlock (bir marta)
     if (c.iq) {
-        const el = document.getElementById("card-eq");
-        if (el) {
-            el.classList.remove("locked"); el.classList.add("unlocked");
-            const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-            const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
-        }
+      const el = document.getElementById("card-eq");
+      if (el) {
+        el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
+      }
     }
-    // EQ → PQ unlock
     if (c.eq) {
-        const el = document.getElementById("card-pq");
-        if (el) {
-            el.classList.remove("locked"); el.classList.add("unlocked");
-            const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-            const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
-        }
+      const el = document.getElementById("card-pq");
+      if (el) {
+        el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
+      }
     }
-    // IQ+EQ+PQ → Profile unlock
     if (c.iq && c.eq && c.pq) {
-        const el = document.getElementById("card-profile");
-        if (el) {
-            el.classList.remove("locked"); el.classList.add("unlocked");
-            const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-        }
+      const el = document.getElementById("card-profile");
+      if (el) {
+        el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+      }
     }
-},
+  },
+
+  // ============ IQ START — HAR SAFAR PROFIL ============
+  startIQ() {
+    // Har safar profil so'rash
+    State.profile.gender = null;
+    State.profile.age = null;
+    State.profile.country = null;
+    this.go("profile-name");
+  },
 
   async saveProfile() {
-    const fullName = document.getElementById("profile-fullname")?.value.trim() || State.profile.full_name;
+    const fullName = document.getElementById("profile-fullname")?.value.trim();
     const gender = State.profile.gender;
-    const age = parseInt(document.getElementById("profile-age")?.value) || State.profile.age;
+    const age = parseInt(document.getElementById("profile-age")?.value);
     const country = State.profile.country;
+
     if (!fullName || fullName.length < 3) { alert("Ism-familiyani to‘liq kiriting."); return; }
     if (!gender) { alert("Jinsni tanlang."); return; }
     if (!age || age < 8 || age > 100) { alert("Yoshni to‘g‘ri kiriting (8-100)."); return; }
     if (!country) { alert("Davlatni tanlang."); return; }
-    State.profile.full_name = fullName; State.profile.age = age;
-    saveLocal();
+
+    State.profile.full_name = fullName;
+    State.profile.age = age;
+
     if (initData) {
-      const res = await api("/api/profile/save", { initData, full_name: fullName, gender, age, country });
-      if (!res.ok) { alert("Saqlashda xatolik."); return; }
+      const res = await api("/api/profile/save", {
+        initData,
+        full_name: fullName,
+        gender: gender,
+        age: age,
+        country: country,
+      });
+      if (!res.ok) {
+        alert("Saqlashda xatolik.");
+        return;
+      }
     }
     haptic("medium");
     this.go("iq-intro");
@@ -594,14 +570,6 @@ const App = {
     haptic("light");
   },
 
-  async startIQ() {
-    if (!State.profile.full_name || !State.profile.gender || !State.profile.age || !State.profile.country) {
-      this.go("profile-name");
-      return;
-    }
-    this.go("iq-intro");
-  },
-
   async startIQTest() {
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "iq" });
@@ -612,7 +580,6 @@ const App = {
     State.test.answers = new Array(18).fill(null);
     State.test.startedAt = Date.now();
     State.test.duration = 0;
-    saveLocal();
     this.go("sample");
     this.renderSample();
   },
@@ -657,7 +624,6 @@ const App = {
       const s = String(elapsed % 60).padStart(2, "0");
       const el = document.getElementById("test-timer");
       if (el) el.textContent = `${m}:${s}`;
-      saveLocal();
     }, 1000);
   },
 
@@ -682,7 +648,6 @@ const App = {
     renderOptions(document.getElementById("test-options"), q.options, (idx) => {
       State.test.answers[State.test.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
-      saveLocal();
     });
     if (State.test.answers[State.test.current] !== null && State.test.answers[State.test.current] !== undefined) {
       const prev = State.test.answers[State.test.current];
@@ -699,12 +664,11 @@ const App = {
     if (cur === 11) { this.go("q12"); return; }
     if (cur === 17) { this.finish(); return; }
     State.test.current++;
-    saveLocal();
     this.renderQuestion();
   },
 
-  continueAfterQ6() { State.test.current = 6; saveLocal(); this.go("test"); this.renderQuestion(); },
-  continueAfterQ12() { State.test.current = 12; saveLocal(); this.go("test"); this.renderQuestion(); },
+  continueAfterQ6() { State.test.current = 6; this.go("test"); this.renderQuestion(); },
+  continueAfterQ12() { State.test.current = 12; this.go("test"); this.renderQuestion(); },
 
   async finish() {
     clearInterval(State.test.timerInterval);
@@ -744,7 +708,6 @@ const App = {
       this.renderResult(score, correct, level);
       this.go("result");
     }
-    clearLocal();
     this.applyUnlocks();
   },
 
@@ -803,7 +766,7 @@ const App = {
   shareResult() {
     const score = document.getElementById("res-score")?.textContent || "0";
     const text = `🧠 IQ TEST BOT\n\nMen IQ-style testda ${score} ball oldim!\nSiz ham sinab ko‘ring 👇`;
-    const url = `https://t.me/${window.__BOT_USERNAME__ || "iqtest_ubot"}`;
+    const url = `https://t.me/iqtest_ubot`;
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
     } else {
@@ -813,7 +776,6 @@ const App = {
   },
 
   retry() {
-    clearLocal();
     State.test = { type: "iq", sessionId: null, attemptId: null, current: 0, answers: [], startedAt: null, duration: 0, timerInterval: null, resultData: null };
     this.go("iq-intro");
   },
@@ -857,7 +819,7 @@ const App = {
       if (cardsEl) {
         cardsEl.innerHTML = res.cards.map(c =>
           `<div class="pay-card"><div class="pay-card-num">${c.card_number}</div><div class="pay-card-holder">${c.holder}</div><div class="pay-card-bank">${c.bank || ""}</div></div>`
-        ).join("") || "<div>Karta mavjud emas. Admin bilan bog‘laning.</div>";
+        ).join("") || "<div>Karta mavjud emas.</div>";
       }
       this.go("payment");
       this.startPaymentPoll();
@@ -922,11 +884,6 @@ const App = {
       State.test.answers[State.test.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
     });
-    if (State.test.answers[State.test.current] !== null && State.test.answers[State.test.current] !== undefined) {
-      const prev = State.test.answers[State.test.current];
-      document.querySelectorAll("#eq-options .option")[prev]?.classList.add("selected");
-      if (nextBtn) nextBtn.disabled = false;
-    }
   },
 
   nextEQQuestion() {
@@ -992,11 +949,6 @@ const App = {
       State.test.answers[State.test.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
     });
-    if (State.test.answers[State.test.current] !== null && State.test.answers[State.test.current] !== undefined) {
-      const prev = State.test.answers[State.test.current];
-      document.querySelectorAll("#pq-options .option")[prev]?.classList.add("selected");
-      if (nextBtn) nextBtn.disabled = false;
-    }
   },
 
   nextPQQuestion() {
@@ -1057,9 +1009,8 @@ const App = {
 
   // ============ BATTLE ============
   openBattle() {
-    console.log("[Battle] initData:", initData ? initData.substring(0, 50) : "EMPTY");
     this.go("battle-home");
-},
+  },
 
   async createBattle() {
     haptic("medium");
@@ -1186,11 +1137,6 @@ const App = {
       if (nextBtn) nextBtn.disabled = false;
       this.syncBattle();
     });
-    if (State.battle.answers[State.battle.current] !== null && State.battle.answers[State.battle.current] !== undefined) {
-      const prev = State.battle.answers[State.battle.current];
-      document.querySelectorAll("#battle-options .option")[prev]?.classList.add("selected");
-      if (nextBtn) nextBtn.disabled = false;
-    }
   },
 
   async syncBattle() {
@@ -1262,35 +1208,36 @@ const App = {
     }
     this.go("battle-result");
   },
-
-  async openBattleDetail() {
-    if (!State.battle.id) return;
-    await this.checkBattle();
-    this.go("battle-wait");
-    this.startBattlePoll();
-  },
 };
 
 // ==================== EVENT BINDINGS ====================
 document.addEventListener("DOMContentLoaded", () => {
   App.init();
 
-  document.querySelector('[data-test="iq"]')?.addEventListener("click", () => { haptic("medium"); App.startIQ(); });
+  // IQ card — HAR SAFAR profil so'raladi
+  document.querySelector('[data-test="iq"]')?.addEventListener("click", () => {
+    haptic("medium");
+    App.startIQ();
+  });
+
   document.getElementById("card-eq")?.addEventListener("click", () => {
     const el = document.getElementById("card-eq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.startEQ();
   });
+
   document.getElementById("card-pq")?.addEventListener("click", () => {
     const el = document.getElementById("card-pq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.startPQ();
   });
+
   document.getElementById("card-profile")?.addEventListener("click", () => {
     const el = document.getElementById("card-profile");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.openProfile();
   });
+
   document.getElementById("battle-card")?.addEventListener("click", () => App.openBattle());
 
   document.querySelectorAll("#gender-selector [data-gender]").forEach(el => {
