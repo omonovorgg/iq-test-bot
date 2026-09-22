@@ -482,13 +482,12 @@ def lang_kb():
 
 def main_menu_kb(lang: str):
     b = ReplyKeyboardBuilder()
-    b.button(text=t(lang, "menu_test"), web_app=WebAppInfo(url=f"{WEBAPP_URL}/app"))
     b.button(text=t(lang, "menu_cert"))
     b.button(text=t(lang, "menu_rank"))
     b.button(text=t(lang, "menu_earn"))
     b.button(text=t(lang, "menu_help"))
     b.button(text=t(lang, "menu_lang"))
-    b.adjust(1, 2, 2, 1)
+    b.adjust(2, 2, 1)
     return b.as_markup(resize_keyboard=True)
 
 def admin_kb():
