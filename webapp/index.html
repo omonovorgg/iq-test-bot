@@ -30,17 +30,17 @@
         <svg class="brain" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="brainGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.9"/>
-              <stop offset="60%" stop-color="#3b82f6" stop-opacity="0.4"/>
+              <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.8"/>
+              <stop offset="60%" stop-color="#6366f1" stop-opacity="0.3"/>
               <stop offset="100%" stop-color="#0a0e1a" stop-opacity="0"/>
             </radialGradient>
             <linearGradient id="brainStroke" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#a78bfa"/>
+              <stop offset="0%" stop-color="#c4b5fd"/>
               <stop offset="100%" stop-color="#60a5fa"/>
             </linearGradient>
           </defs>
-          <circle cx="100" cy="100" r="85" fill="url(#brainGlow)" class="glow-pulse"/>
-          <g class="brain-lines" stroke="url(#brainStroke)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="100" cy="100" r="70" fill="url(#brainGlow)" class="glow-pulse"/>
+          <g class="brain-lines" stroke="url(#brainStroke)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path d="M65 75 Q80 55 100 70 Q120 55 135 75"/>
             <path d="M60 95 Q75 80 100 95 Q125 80 140 95"/>
             <path d="M65 115 Q80 135 100 120 Q120 135 135 115"/>
@@ -48,14 +48,14 @@
             <path d="M125 65 Q135 95 125 125"/>
             <path d="M90 60 Q85 95 90 130"/>
             <path d="M110 60 Q115 95 110 130"/>
-            <circle cx="100" cy="70" r="3" fill="#a78bfa"/>
-            <circle cx="100" cy="95" r="3" fill="#a78bfa"/>
-            <circle cx="100" cy="120" r="3" fill="#a78bfa"/>
-            <circle cx="75" cy="95" r="2.5" fill="#60a5fa"/>
-            <circle cx="125" cy="95" r="2.5" fill="#60a5fa"/>
+            <circle cx="100" cy="70" r="3.5" fill="#c4b5fd"/>
+            <circle cx="100" cy="95" r="3.5" fill="#c4b5fd"/>
+            <circle cx="100" cy="120" r="3.5" fill="#c4b5fd"/>
+            <circle cx="75" cy="95" r="3" fill="#60a5fa"/>
+            <circle cx="125" cy="95" r="3" fill="#60a5fa"/>
           </g>
         </svg>
-        <div class="brain-sparkles"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="brain-sparkles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
       </div>
       <p class="hero-sub">18 TA MANTIQIY PUZZLE</p>
       <h1 class="hero-title">IQ darajangizni sinab ko‘ring</h1>
@@ -114,13 +114,8 @@
     <div class="live-counter">
       <div class="live-badge"><span class="live-dot"></span> JONLI</div>
       <div class="live-label">Botga qo‘shilganlar soni</div>
-      <div class="live-digits">
-        <span id="live-total">0</span>
-      </div>
-      <div class="live-online">
-        <span class="online-icon">👥</span>
-        Hozir <b id="live-online">0</b> kishi onlayn
-      </div>
+      <div class="live-digits"><span id="live-total">0</span></div>
+      <div class="live-online"><span class="online-icon">👥</span> Hozir <b id="live-online">0</b> kishi onlayn</div>
     </div>
 
     <div class="footer-note">Bugungi bilim — ertangi imkoniyat</div>
@@ -172,30 +167,12 @@
       <div class="form-group">
         <label class="form-label">DAVLAT</label>
         <div class="option-grid country-grid" id="country-selector">
-          <div class="option country-opt" data-country="uz">
-            <div class="opt-emoji">🇺🇿</div>
-            <div class="opt-label">O‘zbekiston</div>
-          </div>
-          <div class="option country-opt" data-country="ru">
-            <div class="opt-emoji">🇷🇺</div>
-            <div class="opt-label">Rossiya</div>
-          </div>
-          <div class="option country-opt" data-country="en">
-            <div class="opt-emoji">🇬🇧</div>
-            <div class="opt-label">English</div>
-          </div>
-          <div class="option country-opt" data-country="kz">
-            <div class="opt-emoji">🇰🇿</div>
-            <div class="opt-label">Qozog‘iston</div>
-          </div>
-          <div class="option country-opt" data-country="kg">
-            <div class="opt-emoji">🇰🇬</div>
-            <div class="opt-label">Qirg‘iziston</div>
-          </div>
-          <div class="option country-opt" data-country="tr">
-            <div class="opt-emoji">🇹🇷</div>
-            <div class="opt-label">Turkiya</div>
-          </div>
+          <div class="option country-opt" data-country="uz"><div class="opt-emoji">🇺🇿</div><div class="opt-label">O‘zbekiston</div></div>
+          <div class="option country-opt" data-country="ru"><div class="opt-emoji">🇷🇺</div><div class="opt-label">Rossiya</div></div>
+          <div class="option country-opt" data-country="en"><div class="opt-emoji">🇬🇧</div><div class="opt-label">English</div></div>
+          <div class="option country-opt" data-country="kz"><div class="opt-emoji">🇰🇿</div><div class="opt-label">Qozog‘iston</div></div>
+          <div class="option country-opt" data-country="kg"><div class="opt-emoji">🇰🇬</div><div class="opt-label">Qirg‘iziston</div></div>
+          <div class="option country-opt" data-country="tr"><div class="opt-emoji">🇹🇷</div><div class="opt-label">Turkiya</div></div>
         </div>
       </div>
 
@@ -286,7 +263,7 @@
               <stop offset="100%" stop-color="#3b82f6"/>
             </linearGradient>
           </defs>
-          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="4"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="4"/>
           <circle cx="50" cy="50" r="42" fill="none" stroke="url(#ringGrad)" stroke-width="4"
                   stroke-dasharray="80 200" stroke-linecap="round" class="ring-rotate"/>
           <text x="50" y="58" text-anchor="middle" font-size="32">🧠</text>
@@ -299,9 +276,7 @@
         <li class="done">✅ Fazoviy tasavvur ko'rsatkichi</li>
         <li class="pending">⏳ Dunyo reytingi bilan solishtirilmoqda</li>
       </ul>
-      <div class="loading-progress">
-        <div class="loading-progress-fill"></div>
-      </div>
+      <div class="loading-progress"><div class="loading-progress-fill"></div></div>
     </div>
   </section>
 
@@ -344,7 +319,7 @@
       <h2 class="payreq-title">Natijani olish uchun to‘lov</h2>
       <p class="payreq-desc">Test yakunlandi. Natijani ko‘rish va reytingga kirish uchun to‘lovni amalga oshiring.</p>
       <div class="payreq-price" id="payreq-price">10 000 so‘m</div>
-      <button class="btn-primary" onclick="App.createPayment('iq', {attempt_id: App.getAttemptId()})">💳 TO‘LOVNI AMALGA OSHIRISH</button>
+      <button class="btn-primary" onclick="App.startIQPayment()">💳 TO‘LOVNI AMALGA OSHIRISH</button>
       <p class="payreq-note">To‘lov admin tomonidan 1-2 daqiqada tasdiqlanadi.</p>
     </div>
   </section>
@@ -384,9 +359,7 @@
       <div class="test-progress-text" id="eq-progress-text">Q1 / 6</div>
     </div>
     <div class="progress-bar"><div class="progress-fill" id="eq-progress-fill"></div></div>
-    <div class="question-box">
-      <div class="question-text" id="eq-question-text"></div>
-    </div>
+    <div class="question-box"><div class="question-text" id="eq-question-text"></div></div>
     <div class="text-options" id="eq-options"></div>
     <button class="btn-primary" id="eq-next" disabled onclick="App.nextEQQuestion()">KEYINGISI →</button>
   </section>
@@ -425,9 +398,7 @@
       <div class="test-progress-text" id="pq-progress-text">Q1 / 6</div>
     </div>
     <div class="progress-bar"><div class="progress-fill" id="pq-progress-fill"></div></div>
-    <div class="question-box">
-      <div class="question-text" id="pq-question-text"></div>
-    </div>
+    <div class="question-box"><div class="question-text" id="pq-question-text"></div></div>
     <div class="text-options" id="pq-options"></div>
     <button class="btn-primary" id="pq-next" disabled onclick="App.nextPQQuestion()">KEYINGISI →</button>
   </section>
@@ -501,11 +472,10 @@
       <div class="battle-code" id="battle-code-display">0000</div>
       <div class="battle-code-label">Bu kodni do‘stingizga yuboring</div>
     </div>
-    <button class="btn-secondary" onclick="App.shareBattleCode()">📤 Kodni yuborish</button>
     <div class="battle-players" id="battle-players-list"></div>
     <div class="battle-wait-status" id="battle-wait-status">⏳ Kutilmoqda...</div>
     <div class="battle-price-row">Har biringiz: <b id="battle-price-display">7 500 so‘m</b></div>
-    <button class="btn-primary" onclick="App.createPayment('battle', {battle_id: App.state?.battle?.id})">💳 TO‘LOVNI AMALGA OSHIRISH</button>
+    <button class="btn-primary" onclick="App.startBattlePayment()">💳 TO‘LOVNI AMALGA OSHIRISH</button>
     <button class="btn-primary" id="battle-start-btn" style="display:none;background:linear-gradient(135deg,#22c55e,#16a34a)" onclick="App.startBattleTest()">🚀 BOSHLASH</button>
     <button class="btn-secondary" id="battle-continue-btn" style="display:none" onclick="App.continueBattle()">▶️ DAVOM ETTIRISH</button>
   </section>
