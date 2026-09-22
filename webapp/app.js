@@ -1,11 +1,13 @@
 /* ============================================================
    IQ TEST BOT — app.js
-   FIXED / STABLE VERSION
+   FINAL REBUILD
    ============================================================ */
 
 "use strict";
 
-// ==================== TELEGRAM ====================
+/* ============================================================
+   TELEGRAM WEB APP
+   ============================================================ */
 
 const tg = window.Telegram?.WebApp || null;
 
@@ -21,20 +23,19 @@ if (tg) {
     }
 }
 
-
-// ==================== INIT DATA ====================
+/* ============================================================
+   INIT DATA
+   ============================================================ */
 
 let initData = "";
 
 function getInitData() {
     try {
-        const value = tg?.initData || "";
-
-        if (value && value.length > 0) {
-            initData = value;
+        if (tg?.initData && tg.initData.length > 0) {
+            initData = tg.initData;
         }
     } catch (e) {
-        console.warn("[initData] read error:", e);
+        console.warn("[initData] error:", e);
     }
 
     return initData;
@@ -42,9 +43,10 @@ function getInitData() {
 
 getInitData();
 
-
-// Telegram WebApp initData ba'zan WebApp ochilgandan keyin keladi.
-// Shuning uchun qisqa vaqt davomida qayta tekshiramiz.
+/*
+ * Telegram WebApp ba'zan initData'ni darhol bermaydi.
+ * Shuning uchun qisqa vaqt davomida qayta tekshiramiz.
+ */
 let initAttempts = 0;
 
 const initInterval = setInterval(() => {
@@ -56,7 +58,7 @@ const initInterval = setInterval(() => {
         console.log(
             "[initData] loaded:",
             value.length,
-            "belgi"
+            "characters"
         );
 
         clearInterval(initInterval);
@@ -65,114 +67,133 @@ const initInterval = setInterval(() => {
 
     if (initAttempts >= 50) {
         clearInterval(initInterval);
-
-        console.warn(
-            "[initData] 5 sekund ichida topilmadi"
-        );
+        console.warn("[initData] empty after waiting");
     }
 }, 100);
 
-
-// ==================== HAPTIC ====================
+/* ============================================================
+   HAPTIC
+   ============================================================ */
 
 function haptic(type = "light") {
     try {
         tg?.HapticFeedback?.impactOccurred(type);
     } catch (e) {
-        // Haptic mavjud bo'lmasa app ishlashda davom etadi.
+        // Telegram bo'lmasa jim ishlayveradi
     }
 }
 
+/* ============================================================
+   API
+   ============================================================ */
 
-// ==================== API ====================
+/*
+ * Muhim tuzatish:
+ * GET requestga JSON body yubormaymiz.
+ *
+ * Original app.js har bir requestga body yuborardi.
+ * Bu ayrim server/proxy holatlarida muammo berishi mumkin.
+ */
 
-async function api(
-    path,
-    body = null,
-    method = "POST"
-) {
-    const httpMethod = String(method || "POST").toUpperCase();
-
+async function api(path, body = null, method = "POST") {
     try {
         const currentInitData =
-            getInitData() ||
-            tg?.initData ||
-            "";
+            getInitData() || tg?.initData || "";
 
-        let options = {
-            method: httpMethod,
+        const upperMethod = String(method).toUpperCase();
+
+        const options = {
+            method: upperMethod,
             headers: {
-                "Content-Type": "application/json",
-            },
+                "Content-Type": "application/json"
+            }
         };
 
-        /*
-         * GET / HEAD requestlarda body yubormaymiz.
-         *
-         * Eski kodda /api/config va /api/stats/live kabi
-         * GET endpointlarga ham JSON body yuborilayotgan edi.
-         */
-        if (
-            httpMethod !== "GET" &&
-            httpMethod !== "HEAD"
-        ) {
-            const payload = {
-                ...(body || {}),
-                initData: currentInitData,
-            };
+        if (upperMethod === "GET") {
+            const params = new URLSearchParams();
 
-            options.body = JSON.stringify(payload);
+            if (currentInitData) {
+                params.set("initData", currentInitData);
+            }
+
+            const separator = path.includes("?") ? "&" : "?";
+
+            const url = currentInitData
+                ? `${path}${separator}${params.toString()}`
+                : path;
+
+            const response = await fetch(url, options);
+
+            if (!response.ok) {
+                console.warn(
+                    "[API]",
+                    upperMethod,
+                    path,
+                    response.status
+                );
+
+                return {
+                    ok: false,
+                    error: `HTTP_${response.status}`
+                };
+            }
+
+            return await response.json();
         }
 
-        const response = await fetch(
-            path,
-            options
-        );
+        const payload = {
+            ...(body || {})
+        };
 
-        let data = null;
-
-        try {
-            data = await response.json();
-        } catch (e) {
-            data = null;
+        if (!payload.initData) {
+            payload.initData = currentInitData;
         }
+
+        options.body = JSON.stringify(payload);
+
+        const response = await fetch(path, options);
 
         if (!response.ok) {
-            console.error(
-                "[API HTTP ERROR]",
-                response.status,
+            console.warn(
+                "[API]",
+                upperMethod,
                 path,
-                data
+                response.status
             );
+
+            let errorData = null;
+
+            try {
+                errorData = await response.json();
+            } catch {}
 
             return {
                 ok: false,
                 error:
-                    data?.error ||
-                    `HTTP_${response.status}`,
+                    errorData?.error ||
+                    `HTTP_${response.status}`
             };
         }
 
-        return data || {
-            ok: true,
-        };
+        return await response.json();
 
     } catch (error) {
         console.error(
-            "[API NETWORK ERROR]",
+            "[API ERROR]",
             path,
             error
         );
 
         return {
             ok: false,
-            error: "NETWORK",
+            error: "NETWORK"
         };
     }
 }
 
-
-// ==================== STATE ====================
+/* ============================================================
+   GLOBAL STATE
+   ============================================================ */
 
 const State = {
 
@@ -181,20 +202,20 @@ const State = {
     user: null,
 
     /*
-     * completed:
-     * {
-     *   iq: score,
-     *   eq: percent,
-     *   pq: percent
-     * }
+     * Backenddan kelgan completed qiymatlar.
      *
-     * Muhim:
-     * backend result_visible TRUE qilmaguncha
-     * frontend bu qiymatni o'zi TRUE qilmaydi.
+     * Misol:
+     * {
+     *   iq: 112,
+     *   eq: 75,
+     *   pq: 66
+     * }
      */
     completed: {},
 
     settings: {},
+
+    /* ---------------- TEST ---------------- */
 
     test: {
         type: "iq",
@@ -213,8 +234,10 @@ const State = {
 
         timerInterval: null,
 
-        resultData: null,
+        resultData: null
     },
+
+    /* ---------------- BATTLE ---------------- */
 
     battle: {
         id: null,
@@ -233,8 +256,10 @@ const State = {
 
         startedAt: null,
 
-        pollInterval: null,
+        pollInterval: null
     },
+
+    /* ---------------- PAYMENT ---------------- */
 
     payment: {
         id: null,
@@ -249,5926 +274,7281 @@ const State = {
 
         attemptId: null,
 
-        battleId: null,
+        battleId: null
     },
 
+    /* ---------------- LIVE ---------------- */
+
     live: {
-        interval: null,
+        interval: null
     },
+
+    /* ---------------- PROFILE ---------------- */
 
     profile: {
         full_name: "",
-
         gender: null,
-
         age: null,
-
-        country: null,
-    },
+        country: null
+    }
 };
 
+/* ============================================================
+   IQ QUESTIONS — 18
+   ============================================================ */
 
-// ==================== SAFE HELPERS ====================
+const QUESTIONS = [
 
-function stopPaymentPolling() {
-    if (State.payment.pollInterval) {
-        clearInterval(
-            State.payment.pollInterval
-        );
+    /* ---------------- Q1 ---------------- */
 
-        State.payment.pollInterval = null;
+    {
+        id: 1,
+        weight: 1,
+
+        matrix: [
+            { type: "dot", count: 1 },
+            { type: "dot", count: 2 },
+            { type: "dot", count: 3 },
+
+            { type: "dot", count: 2 },
+            { type: "dot", count: 3 },
+            { type: "dot", count: 4 },
+
+            { type: "dot", count: 3 },
+            { type: "dot", count: 4 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "dot", count: 3 },
+            { type: "dot", count: 4 },
+            { type: "dot", count: 5 },
+            { type: "dot", count: 6 }
+        ],
+
+        correct: 2
+    },
+
+    /* ---------------- Q2 ---------------- */
+
+    {
+        id: 2,
+        weight: 1,
+
+        matrix: [
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "square",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "empty"
+            },
+
+            {
+                type: "shape",
+                shape: "square",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "empty"
+            },
+
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "empty"
+            },
+            { type: "question" }
+        ],
+
+        options: [
+            {
+                type: "shape",
+                shape: "square",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "diamond",
+                fill: "empty"
+            }
+        ],
+
+        correct: 0
+    },
+
+    /* ---------------- Q3 ---------------- */
+
+    {
+        id: 3,
+        weight: 1,
+
+        matrix: [
+            { type: "rotate", angle: 0 },
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 180 },
+
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 180 },
+            { type: "rotate", angle: 270 },
+
+            { type: "rotate", angle: 180 },
+            { type: "rotate", angle: 270 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "rotate", angle: 0 },
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 270 },
+            { type: "rotate", angle: 360 }
+        ],
+
+        correct: 3
+    },
+
+    /* ---------------- Q4 ---------------- */
+
+    {
+        id: 4,
+        weight: 1,
+
+        matrix: [
+            { type: "size", size: 12 },
+            { type: "size", size: 20 },
+            { type: "size", size: 28 },
+
+            { type: "size", size: 20 },
+            { type: "size", size: 28 },
+            { type: "size", size: 36 },
+
+            { type: "size", size: 28 },
+            { type: "size", size: 36 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "size", size: 28 },
+            { type: "size", size: 36 },
+            { type: "size", size: 44 },
+            { type: "size", size: 52 }
+        ],
+
+        correct: 2
+    },
+
+    /* ---------------- Q5 ---------------- */
+
+    {
+        id: 5,
+        weight: 1,
+
+        matrix: [
+            { type: "grid", pos: 0 },
+            { type: "grid", pos: 1 },
+            { type: "grid", pos: 2 },
+
+            { type: "grid", pos: 3 },
+            { type: "grid", pos: 4 },
+            { type: "grid", pos: 5 },
+
+            { type: "grid", pos: 6 },
+            { type: "grid", pos: 7 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "grid", pos: 4 },
+            { type: "grid", pos: 6 },
+            { type: "grid", pos: 7 },
+            { type: "grid", pos: 8 }
+        ],
+
+        correct: 3
+    },
+
+    /* ---------------- Q6 ---------------- */
+
+    {
+        id: 6,
+        weight: 1,
+
+        matrix: [
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "square",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "full"
+            },
+
+            {
+                type: "shape",
+                shape: "square",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "full"
+            },
+
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "full"
+            },
+            { type: "question" }
+        ],
+
+        options: [
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "square",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "diamond",
+                fill: "full"
+            }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q7 ---------------- */
+
+    {
+        id: 7,
+        weight: 2,
+
+        matrix: [
+            {
+                type: "combo",
+                shapes: ["circle"],
+                fill: "full"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "full"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square", "triangle"],
+                fill: "full"
+            },
+
+            {
+                type: "combo",
+                shapes: ["square"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["square", "triangle"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["square", "triangle", "circle"],
+                fill: "empty"
+            },
+
+            {
+                type: "combo",
+                shapes: ["triangle"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "circle"],
+                fill: "half"
+            },
+            { type: "question" }
+        ],
+
+        options: [
+            {
+                type: "combo",
+                shapes: ["triangle"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "circle", "square"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "square"],
+                fill: "half"
+            }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q8 ---------------- */
+
+    {
+        id: 8,
+        weight: 2,
+
+        matrix: [
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "half"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "empty"
+            },
+
+            {
+                type: "shape",
+                shape: "square",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "square",
+                fill: "half"
+            },
+            {
+                type: "shape",
+                shape: "square",
+                fill: "empty"
+            },
+
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "half"
+            },
+            { type: "question" }
+        ],
+
+        options: [
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "full"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "half"
+            },
+            {
+                type: "shape",
+                shape: "triangle",
+                fill: "empty"
+            },
+            {
+                type: "shape",
+                shape: "circle",
+                fill: "empty"
+            }
+        ],
+
+        correct: 2
+    },
+
+    /* ---------------- Q9 ---------------- */
+
+    {
+        id: 9,
+        weight: 2,
+
+        matrix: [
+            { type: "num", val: 2 },
+            { type: "num", val: 4 },
+            { type: "num", val: 6 },
+
+            { type: "num", val: 3 },
+            { type: "num", val: 6 },
+            { type: "num", val: 9 },
+
+            { type: "num", val: 4 },
+            { type: "num", val: 8 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "num", val: 10 },
+            { type: "num", val: 12 },
+            { type: "num", val: 14 },
+            { type: "num", val: 16 }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q10 ---------------- */
+
+    {
+        id: 10,
+        weight: 2,
+
+        matrix: [
+            { type: "rotate", angle: 45 },
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 135 },
+
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 135 },
+            { type: "rotate", angle: 180 },
+
+            { type: "rotate", angle: 135 },
+            { type: "rotate", angle: 180 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "rotate", angle: 180 },
+            { type: "rotate", angle: 225 },
+            { type: "rotate", angle: 270 },
+            { type: "rotate", angle: 315 }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q11 ---------------- */
+
+    {
+        id: 11,
+        weight: 2,
+
+        matrix: [
+            { type: "dot", count: 1 },
+            { type: "dot", count: 4 },
+            { type: "dot", count: 9 },
+
+            { type: "dot", count: 4 },
+            { type: "dot", count: 9 },
+            { type: "dot", count: 16 },
+
+            { type: "dot", count: 9 },
+            { type: "dot", count: 16 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "dot", count: 16 },
+            { type: "dot", count: 25 },
+            { type: "dot", count: 36 },
+            { type: "dot", count: 49 }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q12 ---------------- */
+
+    {
+        id: 12,
+        weight: 2,
+
+        matrix: [
+            { type: "grid", pos: 0 },
+            { type: "grid", pos: 2 },
+            { type: "grid", pos: 4 },
+
+            { type: "grid", pos: 2 },
+            { type: "grid", pos: 4 },
+            { type: "grid", pos: 6 },
+
+            { type: "grid", pos: 4 },
+            { type: "grid", pos: 6 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "grid", pos: 6 },
+            { type: "grid", pos: 7 },
+            { type: "grid", pos: 8 },
+            { type: "grid", pos: 5 }
+        ],
+
+        correct: 2
+    },
+
+    /* ---------------- Q13 ---------------- */
+
+    {
+        id: 13,
+        weight: 3,
+
+        matrix: [
+            { type: "num", val: 1 },
+            { type: "num", val: 1 },
+            { type: "num", val: 2 },
+
+            { type: "num", val: 3 },
+            { type: "num", val: 5 },
+            { type: "num", val: 8 },
+
+            { type: "num", val: 13 },
+            { type: "num", val: 21 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "num", val: 30 },
+            { type: "num", val: 34 },
+            { type: "num", val: 38 },
+            { type: "num", val: 42 }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q14 ---------------- */
+
+    {
+        id: 14,
+        weight: 3,
+
+        matrix: [
+            {
+                type: "combo",
+                shapes: ["circle"],
+                fill: "full"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square", "triangle"],
+                fill: "empty"
+            },
+
+            {
+                type: "combo",
+                shapes: ["square"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["square", "triangle"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["square", "triangle", "circle"],
+                fill: "full"
+            },
+
+            {
+                type: "combo",
+                shapes: ["triangle"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "circle"],
+                fill: "full"
+            },
+            { type: "question" }
+        ],
+
+        options: [
+            {
+                type: "combo",
+                shapes: ["triangle", "circle", "square"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle"],
+                fill: "full"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "square"],
+                fill: "empty"
+            }
+        ],
+
+        correct: 0
+    },
+
+    /* ---------------- Q15 ---------------- */
+
+    {
+        id: 15,
+        weight: 3,
+
+        matrix: [
+            { type: "rotate", angle: 0 },
+            { type: "rotate", angle: 45 },
+            { type: "rotate", angle: 90 },
+
+            { type: "rotate", angle: 45 },
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 135 },
+
+            { type: "rotate", angle: 90 },
+            { type: "rotate", angle: 135 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "rotate", angle: 135 },
+            { type: "rotate", angle: 180 },
+            { type: "rotate", angle: 225 },
+            { type: "rotate", angle: 270 }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q16 ---------------- */
+
+    {
+        id: 16,
+        weight: 3,
+
+        matrix: [
+            { type: "num", val: 3 },
+            { type: "num", val: 9 },
+            { type: "num", val: 27 },
+
+            { type: "num", val: 2 },
+            { type: "num", val: 4 },
+            { type: "num", val: 8 },
+
+            { type: "num", val: 5 },
+            { type: "num", val: 25 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "num", val: 100 },
+            { type: "num", val: 125 },
+            { type: "num", val: 150 },
+            { type: "num", val: 625 }
+        ],
+
+        correct: 1
+    },
+
+    /* ---------------- Q17 ---------------- */
+
+    {
+        id: 17,
+        weight: 3,
+
+        matrix: [
+            { type: "grid", pos: 0 },
+            { type: "grid", pos: 1 },
+            { type: "grid", pos: 3 },
+
+            { type: "grid", pos: 1 },
+            { type: "grid", pos: 3 },
+            { type: "grid", pos: 5 },
+
+            { type: "grid", pos: 3 },
+            { type: "grid", pos: 5 },
+            { type: "question" }
+        ],
+
+        options: [
+            { type: "grid", pos: 5 },
+            { type: "grid", pos: 6 },
+            { type: "grid", pos: 7 },
+            { type: "grid", pos: 8 }
+        ],
+
+        correct: 2
+    },
+
+    /* ---------------- Q18 ---------------- */
+
+    {
+        id: 18,
+        weight: 3,
+
+        matrix: [
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "full"
+            },
+            {
+                type: "combo",
+                shapes: ["square", "triangle"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "circle"],
+                fill: "empty"
+            },
+
+            {
+                type: "combo",
+                shapes: ["square", "triangle"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "circle"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "full"
+            },
+
+            {
+                type: "combo",
+                shapes: ["triangle", "circle"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "full"
+            },
+            { type: "question" }
+        ],
+
+        options: [
+            {
+                type: "combo",
+                shapes: ["circle", "square"],
+                fill: "full"
+            },
+            {
+                type: "combo",
+                shapes: ["square", "triangle"],
+                fill: "half"
+            },
+            {
+                type: "combo",
+                shapes: ["triangle", "circle"],
+                fill: "empty"
+            },
+            {
+                type: "combo",
+                shapes: ["circle", "triangle"],
+                fill: "half"
+            }
+        ],
+
+        correct: 1
     }
-}
+];
 
+/* ============================================================
+   EQ — 6 QUESTIONS
+   ============================================================ */
 
-function stopBattlePolling() {
-    if (State.battle.pollInterval) {
-        clearInterval(
-            State.battle.pollInterval
-        );
+const EQ_QUESTIONS = [
 
-        State.battle.pollInterval = null;
+    {
+        id: 1,
+
+        text:
+            "Ishingiz juda ko‘payib ketdi va boshliq yana yangi topshiriq berdi. Siz nima qilasiz?",
+
+        options: [
+            "Darhol ro‘yxat tuzaman va muhimini ajrataman",
+            "Asabiylashaman, lekin baribir boshlayman",
+            "Boshliqqa vaqt yetmasligini aytaman",
+            "Kechqurun qolib ishlayman"
+        ],
+
+        scores: [4, 2, 3, 1]
+    },
+
+    {
+        id: 2,
+
+        text:
+            "Do‘stingiz yig‘layapti va nima bo‘lganini aytmayapti. Siz:",
+
+        options: [
+            "Yoniga o‘tiraman va jim kutaman",
+            "Darhol savol bera boshlayman",
+            "Hazil qilib kayfiyatini ko‘taraman",
+            "Uydan ketsam bo‘ladi deb o‘ylayman"
+        ],
+
+        scores: [4, 1, 2, 1]
+    },
+
+    {
+        id: 3,
+
+        text:
+            "Siz xato qildingiz va buni birinchi bo‘lib kim payqadi?",
+
+        options: [
+            "O‘zim, darhol tan olaman",
+            "Boshqalar aytganda tan olaman",
+            "Inkor qilaman",
+            "Bahona topaman"
+        ],
+
+        scores: [4, 3, 1, 1]
+    },
+
+    {
+        id: 4,
+
+        text:
+            "Hamkasbingiz sizning fikringizni ochiq tanqid qildi. Siz:",
+
+        options: [
+            "Xotirjam tinglab, sababini so‘rayman",
+            "Darhol javob qaytaraman",
+            "Indamay qolaman",
+            "Boshqalardan yordam so‘rayman"
+        ],
+
+        scores: [4, 2, 1, 2]
+    },
+
+    {
+        id: 5,
+
+        text:
+            "Kutilmagan yomon xabar oldingiz. Birinchi harakatingiz:",
+
+        options: [
+            "Chuqur nafas olib, o‘zimni tutaman",
+            "Darhol kimdirga aytaman",
+            "Yolg‘iz qolaman",
+            "Ishni tashlab ketaman"
+        ],
+
+        scores: [4, 2, 3, 1]
+    },
+
+    {
+        id: 6,
+
+        text:
+            "Suhbatdoshning ko‘zlari boshqa tomonga qarayapti. Bu nimani bildiradi?",
+
+        options: [
+            "U zerikkan yoki shoshilyapti",
+            "U yolg‘on gapiryapti",
+            "U sizni yoqtirmaydi",
+            "Hech narsa, shunchaki shunday"
+        ],
+
+        scores: [4, 2, 1, 2]
     }
-}
+];
 
+/* ============================================================
+   PQ — 6 QUESTIONS
+   ============================================================ */
 
-function stopTestTimer() {
-    if (State.test.timerInterval) {
-        clearInterval(
-            State.test.timerInterval
-        );
+const PQ_QUESTIONS = [
 
-        State.test.timerInterval = null;
+    {
+        id: 1,
+
+        text:
+            "Muhim loyiha bor, lekin siz uni doim keyinga surasiz. Sabab:",
+
+        options: [
+            "Qiyin bo‘lgani uchun",
+            "Vaqt ko‘p deb o‘ylayman",
+            "Nima qilishni bilmayman",
+            "Kayfiyat yo‘q"
+        ],
+
+        scores: [2, 1, 2, 1]
+    },
+
+    {
+        id: 2,
+
+        text:
+            "Imtihonga 7 kun qoldi. Siz:",
+
+        options: [
+            "Har kuni oz-oz tayyorlanaman",
+            "Oxirgi 2 kunda qattiq tayyorlanaman",
+            "Oxirgi kechada tayyorlanaman",
+            "Tayyorlanmayman, nima bo‘lsa bo‘lsin"
+        ],
+
+        scores: [4, 2, 1, 0]
+    },
+
+    {
+        id: 3,
+
+        text:
+            "Ishni boshlash uchun sizga nima kerak?",
+
+        options: [
+            "Aniq reja",
+            "Kayfiyat",
+            "Deadline",
+            "Mukofot"
+        ],
+
+        scores: [4, 1, 2, 2]
+    },
+
+    {
+        id: 4,
+
+        text:
+            "Ishlayotganingizda telefonni tez-tez tekshirasizmi?",
+
+        options: [
+            "Yo‘q, telefon boshqa xonada",
+            "Ba‘zan, lekin o‘zimni tutaman",
+            "Ha, har 10 daqiqada",
+            "Doim qo‘limda"
+        ],
+
+        scores: [4, 3, 1, 0]
+    },
+
+    {
+        id: 5,
+
+        text:
+            "Deadline yaqinlashganda siz:",
+
+        options: [
+            "Avvaldan tayyor bo‘laman",
+            "Oxirgi paytda tezlashaman",
+            "Kechikaman",
+            "Umuman bajarmayman"
+        ],
+
+        scores: [4, 2, 1, 0]
+    },
+
+    {
+        id: 6,
+
+        text:
+            "Rejangizni qanchalik bajarasiz?",
+
+        options: [
+            "Doim bajaraman",
+            "Ko‘pincha bajaraman",
+            "Ba‘zan bajaraman",
+            "Deyarli hech qachon"
+        ],
+
+        scores: [4, 3, 1, 0]
     }
-}
+];
 
-
-function resetTestState(type = "iq") {
-
-    stopTestTimer();
-
-    State.test = {
-        type,
-
-        sessionId: null,
-
-        attemptId: null,
-
-        current: 0,
-
-        answers: [],
-
-        startedAt: null,
-
-        duration: 0,
-
-        timerInterval: null,
-
-        resultData: null,
-    };
-}
-
-
-function resetPaymentState() {
-
-    stopPaymentPolling();
-
-    State.payment = {
-        id: null,
-
-        product: null,
-
-        amount: 0,
-
-        cards: [],
-
-        pollInterval: null,
-
-        attemptId: null,
-
-        battleId: null,
-    };
-}
-
-
-// ============================================================
-// MUHIM:
-// Bu yerda QUESTIONS / EQ_QUESTIONS / PQ_QUESTIONS
-// o'zgartirilmaydi.
-// ============================================================
-
-
-// ==================== 18 IQ QUESTIONS ====================
-// ============================================================
-// APP.JS — 2-QISM
-// RENDER HELPERS + APP INIT + PROFILE
-// ============================================================
-
-// ==================== SAFE HELPERS ====================
-
-function escapeHtml(value) {
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function formatNumber(value) {
-    const number = Number(value || 0);
-    return number.toLocaleString("uz-UZ");
-}
-
-function getElement(id) {
-    return document.getElementById(id);
-}
-
-function showScreen(id) {
-    document.querySelectorAll(".screen").forEach(screen => {
-        screen.classList.remove("active");
-    });
-
-    const screen = getElement(id);
-
-    if (screen) {
-        screen.classList.add("active");
-    }
-
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
-}
-
-function setText(id, value) {
-    const element = getElement(id);
-
-    if (element) {
-        element.textContent = value ?? "";
-    }
-}
-
-function setHTML(id, html) {
-    const element = getElement(id);
-
-    if (element) {
-        element.innerHTML = html;
-    }
-}
-
-function setDisplay(id, display) {
-    const element = getElement(id);
-
-    if (element) {
-        element.style.display = display;
-    }
-}
-
-function getPrice(product) {
-    const settings = State.settings || {};
-
-    const prices = {
-        iq: Number(settings.iq_price || 0),
-        iq_retry: Number(settings.iq_retry_price || 0),
-
-        eq: Number(settings.eq_price || 0),
-        eq_retry: Number(settings.eq_retry_price || 0),
-
-        pq: Number(settings.pq_price || 0),
-        pq_retry: Number(settings.pq_retry_price || 0),
-
-        battle: Number(settings.battle_price || 0)
-    };
-
-    return prices[product] ?? 0;
-}
-
-function getProductName(product) {
-    const names = {
-        iq: "IQ testi",
-        iq_retry: "IQ testini qayta topshirish",
-        eq: "EQ testi",
-        eq_retry: "EQ testini qayta topshirish",
-        pq: "PQ testi",
-        pq_retry: "PQ testini qayta topshirish",
-        battle: "Do‘st bilan Battle"
-    };
-
-    return names[product] || product;
-}
-
-
-// ==================== RENDER CELL ====================
+/* ============================================================
+   RENDER — MATRIX CELL
+   ============================================================ */
 
 function renderCell(cell) {
+
     if (!cell) {
         return "";
     }
 
-    const type = cell.type || "text";
-    const value = cell.value ?? "";
+    if (cell.type === "question") {
+        return `
+            <span
+                style="
+                    font-size:32px;
+                    font-weight:900;
+                    color:#a78bfa;
+                "
+            >?</span>
+        `;
+    }
 
-    // ---------- DOT ----------
-    if (type === "dot") {
-        const count = Number(value || 0);
+    /* ---------------- DOT ---------------- */
 
-        let dots = "";
+    if (cell.type === "dot") {
+
+        const count = Math.min(
+            Number(cell.count) || 0,
+            16
+        );
+
+        let html = `
+            <div
+                style="
+                    display:grid;
+                    grid-template-columns:repeat(4,1fr);
+                    gap:2px;
+                    width:44px;
+                    height:44px;
+                    align-items:center;
+                    justify-items:center;
+                "
+            >
+        `;
 
         for (let i = 0; i < count; i++) {
-            dots += '<span class="matrix-dot"></span>';
-        }
 
-        return `
-            <div class="matrix-cell matrix-dot-cell">
-                ${dots}
-            </div>
-        `;
-    }
-
-    // ---------- NUMBER ----------
-    if (type === "num") {
-        return `
-            <div class="matrix-cell matrix-number">
-                ${escapeHtml(value)}
-            </div>
-        `;
-    }
-
-    // ---------- SHAPE ----------
-    if (type === "shape") {
-        return `
-            <div class="matrix-cell matrix-shape-cell">
-                <div class="shape shape-${escapeHtml(value)}"></div>
-            </div>
-        `;
-    }
-
-    // ---------- ROTATE ----------
-    if (type === "rotate") {
-        return `
-            <div class="matrix-cell matrix-rotate-cell">
+            html += `
                 <div
-                    class="rotate-shape"
-                    style="transform: rotate(${Number(value) || 0}deg);"
-                ></div>
-            </div>
-        `;
-    }
-
-    // ---------- SIZE ----------
-    if (type === "size") {
-        const size = Number(value || 20);
-
-        return `
-            <div class="matrix-cell matrix-size-cell">
-                <div
-                    class="size-shape"
                     style="
-                        width:${size}px;
-                        height:${size}px;
+                        width:6px;
+                        height:6px;
+                        border-radius:50%;
+                        background:#a78bfa;
+                        box-shadow:0 0 6px #a78bfa;
                     "
                 ></div>
-            </div>
-        `;
+            `;
+        }
+
+        html += "</div>";
+
+        return html;
     }
 
-    // ---------- GRID ----------
-    if (type === "grid") {
-        const position = Number(value || 0);
+    /* ---------------- NUMBER ---------------- */
+
+    if (cell.type === "num") {
 
         return `
-            <div class="matrix-cell matrix-grid-cell">
-                <div class="grid-3x3">
-                    ${Array.from({ length: 9 }, (_, index) => `
-                        <span
-                            class="${index === position ? "active" : ""}"
-                        ></span>
-                    `).join("")}
-                </div>
-            </div>
+            <span
+                style="
+                    font-size:22px;
+                    font-weight:800;
+                    color:#a78bfa;
+                "
+            >
+                ${cell.val}
+            </span>
         `;
     }
 
-    // ---------- COMBO ----------
-    if (type === "combo") {
-        const shapes = Array.isArray(value)
-            ? value
-            : String(value)
-                .split(",")
-                .map(item => item.trim())
-                .filter(Boolean);
+    /* ---------------- SHAPE ---------------- */
 
-        return `
-            <div class="matrix-cell matrix-combo-cell">
-                ${shapes.map(shape => `
-                    <span class="combo-shape combo-${escapeHtml(shape)}"></span>
-                `).join("")}
-            </div>
-        `;
-    }
+    if (cell.type === "shape") {
 
-    // ---------- TEXT ----------
-    return `
-        <div class="matrix-cell matrix-text-cell">
-            ${escapeHtml(value)}
-        </div>
-    `;
-}
-
-
-// ==================== RENDER MATRIX ====================
-
-function renderMatrix(matrix) {
-    if (!Array.isArray(matrix)) {
-        return "";
-    }
-
-    return `
-        <div class="matrix-wrapper">
-            <div class="question-matrix">
-                ${matrix.map(row => `
-                    <div class="matrix-row">
-                        ${
-                            Array.isArray(row)
-                                ? row.map(cell => renderCell(cell)).join("")
-                                : ""
-                        }
-                    </div>
-                `).join("")}
-            </div>
-        </div>
-    `;
-}
-
-
-// ==================== RENDER IQ OPTIONS ====================
-
-function renderOptions(question) {
-    if (!question || !Array.isArray(question.options)) {
-        return "";
-    }
-
-    return `
-        <div class="answer-options">
-            ${question.options.map((option, index) => `
-                <button
-                    type="button"
-                    class="answer-option"
-                    data-answer="${index}"
-                >
-                    <span class="answer-letter">
-                        ${String.fromCharCode(65 + index)}
-                    </span>
-
-                    <span class="answer-content">
-                        ${renderCell(option)}
-                    </span>
-                </button>
-            `).join("")}
-        </div>
-    `;
-}
-
-
-// ==================== RENDER TEXT OPTIONS ====================
-
-function renderTextOptions(question) {
-    if (!question || !Array.isArray(question.options)) {
-        return "";
-    }
-
-    return `
-        <div class="answer-options text-answer-options">
-            ${question.options.map((option, index) => `
-                <button
-                    type="button"
-                    class="answer-option text-option"
-                    data-answer="${index}"
-                >
-                    <span class="answer-letter">
-                        ${String.fromCharCode(65 + index)}
-                    </span>
-
-                    <span class="answer-content">
-                        ${escapeHtml(option)}
-                    </span>
-                </button>
-            `).join("")}
-        </div>
-    `;
-}
-
-
-// ==================== QUESTION PROGRESS ====================
-
-function updateQuestionProgress() {
-    const type = State.test.type || "iq";
-
-    let total = 0;
-
-    if (type === "iq") {
-        total = QUESTIONS.length;
-    } else if (type === "eq") {
-        total = EQ_QUESTIONS.length;
-    } else if (type === "pq") {
-        total = PQ_QUESTIONS.length;
-    }
-
-    const current = Number(State.test.current || 0);
-
-    const number = current + 1;
-
-    setText("question-number", `${number}/${total}`);
-    setText("question-count", `${number} / ${total}`);
-
-    const progress = total > 0
-        ? Math.round((current / total) * 100)
-        : 0;
-
-    const progressBar = getElement("test-progress");
-
-    if (progressBar) {
-        progressBar.style.width = `${progress}%`;
-    }
-
-    const progressFill = getElement("progress-fill");
-
-    if (progressFill) {
-        progressFill.style.width = `${progress}%`;
-    }
-}
-
-
-// ==================== RENDER IQ QUESTION ====================
-
-function renderIQQuestion() {
-    const question = QUESTIONS[State.test.current];
-
-    if (!question) {
-        finish();
-        return;
-    }
-
-    updateQuestionProgress();
-
-    setText(
-        "question-title",
-        question.title || `Savol ${State.test.current + 1}`
-    );
-
-    setHTML(
-        "question-content",
-        renderMatrix(question.matrix)
-    );
-
-    setHTML(
-        "question-options",
-        renderOptions(question)
-    );
-
-    document
-        .querySelectorAll("#question-options .answer-option")
-        .forEach(button => {
-            button.addEventListener("click", () => {
-                const answer = Number(button.dataset.answer);
-
-                selectIQAnswer(answer);
-            });
-        });
-
-    showScreen("screen-test");
-}
-
-
-// ==================== SELECT IQ ANSWER ====================
-
-function selectIQAnswer(answer) {
-    const question = QUESTIONS[State.test.current];
-
-    if (!question) {
-        return;
-    }
-
-    State.test.answers[State.test.current] = answer;
-
-    document
-        .querySelectorAll("#question-options .answer-option")
-        .forEach(button => {
-            button.classList.remove("selected");
-
-            if (Number(button.dataset.answer) === answer) {
-                button.classList.add("selected");
-            }
-        });
-
-    setTimeout(() => {
-        if (State.test.current >= QUESTIONS.length - 1) {
-            finish();
-        } else {
-            State.test.current += 1;
-            renderIQQuestion();
-        }
-    }, 220);
-}
-
-
-// ==================== RENDER EQ QUESTION ====================
-
-function renderEQQuestion() {
-    const question = EQ_QUESTIONS[State.test.current];
-
-    if (!question) {
-        finishEQ();
-        return;
-    }
-
-    updateQuestionProgress();
-
-    setText(
-        "question-title",
-        question.title || `Savol ${State.test.current + 1}`
-    );
-
-    setHTML(
-        "question-content",
-        `
-            <div class="text-question">
-                <div class="text-question-title">
-                    ${escapeHtml(question.question || "")}
-                </div>
-            </div>
-        `
-    );
-
-    setHTML(
-        "question-options",
-        renderTextOptions(question)
-    );
-
-    document
-        .querySelectorAll("#question-options .answer-option")
-        .forEach(button => {
-            button.addEventListener("click", () => {
-                const answer = Number(button.dataset.answer);
-
-                selectEQAnswer(answer);
-            });
-        });
-
-    showScreen("screen-test");
-}
-
-
-// ==================== SELECT EQ ANSWER ====================
-
-function selectEQAnswer(answer) {
-    State.test.answers[State.test.current] = answer;
-
-    document
-        .querySelectorAll("#question-options .answer-option")
-        .forEach(button => {
-            button.classList.remove("selected");
-
-            if (Number(button.dataset.answer) === answer) {
-                button.classList.add("selected");
-            }
-        });
-
-    setTimeout(() => {
-        if (State.test.current >= EQ_QUESTIONS.length - 1) {
-            finishEQ();
-        } else {
-            State.test.current += 1;
-            renderEQQuestion();
-        }
-    }, 220);
-}
-
-
-// ==================== RENDER PQ QUESTION ====================
-
-function renderPQQuestion() {
-    const question = PQ_QUESTIONS[State.test.current];
-
-    if (!question) {
-        finishPQ();
-        return;
-    }
-
-    updateQuestionProgress();
-
-    setText(
-        "question-title",
-        question.title || `Savol ${State.test.current + 1}`
-    );
-
-    setHTML(
-        "question-content",
-        `
-            <div class="text-question">
-                <div class="text-question-title">
-                    ${escapeHtml(question.question || "")}
-                </div>
-            </div>
-        `
-    );
-
-    setHTML(
-        "question-options",
-        renderTextOptions(question)
-    );
-
-    document
-        .querySelectorAll("#question-options .answer-option")
-        .forEach(button => {
-            button.addEventListener("click", () => {
-                const answer = Number(button.dataset.answer);
-
-                selectPQAnswer(answer);
-            });
-        });
-
-    showScreen("screen-test");
-}
-
-
-// ==================== SELECT PQ ANSWER ====================
-
-function selectPQAnswer(answer) {
-    State.test.answers[State.test.current] = answer;
-
-    document
-        .querySelectorAll("#question-options .answer-option")
-        .forEach(button => {
-            button.classList.remove("selected");
-
-            if (Number(button.dataset.answer) === answer) {
-                button.classList.add("selected");
-            }
-        });
-
-    setTimeout(() => {
-        if (State.test.current >= PQ_QUESTIONS.length - 1) {
-            finishPQ();
-        } else {
-            State.test.current += 1;
-            renderPQQuestion();
-        }
-    }, 220);
-}
-
-
-// ============================================================
-// APP
-// ============================================================
-
-const App = {
-
-    async init() {
-        try {
-            if (tg) {
-                try {
-                    tg.ready();
-                    tg.expand();
-                } catch (error) {
-                    console.warn("[APP] Telegram init warning:", error);
-                }
-            }
-
-            // --------------------------------------------
-            // CONFIG
-            // --------------------------------------------
-
-            try {
-                const config = await api(
-                    "/api/config",
-                    null,
-                    "GET"
-                );
-
-                if (config?.ok) {
-                    State.settings = {
-                        ...State.settings,
-                        ...(config.settings || config.config || {})
-                    };
-                }
-            } catch (error) {
-                console.warn("[APP] Config error:", error);
-            }
-
-            // --------------------------------------------
-            // LIVE STATS
-            // --------------------------------------------
-
-            try {
-                const stats = await api(
-                    "/api/stats/live",
-                    null,
-                    "GET"
-                );
-
-                if (stats?.ok) {
-                    State.live = {
-                        ...State.live,
-                        ...(stats.stats || stats.data || {})
-                    };
-
-                    updateLiveCounter();
-                }
-            } catch (error) {
-                console.warn("[APP] Live stats error:", error);
-            }
-
-            // --------------------------------------------
-            // USER
-            // --------------------------------------------
-
-            if (State.initData) {
-                try {
-                    const me = await api(
-                        "/api/me",
-                        null,
-                        "GET"
-                    );
-
-                    if (me?.ok) {
-                        State.user = me.user || null;
-
-                        State.completed = {
-                            ...State.completed,
-                            ...(me.completed || {})
-                        };
-
-                        State.profile = me.profile || null;
-
-                        if (me.battle) {
-                            State.battle = {
-                                ...State.battle,
-                                ...me.battle
-                            };
-                        }
-                    }
-                } catch (error) {
-                    console.warn("[APP] /api/me error:", error);
-                }
-            }
-
-            applyUnlocks();
-
-            updateProfileHeader();
-
-            bindGlobalEvents();
-
-            hideLoadingScreen();
-
-        } catch (error) {
-            console.error("[APP] Initialization failed:", error);
-
-            hideLoadingScreen();
-
-            showToast(
-                "Ilovani yuklashda xatolik yuz berdi",
-                "error"
-            );
-        }
-    }
-};
-
-
-// ==================== LOADING ====================
-
-function hideLoadingScreen() {
-    const loading = getElement("loading-screen");
-
-    if (!loading) {
-        return;
-    }
-
-    setTimeout(() => {
-        loading.classList.add("hidden");
-    }, 250);
-}
-
-
-// ==================== LIVE COUNTER ====================
-
-function updateLiveCounter() {
-    const live = State.live || {};
-
-    const value =
-        live.current ??
-        live.live ??
-        live.online ??
-        live.count ??
-        0;
-
-    setText(
-        "live-counter",
-        formatNumber(value)
-    );
-
-    setText(
-        "live-count",
-        formatNumber(value)
-    );
-}
-
-
-// ==================== PROFILE HEADER ====================
-
-function updateProfileHeader() {
-    const user = State.user;
-
-    if (!user) {
-        return;
-    }
-
-    const name =
-        user.first_name ||
-        user.firstName ||
-        user.username ||
-        "Foydalanuvchi";
-
-    setText(
-        "profile-name",
-        name
-    );
-
-    if (user.username) {
-        setText(
-            "profile-username",
-            `@${String(user.username).replace(/^@/, "")}`
-        );
-    }
-}
-
-
-// ==================== UNLOCK SYSTEM ====================
-
-function applyUnlocks() {
-    const completed = State.completed || {};
-
-    const iqDone = completed.iq !== null &&
-                   completed.iq !== undefined;
-
-    const eqDone = completed.eq !== null &&
-                   completed.eq !== undefined;
-
-    const pqDone = completed.pq !== null &&
-                   completed.pq !== undefined;
-
-    const eqLocked = getElement("eq-lock");
-    const pqLocked = getElement("pq-lock");
-    const profileLocked = getElement("profile-lock");
-
-    const eqCard = getElement("eq-card");
-    const pqCard = getElement("pq-card");
-    const profileCard = getElement("profile-card");
-
-    // --------------------------------------------
-    // EQ
-    // --------------------------------------------
-
-    if (eqCard) {
-        eqCard.classList.toggle("locked", !iqDone);
-    }
-
-    if (eqLocked) {
-        eqLocked.style.display = iqDone ? "none" : "";
-    }
-
-    // --------------------------------------------
-    // PQ
-    // --------------------------------------------
-
-    if (pqCard) {
-        pqCard.classList.toggle("locked", !eqDone);
-    }
-
-    if (pqLocked) {
-        pqLocked.style.display = eqDone ? "none" : "";
-    }
-
-    // --------------------------------------------
-    // PROFILE
-    // --------------------------------------------
-
-    const allDone = iqDone && eqDone && pqDone;
-
-    if (profileCard) {
-        profileCard.classList.toggle("locked", !allDone);
-    }
-
-    if (profileLocked) {
-        profileLocked.style.display = allDone ? "none" : "";
-    }
-
-    // --------------------------------------------
-    // HOME BUTTONS
-    // --------------------------------------------
-
-    const iqButton = getElement("start-iq-btn");
-    const eqButton = getElement("start-eq-btn");
-    const pqButton = getElement("start-pq-btn");
-
-    if (eqButton) {
-        eqButton.disabled = !iqDone;
-    }
-
-    if (pqButton) {
-        pqButton.disabled = !eqDone;
-    }
-
-    // IQ is always available.
-    if (iqButton) {
-        iqButton.disabled = false;
-    }
-}
-
-
-// ==================== GLOBAL EVENTS ====================
-
-function bindGlobalEvents() {
-
-    // --------------------------------------------
-    // HOME / BACK
-    // --------------------------------------------
-
-    document.querySelectorAll("[data-screen]").forEach(element => {
-        if (element.dataset.bound === "1") {
-            return;
-        }
-
-        element.dataset.bound = "1";
-
-        element.addEventListener("click", () => {
-            const target = element.dataset.screen;
-
-            if (target) {
-                showScreen(target);
-            }
-        });
-    });
-
-    // --------------------------------------------
-    // IQ
-    // --------------------------------------------
-
-    const iqButton = getElement("start-iq-btn");
-
-    if (iqButton && iqButton.dataset.bound !== "1") {
-        iqButton.dataset.bound = "1";
-
-        iqButton.addEventListener("click", () => {
-            startIQ();
-        });
-    }
-
-    // --------------------------------------------
-    // EQ
-    // --------------------------------------------
-
-    const eqButton = getElement("start-eq-btn");
-
-    if (eqButton && eqButton.dataset.bound !== "1") {
-        eqButton.dataset.bound = "1";
-
-        eqButton.addEventListener("click", () => {
-            startEQ();
-        });
-    }
-
-    // --------------------------------------------
-    // PQ
-    // --------------------------------------------
-
-    const pqButton = getElement("start-pq-btn");
-
-    if (pqButton && pqButton.dataset.bound !== "1") {
-        pqButton.dataset.bound = "1";
-
-        pqButton.addEventListener("click", () => {
-            startPQ();
-        });
-    }
-
-    // --------------------------------------------
-    // PROFILE
-    // --------------------------------------------
-
-    const profileButton = getElement("profile-card");
-
-    if (profileButton && profileButton.dataset.bound !== "1") {
-        profileButton.dataset.bound = "1";
-
-        profileButton.addEventListener("click", () => {
-            if (
-                State.completed.iq !== null &&
-                State.completed.iq !== undefined &&
-                State.completed.eq !== null &&
-                State.completed.eq !== undefined &&
-                State.completed.pq !== null &&
-                State.completed.pq !== undefined
-            ) {
-                openProfile();
-            } else {
-                showToast(
-                    "Avval barcha testlarni yakunlang",
-                    "warning"
-                );
-            }
-        });
-    }
-}
-
-
-// ============================================================
-// START IQ
-// ============================================================
-
-async function startIQ() {
-
-    stopTestTimer();
-
-    resetTestState();
-
-    State.test.type = "iq";
-    State.test.current = 0;
-    State.test.answers = [];
-
-    const intro = getElement("screen-iq-intro");
-
-    if (intro) {
-        showScreen("screen-iq-intro");
-    } else {
-        await startIQTest();
-    }
-}
-
-
-// ============================================================
-// SAVE PROFILE
-// ============================================================
-
-async function saveProfile() {
-
-    const fullNameInput = getElement("profile-full-name");
-    const genderInput = getElement("profile-gender");
-    const ageInput = getElement("profile-age");
-    const countryInput = getElement("profile-country");
-
-    const fullName = fullNameInput?.value?.trim() || "";
-    const gender = genderInput?.value || "";
-    const age = Number(ageInput?.value || 0);
-    const country = countryInput?.value?.trim() || "";
-
-    if (fullName.length < 3) {
-        showToast(
-            "Ism va familiyani to‘liq kiriting",
-            "warning"
-        );
-        return;
-    }
-
-    if (!gender) {
-        showToast(
-            "Jinsni tanlang",
-            "warning"
-        );
-        return;
-    }
-
-    if (!Number.isFinite(age) || age < 8 || age > 100) {
-        showToast(
-            "Yoshni to‘g‘ri kiriting",
-            "warning"
-        );
-        return;
-    }
-
-    if (!country) {
-        showToast(
-            "Davlatni kiriting",
-            "warning"
-        );
-        return;
-    }
-
-    try {
-        const response = await api(
-            "/api/profile/save",
-            {
-                full_name: fullName,
-                gender,
-                age,
-                country
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "Profilni saqlab bo‘lmadi"
-            );
-        }
-
-        State.profile = response.profile || {
-            full_name: fullName,
-            gender,
-            age,
-            country
+        const colors = {
+            full: "#a78bfa",
+            half: "rgba(167,139,250,.5)",
+            empty: "transparent"
         };
 
-        await startIQTest();
+        const fill =
+            colors[cell.fill] || "transparent";
 
-    } catch (error) {
-        console.error("[PROFILE]", error);
-
-        showToast(
-            error.message || "Profilni saqlashda xatolik",
-            "error"
-        );
-    }
-}
-
-
-// ============================================================
-// START IQ TEST
-// ============================================================
-
-async function startIQTest() {
-
-    stopTestTimer();
-
-    resetTestState();
-
-    State.test.type = "iq";
-    State.test.current = 0;
-    State.test.answers = [];
-
-    try {
-
-        if (!State.initData) {
-            renderIQSample();
-            return;
-        }
-
-        const response = await api(
-            "/api/session/start",
-            {
-                test_type: "iq"
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "Test sessiyasini boshlab bo‘lmadi"
-            );
-        }
-
-        State.test.sessionId =
-            response.session_id ||
-            response.sessionId ||
-            null;
-
-        State.test.attemptId =
-            response.attempt_id ||
-            response.attemptId ||
-            null;
-
-        State.test.startedAt = Date.now();
-
-        renderIQSample();
-
-    } catch (error) {
-        console.error("[IQ START]", error);
-
-        showToast(
-            error.message ||
-            "Testni boshlashda xatolik",
-            "error"
-        );
-    }
-}
-
-
-// ============================================================
-// IQ SAMPLE SCREEN
-// ============================================================
-
-function renderIQSample() {
-
-    const startButton =
-        getElement("start-real-iq-btn");
-
-    if (startButton) {
-
-        if (startButton.dataset.bound !== "1") {
-
-            startButton.dataset.bound = "1";
-
-            startButton.addEventListener("click", () => {
-                beginIQQuestions();
-            });
-        }
-    }
-
-    showScreen("screen-iq-sample");
-}
-
-
-// ============================================================
-// BEGIN IQ QUESTIONS
-// ============================================================
-
-function beginIQQuestions() {
-
-    State.test.current = 0;
-    State.test.answers = [];
-
-    renderIQQuestion();
-
-    startTestTimer();
-}
-
-
-// ============================================================
-// TEST TIMER
-// ============================================================
-
-function startTestTimer() {
-
-    stopTestTimer();
-
-    const duration =
-        Number(State.settings?.iq_time_limit || 0);
-
-    if (!duration || duration <= 0) {
-        return;
-    }
-
-    State.test.timeLeft = duration;
-
-    updateTimerDisplay();
-
-    State.test.timer = setInterval(() => {
-
-        State.test.timeLeft -= 1;
-
-        updateTimerDisplay();
-
-        if (State.test.timeLeft <= 0) {
-            stopTestTimer();
-
-            finish();
-
-        }
-
-    }, 1000);
-}
-
-
-function updateTimerDisplay() {
-
-    const seconds =
-        Math.max(0, Number(State.test.timeLeft || 0));
-
-    const minutes =
-        Math.floor(seconds / 60);
-
-    const remainingSeconds =
-        seconds % 60;
-
-    const formatted =
-        `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
-
-    setText("test-timer", formatted);
-    setText("timer", formatted);
-}
-
-
-// ============================================================
-// TOAST
-// ============================================================
-
-function showToast(message, type = "info") {
-
-    const existing =
-        getElement("app-toast");
-
-    if (existing) {
-        existing.remove();
-    }
-
-    const toast =
-        document.createElement("div");
-
-    toast.id = "app-toast";
-
-    toast.className =
-        `app-toast app-toast-${type}`;
-
-    toast.textContent =
-        String(message || "");
-
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => {
-        toast.classList.add("show");
-    });
-
-    setTimeout(() => {
-
-        toast.classList.remove("show");
-
-        setTimeout(() => {
-            toast.remove();
-        }, 250);
-
-    }, 2800);
-}
-
-
-// ============================================================
-// 2-QISM TUGADI
-// ============================================================
-// ============================================================
-// APP.JS — 3-QISM
-// IQ FINISH + RESULT + PAYMENT REQUIRED
-// ============================================================
-
-
-// ============================================================
-// FINISH IQ TEST
-// ============================================================
-
-async function finish() {
-
-    if (State.test.finished) {
-        return;
-    }
-
-    State.test.finished = true;
-
-    stopTestTimer();
-
-    // --------------------------------------------
-    // LOADING
-    // --------------------------------------------
-
-    showScreen("screen-result-loading");
-
-    await sleep(3500);
-
-    // --------------------------------------------
-    // OFFLINE / BROWSER FALLBACK
-    // --------------------------------------------
-
-    if (!State.initData || !State.test.sessionId) {
-
-        const localResult =
-            calculateIQResult(State.test.answers);
-
-        State.test.resultData = {
-            test_type: "iq",
-            score: localResult.score,
-            correct: localResult.correct,
-            total: QUESTIONS.length,
-            level: localResult.level,
-            result_visible: true,
-            payment_required: false,
-            payment_product: null,
-            attempt_id: null
-        };
-
-        State.completed.iq =
-            localResult.score;
-
-        applyUnlocks();
-
-        renderIQResult(
-            State.test.resultData
-        );
-
-        return;
-    }
-
-    // --------------------------------------------
-    // BACKEND SUBMIT
-    // --------------------------------------------
-
-    try {
-
-        const response = await api(
-            "/api/test/submit",
-            {
-                session_id: State.test.sessionId,
-                test_type: "iq",
-                answers: State.test.answers
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "Natijani yuborib bo‘lmadi"
-            );
-        }
-
-        const result = {
-            ...response,
-
-            test_type: "iq",
-
-            attempt_id:
-                response.attempt_id ||
-                response.attemptId ||
-                State.test.attemptId ||
-                null
-        };
-
-        State.test.attemptId =
-            result.attempt_id;
-
-        State.test.resultData =
-            result;
-
-        // ----------------------------------------
-        // PAYMENT REQUIRED
-        // ----------------------------------------
-
-        if (
-            result.payment_required === true ||
-            result.result_visible === false
-        ) {
-
-            /*
-             * MUHIM:
-             *
-             * Bu yerda IQ completed qilinmaydi.
-             *
-             * Foydalanuvchi hali pul to‘lamagan.
-             * Shuning uchun EQ ochilmasligi kerak.
-             */
-
-            showIQPaymentRequired(result);
-
-            return;
-        }
-
-        // ----------------------------------------
-        // FREE / ALREADY PAID
-        // ----------------------------------------
-
-        completeTestFromResult(
-            "iq",
-            result
-        );
-
-        renderIQResult(result);
-
-    } catch (error) {
-
-        console.error(
-            "[IQ FINISH]",
-            error
-        );
-
-        State.test.finished = false;
-
-        showToast(
-            error.message ||
-            "Natijani hisoblashda xatolik",
-            "error"
-        );
-
-        showScreen("screen-test");
-    }
-}
-
-
-// ============================================================
-// SLEEP
-// ============================================================
-
-function sleep(ms) {
-    return new Promise(resolve => {
-        setTimeout(resolve, ms);
-    });
-}
-
-
-// ============================================================
-// LOCAL IQ CALCULATION
-// ============================================================
-
-function calculateIQResult(answers) {
-
-    let correct = 0;
-    let weightedScore = 0;
-    let maxWeightedScore = 0;
-
-    QUESTIONS.forEach((question, index) => {
-
-        const weight =
-            Number(question.weight || 1);
-
-        maxWeightedScore += weight;
-
-        const answer =
-            answers?.[index];
-
-        if (
-            answer !== undefined &&
-            answer !== null &&
-            Number(answer) === Number(question.correct)
-        ) {
-            correct += 1;
-            weightedScore += weight;
-        }
-    });
-
-    const score =
-        maxWeightedScore > 0
-            ? Math.round(
-                (weightedScore / maxWeightedScore) * 100
-            )
-            : 0;
-
-    let level = "O‘rtacha";
-
-    if (score >= 90) {
-        level = "Juda yuqori";
-    } else if (score >= 75) {
-        level = "Yuqori";
-    } else if (score >= 60) {
-        level = "O‘rtacha yuqori";
-    } else if (score >= 40) {
-        level = "O‘rtacha";
-    } else if (score >= 25) {
-        level = "Past";
-    } else {
-        level = "Juda past";
-    }
-
-    return {
-        score,
-        correct,
-        level
-    };
-}
-
-
-// ============================================================
-// COMPLETE TEST FROM BACKEND RESULT
-// ============================================================
-
-function completeTestFromResult(
-    type,
-    result
-) {
-
-    const score =
-        Number(
-            result?.score ??
-            result?.percentage ??
-            result?.percent ??
-            0
-        );
-
-    State.completed[type] = score;
-
-    State.test.resultData = {
-        ...State.test.resultData,
-        ...result,
-        score,
-        result_visible: true,
-        payment_required: false
-    };
-
-    applyUnlocks();
-}
-
-
-// ============================================================
-// IQ PAYMENT REQUIRED
-// ============================================================
-
-function showIQPaymentRequired(result) {
-
-    const product =
-        result.payment_product ||
-        (
-            State.completed.iq !== null &&
-            State.completed.iq !== undefined
-                ? "iq_retry"
-                : "iq"
-        );
-
-    const price =
-        Number(
-            result.price ??
-            getPrice(product)
-        );
-
-    State.payment = {
-        ...State.payment,
-        product,
-        attemptId:
-            result.attempt_id ||
-            State.test.attemptId ||
-            null,
-        price,
-        paymentId: null
-    };
-
-    // --------------------------------------------
-    // PRICE
-    // --------------------------------------------
-
-    setText(
-        "payment-required-price",
-        `${formatNumber(price)} so‘m`
-    );
-
-    setText(
-        "iq-payment-price",
-        `${formatNumber(price)} so‘m`
-    );
-
-    // --------------------------------------------
-    // DESCRIPTION
-    // --------------------------------------------
-
-    const description =
-        getElement("payment-required-description");
-
-    if (description) {
-
-        description.textContent =
-            product === "iq_retry"
-                ? "IQ testini qayta topshirish uchun to‘lov talab qilinadi."
-                : "IQ test natijasini ko‘rish uchun to‘lov talab qilinadi.";
-    }
-
-    // --------------------------------------------
-    // BUTTON
-    // --------------------------------------------
-
-    const button =
-        getElement("start-iq-payment-btn");
-
-    if (button) {
-
-        button.disabled = false;
-
-        if (button.dataset.bound !== "1") {
-
-            button.dataset.bound = "1";
-
-            button.addEventListener(
-                "click",
-                startIQPayment
-            );
-        }
-    }
-
-    showScreen(
-        "screen-payment-required"
-    );
-}
-
-
-// ============================================================
-// RENDER IQ RESULT
-// ============================================================
-
-function renderIQResult(result) {
-
-    const score =
-        Number(
-            result?.score ??
-            result?.percentage ??
-            0
-        );
-
-    const correct =
-        Number(
-            result?.correct ??
-            result?.correct_answers ??
-            0
-        );
-
-    const total =
-        Number(
-            result?.total ??
-            result?.total_questions ??
-            QUESTIONS.length
-        );
-
-    const level =
-        result?.level ||
-        getIQLevel(score);
-
-    // --------------------------------------------
-    // SCORE
-    // --------------------------------------------
-
-    setText(
-        "iq-result-score",
-        String(score)
-    );
-
-    setText(
-        "result-score",
-        String(score)
-    );
-
-    setText(
-        "iq-score-value",
-        String(score)
-    );
-
-    // --------------------------------------------
-    // CORRECT
-    // --------------------------------------------
-
-    setText(
-        "iq-result-correct",
-        `${correct}/${total}`
-    );
-
-    setText(
-        "result-correct",
-        `${correct}/${total}`
-    );
-
-    // --------------------------------------------
-    // LEVEL
-    // --------------------------------------------
-
-    setText(
-        "iq-result-level",
-        level
-    );
-
-    setText(
-        "result-level",
-        level
-    );
-
-    // --------------------------------------------
-    // CIRCLE / PROGRESS
-    // --------------------------------------------
-
-    const circles =
-        document.querySelectorAll(
-            ".result-progress-circle"
-        );
-
-    circles.forEach(circle => {
-
-        const radius =
-            Number(circle.getAttribute("r") || 0);
-
-        if (!radius) {
-            return;
-        }
-
-        const circumference =
-            2 * Math.PI * radius;
-
-        circle.style.strokeDasharray =
-            `${circumference}`;
-
-        circle.style.strokeDashoffset =
-            `${circumference * (1 - score / 100)}`;
-    });
-
-    // --------------------------------------------
-    // DATA ATTRIBUTE
-    // --------------------------------------------
-
-    const resultScreen =
-        getElement("screen-result");
-
-    if (resultScreen) {
-        resultScreen.dataset.score =
-            String(score);
-    }
-
-    showScreen("screen-result");
-}
-
-
-// ============================================================
-// IQ LEVEL
-// ============================================================
-
-function getIQLevel(score) {
-
-    score = Number(score || 0);
-
-    if (score >= 90) {
-        return "Juda yuqori";
-    }
-
-    if (score >= 75) {
-        return "Yuqori";
-    }
-
-    if (score >= 60) {
-        return "O‘rtacha yuqori";
-    }
-
-    if (score >= 40) {
-        return "O‘rtacha";
-    }
-
-    if (score >= 25) {
-        return "Past";
-    }
-
-    return "Juda past";
-}
-
-
-// ============================================================
-// IQ RETRY
-// ============================================================
-
-async function retry() {
-
-    const retryPrice =
-        getPrice("iq_retry");
-
-    if (retryPrice > 0) {
-
-        const confirmed =
-            window.confirm(
-                `IQ testini qayta topshirish narxi ${formatNumber(retryPrice)} so‘m.\n\nDavom etasizmi?`
-            );
-
-        if (!confirmed) {
-            return;
-        }
-    }
-
-    stopTestTimer();
-
-    resetTestState();
-
-    State.test.type = "iq";
-    State.test.current = 0;
-    State.test.answers = [];
-
-    await startIQ();
-}
-
-
-// ============================================================
-// RESET RESULT VIEW
-// ============================================================
-
-function closeResult() {
-
-    stopTestTimer();
-
-    showScreen("screen-home");
-}
-
-
-// ============================================================
-// RESULT -> NEXT TEST
-// ============================================================
-
-function goToEQFromResult() {
-
-    if (
-        State.completed.iq === null ||
-        State.completed.iq === undefined
-    ) {
-        showToast(
-            "Avval IQ testini yakunlang",
-            "warning"
-        );
-
-        return;
-    }
-
-    startEQ();
-}
-
-
-function goToPQFromResult() {
-
-    if (
-        State.completed.eq === null ||
-        State.completed.eq === undefined
-    ) {
-        showToast(
-            "Avval EQ testini yakunlang",
-            "warning"
-        );
-
-        return;
-    }
-
-    startPQ();
-}
-
-
-// ============================================================
-// PAYMENT BUTTON BINDING
-// ============================================================
-
-function bindPaymentButtons() {
-
-    const iqPaymentButton =
-        getElement("start-iq-payment-btn");
-
-    if (
-        iqPaymentButton &&
-        iqPaymentButton.dataset.bound !== "1"
-    ) {
-
-        iqPaymentButton.dataset.bound = "1";
-
-        iqPaymentButton.addEventListener(
-            "click",
-            startIQPayment
-        );
-    }
-
-    const paymentCancelButton =
-        getElement("payment-cancel-btn");
-
-    if (
-        paymentCancelButton &&
-        paymentCancelButton.dataset.bound !== "1"
-    ) {
-
-        paymentCancelButton.dataset.bound = "1";
-
-        paymentCancelButton.addEventListener(
-            "click",
-            () => {
-                showScreen("screen-home");
-            }
-        );
-    }
-
-    const resultCloseButton =
-        getElement("result-home-btn");
-
-    if (
-        resultCloseButton &&
-        resultCloseButton.dataset.bound !== "1"
-    ) {
-
-        resultCloseButton.dataset.bound = "1";
-
-        resultCloseButton.addEventListener(
-            "click",
-            closeResult
-        );
-    }
-
-    const retryButton =
-        getElement("retry-iq-btn");
-
-    if (
-        retryButton &&
-        retryButton.dataset.bound !== "1"
-    ) {
-
-        retryButton.dataset.bound = "1";
-
-        retryButton.addEventListener(
-            "click",
-            retry
-        );
-    }
-}
-
-
-// ============================================================
-// OVERRIDE APP INIT BINDINGS
-// ============================================================
-
-const originalAppInit =
-    App.init;
-
-App.init = async function () {
-
-    await originalAppInit();
-
-    bindPaymentButtons();
-
-    // Re-apply unlock state after all UI is loaded.
-    applyUnlocks();
-
-    updateLiveCounter();
-};
-
-
-// ============================================================
-// AUTO START
-// ============================================================
-
-if (
-    document.readyState === "loading"
-) {
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        () => {
-            App.init();
-        },
-        {
-            once: true
-        }
-    );
-
-} else {
-
-    App.init();
-}
-
-
-// ============================================================
-// 3-QISM TUGADI
-// ============================================================
-// ============================================================
-// APP.JS — 4-QISM
-// EQ + PQ TESTLARI
-// ============================================================
-
-
-// ============================================================
-// START EQ
-// ============================================================
-
-async function startEQ() {
-
-    // IQ tugamagan bo‘lsa — EQ ochilmaydi
-    if (
-        State.completed.iq === null ||
-        State.completed.iq === undefined
-    ) {
-        showToast(
-            "Avval IQ testini yakunlang",
-            "warning"
-        );
-        return;
-    }
-
-    stopTestTimer();
-
-    resetTestState();
-
-    State.test.type = "eq";
-    State.test.current = 0;
-    State.test.answers = [];
-
-    // Qayta topshirish bo‘lsa, faqat ogohlantiramiz.
-    // To‘lovning o‘zi test tugagandan keyin backend tomonidan
-    // aniqlanadi.
-    if (
-        State.completed.eq !== null &&
-        State.completed.eq !== undefined
-    ) {
-
-        const price =
-            getPrice("eq_retry");
-
-        if (price > 0) {
-
-            const confirmed =
-                window.confirm(
-                    `EQ testini qayta topshirish narxi ${formatNumber(price)} so‘m.\n\nDavom etasizmi?`
-                );
-
-            if (!confirmed) {
-                return;
-            }
-        }
-    }
-
-    // Telegram bo‘lmagan holatda ham test ishlasin
-    if (!State.initData) {
-        renderEQQuestion();
-        return;
-    }
-
-    try {
-
-        const response = await api(
-            "/api/session/start",
-            {
-                test_type: "eq"
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "EQ test sessiyasini boshlashda xatolik"
-            );
-        }
-
-        State.test.sessionId =
-            response.session_id ||
-            response.sessionId ||
-            null;
-
-        State.test.attemptId =
-            response.attempt_id ||
-            response.attemptId ||
-            null;
-
-        State.test.startedAt =
-            Date.now();
-
-        renderEQQuestion();
-
-    } catch (error) {
-
-        console.error(
-            "[EQ START]",
-            error
-        );
-
-        showToast(
-            error.message ||
-            "EQ testini boshlashda xatolik",
-            "error"
-        );
-    }
-}
-
-
-// ============================================================
-// FINISH EQ
-// ============================================================
-
-async function finishEQ() {
-
-    if (State.test.finished) {
-        return;
-    }
-
-    State.test.finished = true;
-
-    stopTestTimer();
-
-    showScreen("screen-result-loading");
-
-    await sleep(1800);
-
-    // --------------------------------------------
-    // OFFLINE FALLBACK
-    // --------------------------------------------
-
-    if (!State.initData || !State.test.sessionId) {
-
-        const local =
-            calculateEQResult(
-                State.test.answers
-            );
-
-        State.test.resultData = {
-            test_type: "eq",
-            score: local.score,
-            correct: local.correct,
-            total: EQ_QUESTIONS.length,
-            level: local.level,
-            result_visible: true,
-            payment_required: false,
-            payment_product: null,
-            attempt_id: null
-        };
-
-        State.completed.eq =
-            local.score;
-
-        applyUnlocks();
-
-        renderEQResult(
-            State.test.resultData
-        );
-
-        return;
-    }
-
-    // --------------------------------------------
-    // BACKEND
-    // --------------------------------------------
-
-    try {
-
-        const response = await api(
-            "/api/test/submit",
-            {
-                session_id: State.test.sessionId,
-                test_type: "eq",
-                answers: State.test.answers
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "EQ natijasini yuborib bo‘lmadi"
-            );
-        }
-
-        const result = {
-            ...response,
-
-            test_type: "eq",
-
-            attempt_id:
-                response.attempt_id ||
-                response.attemptId ||
-                State.test.attemptId ||
-                null
-        };
-
-        State.test.attemptId =
-            result.attempt_id;
-
-        State.test.resultData =
-            result;
-
-        // ----------------------------------------
-        // PAYMENT REQUIRED
-        // ----------------------------------------
-
-        if (
-            result.payment_required === true ||
-            result.result_visible === false
-        ) {
-
-            showTestPaymentRequired(
-                "eq",
-                result
-            );
-
-            return;
-        }
-
-        // ----------------------------------------
-        // FREE / PAID
-        // ----------------------------------------
-
-        completeTestFromResult(
-            "eq",
-            result
-        );
-
-        renderEQResult(result);
-
-    } catch (error) {
-
-        console.error(
-            "[EQ FINISH]",
-            error
-        );
-
-        State.test.finished = false;
-
-        showToast(
-            error.message ||
-            "EQ natijasini hisoblashda xatolik",
-            "error"
-        );
-
-        showScreen("screen-test");
-    }
-}
-
-
-// ============================================================
-// CALCULATE EQ
-// ============================================================
-
-function calculateEQResult(answers) {
-
-    let points = 0;
-    let maxPoints = 0;
-    let correct = 0;
-
-    EQ_QUESTIONS.forEach(
-        (question, index) => {
-
-            const answer =
-                answers?.[index];
-
-            const scores =
-                Array.isArray(question.scores)
-                    ? question.scores
-                    : [];
-
-            const max =
-                Math.max(
-                    ...scores,
-                    0
-                );
-
-            maxPoints += max;
-
-            if (
-                answer !== undefined &&
-                answer !== null &&
-                scores[answer] !== undefined
-            ) {
-
-                points +=
-                    Number(scores[answer]);
-
-                if (
-                    Number(scores[answer]) === max
-                ) {
-                    correct++;
-                }
-            }
-        }
-    );
-
-    const score =
-        maxPoints > 0
-            ? Math.round(
-                (points / maxPoints) * 100
-            )
-            : 0;
-
-    return {
-        score,
-        correct,
-        level: getEQLevel(score)
-    };
-}
-
-
-// ============================================================
-// EQ LEVEL
-// ============================================================
-
-function getEQLevel(score) {
-
-    score = Number(score || 0);
-
-    if (score >= 85) {
-        return "Juda yuqori";
-    }
-
-    if (score >= 70) {
-        return "Yuqori";
-    }
-
-    if (score >= 50) {
-        return "O‘rtacha";
-    }
-
-    if (score >= 30) {
-        return "Past";
-    }
-
-    return "Juda past";
-}
-
-
-// ============================================================
-// RENDER EQ RESULT
-// ============================================================
-
-function renderEQResult(result) {
-
-    const score =
-        Number(
-            result?.score ??
-            result?.percentage ??
-            0
-        );
-
-    const correct =
-        Number(
-            result?.correct ??
-            result?.correct_answers ??
-            0
-        );
-
-    const total =
-        Number(
-            result?.total ??
-            result?.total_questions ??
-            EQ_QUESTIONS.length
-        );
-
-    const level =
-        result?.level ||
-        getEQLevel(score);
-
-    setText(
-        "eq-result-score",
-        String(score)
-    );
-
-    setText(
-        "eq-score-value",
-        String(score)
-    );
-
-    setText(
-        "eq-result-correct",
-        `${correct}/${total}`
-    );
-
-    setText(
-        "eq-result-level",
-        level
-    );
-
-    setText(
-        "result-score",
-        String(score)
-    );
-
-    setText(
-        "result-level",
-        level
-    );
-
-    const resultScreen =
-        getElement("screen-eq-result");
-
-    if (resultScreen) {
-        resultScreen.dataset.score =
-            String(score);
-    }
-
-    showScreen("screen-eq-result");
-}
-
-
-// ============================================================
-// START PQ
-// ============================================================
-
-async function startPQ() {
-
-    // EQ tugamagan bo‘lsa PQ ochilmaydi
-    if (
-        State.completed.eq === null ||
-        State.completed.eq === undefined
-    ) {
-        showToast(
-            "Avval EQ testini yakunlang",
-            "warning"
-        );
-        return;
-    }
-
-    stopTestTimer();
-
-    resetTestState();
-
-    State.test.type = "pq";
-    State.test.current = 0;
-    State.test.answers = [];
-
-    if (
-        State.completed.pq !== null &&
-        State.completed.pq !== undefined
-    ) {
-
-        const price =
-            getPrice("pq_retry");
-
-        if (price > 0) {
-
-            const confirmed =
-                window.confirm(
-                    `PQ testini qayta topshirish narxi ${formatNumber(price)} so‘m.\n\nDavom etasizmi?`
-                );
-
-            if (!confirmed) {
-                return;
-            }
-        }
-    }
-
-    if (!State.initData) {
-        renderPQQuestion();
-        return;
-    }
-
-    try {
-
-        const response = await api(
-            "/api/session/start",
-            {
-                test_type: "pq"
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "PQ test sessiyasini boshlashda xatolik"
-            );
-        }
-
-        State.test.sessionId =
-            response.session_id ||
-            response.sessionId ||
-            null;
-
-        State.test.attemptId =
-            response.attempt_id ||
-            response.attemptId ||
-            null;
-
-        State.test.startedAt =
-            Date.now();
-
-        renderPQQuestion();
-
-    } catch (error) {
-
-        console.error(
-            "[PQ START]",
-            error
-        );
-
-        showToast(
-            error.message ||
-            "PQ testini boshlashda xatolik",
-            "error"
-        );
-    }
-}
-
-
-// ============================================================
-// FINISH PQ
-// ============================================================
-
-async function finishPQ() {
-
-    if (State.test.finished) {
-        return;
-    }
-
-    State.test.finished = true;
-
-    stopTestTimer();
-
-    showScreen("screen-result-loading");
-
-    await sleep(1800);
-
-    // --------------------------------------------
-    // OFFLINE FALLBACK
-    // --------------------------------------------
-
-    if (!State.initData || !State.test.sessionId) {
-
-        const local =
-            calculatePQResult(
-                State.test.answers
-            );
-
-        State.test.resultData = {
-            test_type: "pq",
-            score: local.score,
-            correct: local.correct,
-            total: PQ_QUESTIONS.length,
-            level: local.level,
-            result_visible: true,
-            payment_required: false,
-            payment_product: null,
-            attempt_id: null
-        };
-
-        State.completed.pq =
-            local.score;
-
-        applyUnlocks();
-
-        renderPQResult(
-            State.test.resultData
-        );
-
-        return;
-    }
-
-    // --------------------------------------------
-    // BACKEND
-    // --------------------------------------------
-
-    try {
-
-        const response = await api(
-            "/api/test/submit",
-            {
-                session_id: State.test.sessionId,
-                test_type: "pq",
-                answers: State.test.answers
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "PQ natijasini yuborib bo‘lmadi"
-            );
-        }
-
-        const result = {
-            ...response,
-
-            test_type: "pq",
-
-            attempt_id:
-                response.attempt_id ||
-                response.attemptId ||
-                State.test.attemptId ||
-                null
-        };
-
-        State.test.attemptId =
-            result.attempt_id;
-
-        State.test.resultData =
-            result;
-
-        // ----------------------------------------
-        // PAYMENT REQUIRED
-        // ----------------------------------------
-
-        if (
-            result.payment_required === true ||
-            result.result_visible === false
-        ) {
-
-            showTestPaymentRequired(
-                "pq",
-                result
-            );
-
-            return;
-        }
-
-        // ----------------------------------------
-        // FREE / PAID
-        // ----------------------------------------
-
-        completeTestFromResult(
-            "pq",
-            result
-        );
-
-        renderPQResult(result);
-
-    } catch (error) {
-
-        console.error(
-            "[PQ FINISH]",
-            error
-        );
-
-        State.test.finished = false;
-
-        showToast(
-            error.message ||
-            "PQ natijasini hisoblashda xatolik",
-            "error"
-        );
-
-        showScreen("screen-test");
-    }
-}
-
-
-// ============================================================
-// CALCULATE PQ
-// ============================================================
-
-function calculatePQResult(answers) {
-
-    let points = 0;
-    let maxPoints = 0;
-    let correct = 0;
-
-    PQ_QUESTIONS.forEach(
-        (question, index) => {
-
-            const answer =
-                answers?.[index];
-
-            const scores =
-                Array.isArray(question.scores)
-                    ? question.scores
-                    : [];
-
-            const max =
-                Math.max(
-                    ...scores,
-                    0
-                );
-
-            maxPoints += max;
-
-            if (
-                answer !== undefined &&
-                answer !== null &&
-                scores[answer] !== undefined
-            ) {
-
-                points +=
-                    Number(scores[answer]);
-
-                if (
-                    Number(scores[answer]) === max
-                ) {
-                    correct++;
-                }
-            }
-        }
-    );
-
-    const score =
-        maxPoints > 0
-            ? Math.round(
-                (points / maxPoints) * 100
-            )
-            : 0;
-
-    return {
-        score,
-        correct,
-        level: getPQLevel(score)
-    };
-}
-
-
-// ============================================================
-// PQ LEVEL
-// ============================================================
-
-function getPQLevel(score) {
-
-    score = Number(score || 0);
-
-    if (score >= 85) {
-        return "Juda yuqori";
-    }
-
-    if (score >= 70) {
-        return "Yuqori";
-    }
-
-    if (score >= 50) {
-        return "O‘rtacha";
-    }
-
-    if (score >= 30) {
-        return "Past";
-    }
-
-    return "Juda past";
-}
-
-
-// ============================================================
-// RENDER PQ RESULT
-// ============================================================
-
-function renderPQResult(result) {
-
-    const score =
-        Number(
-            result?.score ??
-            result?.percentage ??
-            0
-        );
-
-    const correct =
-        Number(
-            result?.correct ??
-            result?.correct_answers ??
-            0
-        );
-
-    const total =
-        Number(
-            result?.total ??
-            result?.total_questions ??
-            PQ_QUESTIONS.length
-        );
-
-    const level =
-        result?.level ||
-        getPQLevel(score);
-
-    setText(
-        "pq-result-score",
-        String(score)
-    );
-
-    setText(
-        "pq-score-value",
-        String(score)
-    );
-
-    setText(
-        "pq-result-correct",
-        `${correct}/${total}`
-    );
-
-    setText(
-        "pq-result-level",
-        level
-    );
-
-    setText(
-        "result-score",
-        String(score)
-    );
-
-    setText(
-        "result-level",
-        level
-    );
-
-    const resultScreen =
-        getElement("screen-pq-result");
-
-    if (resultScreen) {
-        resultScreen.dataset.score =
-            String(score);
-    }
-
-    showScreen("screen-pq-result");
-}
-
-
-// ============================================================
-// GENERIC EQ/PQ PAYMENT REQUIRED
-// ============================================================
-
-function showTestPaymentRequired(
-    type,
-    result
-) {
-
-    const product =
-        result.payment_product ||
-        getRetryOrInitialProduct(type);
-
-    const price =
-        Number(
-            result.price ??
-            getPrice(product)
-        );
-
-    const attemptId =
-        result.attempt_id ||
-        State.test.attemptId ||
-        null;
-
-    State.payment = {
-        ...State.payment,
-
-        product,
-        attemptId,
-        price,
-        paymentId: null,
-
-        testType: type
-    };
-
-    State.test.resultData =
-        result;
-
-    // --------------------------------------------
-    // PAYMENT TITLE
-    // --------------------------------------------
-
-    setText(
-        "payment-title",
-        getProductName(product)
-    );
-
-    setText(
-        "payment-product-name",
-        getProductName(product)
-    );
-
-    // --------------------------------------------
-    // PRICE
-    // --------------------------------------------
-
-    setText(
-        "payment-price",
-        `${formatNumber(price)} so‘m`
-    );
-
-    setText(
-        "payment-required-price",
-        `${formatNumber(price)} so‘m`
-    );
-
-    // --------------------------------------------
-    // DESCRIPTION
-    // --------------------------------------------
-
-    const description =
-        getElement("payment-description");
-
-    if (description) {
-
-        description.textContent =
-            product.endsWith("_retry")
-                ? `${type.toUpperCase()} testini qayta topshirish uchun to‘lov talab qilinadi.`
-                : `${type.toUpperCase()} test natijasini ko‘rish uchun to‘lov talab qilinadi.`;
-    }
-
-    // --------------------------------------------
-    // PAYMENT BUTTON
-    // --------------------------------------------
-
-    const paymentButton =
-        getElement("start-payment-btn");
-
-    if (
-        paymentButton &&
-        paymentButton.dataset.bound !== "1"
-    ) {
-
-        paymentButton.dataset.bound = "1";
-
-        paymentButton.addEventListener(
-            "click",
-            () => {
-                createPayment(
-                    product,
-                    attemptId
-                );
-            }
-        );
-    }
-
-    if (paymentButton) {
-        paymentButton.disabled = false;
-    }
-
-    showScreen("screen-payment");
-}
-
-
-// ============================================================
-// DETERMINE INITIAL / RETRY PRODUCT
-// ============================================================
-
-function getRetryOrInitialProduct(type) {
-
-    const completed =
-        State.completed?.[type];
-
-    if (
-        completed !== null &&
-        completed !== undefined
-    ) {
-        return `${type}_retry`;
-    }
-
-    return type;
-}
-
-
-// ============================================================
-// EQ RETRY
-// ============================================================
-
-async function retryEQ() {
-
-    await startEQ();
-}
-
-
-// ============================================================
-// PQ RETRY
-// ============================================================
-
-async function retryPQ() {
-
-    await startPQ();
-}
-
-
-// ============================================================
-// RESULT HOME BUTTONS
-// ============================================================
-
-function bindEQPQResultButtons() {
-
-    const eqHome =
-        getElement("eq-result-home-btn");
-
-    if (
-        eqHome &&
-        eqHome.dataset.bound !== "1"
-    ) {
-
-        eqHome.dataset.bound = "1";
-
-        eqHome.addEventListener(
-            "click",
-            () => {
-                showScreen("screen-home");
-            }
-        );
-    }
-
-    const eqRetry =
-        getElement("eq-retry-btn");
-
-    if (
-        eqRetry &&
-        eqRetry.dataset.bound !== "1"
-    ) {
-
-        eqRetry.dataset.bound = "1";
-
-        eqRetry.addEventListener(
-            "click",
-            retryEQ
-        );
-    }
-
-    const pqHome =
-        getElement("pq-result-home-btn");
-
-    if (
-        pqHome &&
-        pqHome.dataset.bound !== "1"
-    ) {
-
-        pqHome.dataset.bound = "1";
-
-        pqHome.addEventListener(
-            "click",
-            () => {
-                showScreen("screen-home");
-            }
-        );
-    }
-
-    const pqRetry =
-        getElement("pq-retry-btn");
-
-    if (
-        pqRetry &&
-        pqRetry.dataset.bound !== "1"
-    ) {
-
-        pqRetry.dataset.bound = "1";
-
-        pqRetry.addEventListener(
-            "click",
-            retryPQ
-        );
-    }
-}
-
-
-// ============================================================
-// EXTEND INIT
-// ============================================================
-
-const previousInitAfterEQ =
-    App.init;
-
-App.init = async function () {
-
-    await previousInitAfterEQ();
-
-    bindEQPQResultButtons();
-
-    applyUnlocks();
-};
-
-
-// ============================================================
-// 4-QISM TUGADI
-// ============================================================
-// ============================================================
-// APP.JS — 5-QISM
-// PAYMENT SYSTEM
-// ============================================================
-
-
-// ============================================================
-// CREATE PAYMENT
-// ============================================================
-
-async function createPayment(
-    product,
-    attemptId = null,
-    battleId = null
-) {
-
-    if (!product) {
-        showToast(
-            "To‘lov mahsuloti aniqlanmadi",
-            "error"
-        );
-        return;
-    }
-
-    // --------------------------------------------
-    // DUPLICATE CLICK PROTECTION
-    // --------------------------------------------
-
-    if (State.payment.creating) {
-        return;
-    }
-
-    State.payment.creating = true;
-
-    try {
-
-        const response = await api(
-            "/api/payment/create",
-            {
-                product,
-                attempt_id:
-                    attemptId ||
-                    State.test.attemptId ||
-                    null,
-
-                battle_id:
-                    battleId ||
-                    State.battle?.id ||
-                    null
-            }
-        );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "To‘lov yaratib bo‘lmadi"
-            );
-        }
-
-        // ----------------------------------------
-        // FREE PAYMENT
-        // ----------------------------------------
-
-        if (
-            response.free === true ||
-            Number(response.amount || 0) === 0
-        ) {
-
-            State.payment = {
-                ...State.payment,
-
-                product,
-                attemptId:
-                    response.attempt_id ||
-                    attemptId ||
-                    State.test.attemptId ||
-                    null,
-
-                paymentId:
-                    response.payment_id ||
-                    null,
-
-                price: 0,
-
-                creating: false
-            };
-
-            await handlePaymentApproved(
-                response
-            );
-
-            return;
-        }
-
-        // ----------------------------------------
-        // SAVE PAYMENT
-        // ----------------------------------------
-
-        State.payment = {
-            ...State.payment,
-
-            product,
-
-            attemptId:
-                response.attempt_id ||
-                attemptId ||
-                State.test.attemptId ||
-                null,
-
-            battleId:
-                response.battle_id ||
-                battleId ||
-                null,
-
-            paymentId:
-                response.payment_id ||
-                response.id ||
-                null,
-
-            price:
-                Number(
-                    response.amount ||
-                    response.price ||
-                    getPrice(product)
-                ),
-
-            cards:
-                response.cards ||
-                response.payment_cards ||
-                [],
-
-            creating: false
-        };
-
-        // ----------------------------------------
-        // PAYMENT ID CHECK
-        // ----------------------------------------
-
-        if (!State.payment.paymentId) {
-            throw new Error(
-                "Payment ID olinmadi"
-            );
-        }
-
-        renderPaymentCards(
-            State.payment.cards
-        );
-
-        renderPaymentInfo(
-            State.payment
-        );
-
-        showScreen("screen-payment");
-
-        startPaymentPoll();
-
-    } catch (error) {
-
-        console.error(
-            "[PAYMENT CREATE]",
-            error
-        );
-
-        State.payment.creating = false;
-
-        showToast(
-            error.message ||
-            "To‘lovni boshlashda xatolik",
-            "error"
-        );
-    }
-}
-
-
-// ============================================================
-// IQ PAYMENT
-// ============================================================
-
-async function startIQPayment() {
-
-    const product =
-        State.payment.product ||
-        State.test.resultData?.payment_product ||
-        "iq";
-
-    const attemptId =
-        State.payment.attemptId ||
-        State.test.attemptId ||
-        null;
-
-    if (!attemptId) {
-        showToast(
-            "Test natijasi topilmadi",
-            "error"
-        );
-        return;
-    }
-
-    const price =
-        getPrice(product);
-
-    // --------------------------------------------
-    // FREE
-    // --------------------------------------------
-
-    if (price <= 0) {
-
-        await createPayment(
-            product,
-            attemptId
-        );
-
-        return;
-    }
-
-    await createPayment(
-        product,
-        attemptId
-    );
-}
-
-
-// ============================================================
-// PAYMENT INFO
-// ============================================================
-
-function renderPaymentInfo(payment) {
-
-    const product =
-        payment.product || "";
-
-    const amount =
-        Number(
-            payment.price || 0
-        );
-
-    setText(
-        "payment-product-name",
-        getProductName(product)
-    );
-
-    setText(
-        "payment-price",
-        `${formatNumber(amount)} so‘m`
-    );
-
-    setText(
-        "payment-required-price",
-        `${formatNumber(amount)} so‘m`
-    );
-
-    const title =
-        getElement("payment-title");
-
-    if (title) {
-        title.textContent =
-            getProductName(product);
-    }
-}
-
-
-// ============================================================
-// RENDER PAYMENT CARDS
-// ============================================================
-
-function renderPaymentCards(cards) {
-
-    const container =
-        getElement("payment-cards");
-
-    if (!container) {
-        return;
-    }
-
-    if (
-        !Array.isArray(cards) ||
-        cards.length === 0
-    ) {
-
-        container.innerHTML = `
-            <div class="payment-empty">
-                <div class="payment-empty-icon">💳</div>
-                <div class="payment-empty-title">
-                    To‘lov kartalari topilmadi
-                </div>
-                <div class="payment-empty-text">
-                    Iltimos, keyinroq qayta urinib ko‘ring.
-                </div>
-            </div>
-        `;
-
-        return;
-    }
-
-    container.innerHTML =
-        cards.map(card => {
-
-            const number =
-                card.card_number ||
-                card.number ||
-                "";
-
-            const holder =
-                card.holder_name ||
-                card.holder ||
-                "";
-
-            const bank =
-                card.bank_name ||
-                card.bank ||
-                "";
+        if (cell.shape === "circle") {
 
             return `
-                <div class="payment-card">
-                    <div class="payment-card-top">
-
-                        <div class="payment-bank">
-                            ${escapeHtml(bank)}
-                        </div>
-
-                        <div class="payment-card-icon">
-                            💳
-                        </div>
-
-                    </div>
-
-                    <div class="payment-card-number">
-                        ${escapeHtml(number)}
-                    </div>
-
-                    <div class="payment-card-bottom">
-
-                        <div>
-                            <div class="payment-card-label">
-                                Karta egasi
-                            </div>
-
-                            <div class="payment-card-holder">
-                                ${escapeHtml(holder)}
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            class="copy-card-btn"
-                            data-card="${escapeHtml(number)}"
-                        >
-                            Nusxalash
-                        </button>
-
-                    </div>
-                </div>
+                <svg
+                    width="44"
+                    height="44"
+                    viewBox="0 0 44 44"
+                >
+                    <circle
+                        cx="22"
+                        cy="22"
+                        r="14"
+                        fill="${fill}"
+                        stroke="#a78bfa"
+                        stroke-width="2"
+                    />
+                </svg>
             `;
+        }
 
-        }).join("");
+        if (cell.shape === "square") {
 
-    container
-        .querySelectorAll(".copy-card-btn")
-        .forEach(button => {
+            return `
+                <svg
+                    width="44"
+                    height="44"
+                    viewBox="0 0 44 44"
+                >
+                    <rect
+                        x="7"
+                        y="7"
+                        width="30"
+                        height="30"
+                        rx="4"
+                        fill="${fill}"
+                        stroke="#a78bfa"
+                        stroke-width="2"
+                    />
+                </svg>
+            `;
+        }
 
-            button.addEventListener(
-                "click",
-                async () => {
+        if (cell.shape === "triangle") {
 
-                    const card =
-                        button.dataset.card || "";
+            return `
+                <svg
+                    width="44"
+                    height="44"
+                    viewBox="0 0 44 44"
+                >
+                    <polygon
+                        points="22,7 37,37 7,37"
+                        fill="${fill}"
+                        stroke="#a78bfa"
+                        stroke-width="2"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            `;
+        }
 
-                    await copyText(card);
+        if (cell.shape === "diamond") {
 
-                    showToast(
-                        "Karta raqami nusxalandi",
-                        "success"
-                    );
-                }
+            return `
+                <svg
+                    width="44"
+                    height="44"
+                    viewBox="0 0 44 44"
+                >
+                    <polygon
+                        points="22,6 38,22 22,38 6,22"
+                        fill="${fill}"
+                        stroke="#a78bfa"
+                        stroke-width="2"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            `;
+        }
+    }
+
+    /* ---------------- ROTATE ---------------- */
+
+    if (cell.type === "rotate") {
+
+        return `
+            <svg
+                width="44"
+                height="44"
+                viewBox="0 0 44 44"
+            >
+                <g
+                    transform="rotate(${cell.angle} 22 22)"
+                >
+                    <path
+                        d="
+                            M12 22
+                            L32 22
+                            M27 17
+                            L32 22
+                            L27 27
+                        "
+                        stroke="#a78bfa"
+                        stroke-width="2.5"
+                        fill="none"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </g>
+            </svg>
+        `;
+    }
+
+    /* ---------------- COMBO ---------------- */
+
+    if (cell.type === "combo") {
+
+        const colors = {
+            full: "#a78bfa",
+            half: "rgba(167,139,250,.5)",
+            empty: "transparent"
+        };
+
+        const fill =
+            colors[cell.fill] || "transparent";
+
+        const shapes =
+            Array.isArray(cell.shapes)
+                ? cell.shapes
+                : [];
+
+        let svg = `
+            <svg
+                width="44"
+                height="44"
+                viewBox="0 0 44 44"
+            >
+        `;
+
+        if (shapes.includes("triangle")) {
+
+            svg += `
+                <polygon
+                    points="22,7 37,37 7,37"
+                    fill="${fill}"
+                    stroke="#a78bfa"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"
+                />
+            `;
+        }
+
+        if (shapes.includes("square")) {
+
+            svg += `
+                <rect
+                    x="8"
+                    y="8"
+                    width="28"
+                    height="28"
+                    rx="3"
+                    fill="${fill}"
+                    stroke="#a78bfa"
+                    stroke-width="1.8"
+                />
+            `;
+        }
+
+        if (shapes.includes("circle")) {
+
+            svg += `
+                <circle
+                    cx="22"
+                    cy="22"
+                    r="14"
+                    fill="${fill}"
+                    stroke="#a78bfa"
+                    stroke-width="1.8"
+                />
+            `;
+        }
+
+        svg += "</svg>";
+
+        return svg;
+    }
+
+    /* ---------------- SIZE ---------------- */
+
+    if (cell.type === "size") {
+
+        const size = Math.max(
+            6,
+            Math.min(
+                Number(cell.size) || 20,
+                40
+            )
+        );
+
+        return `
+            <svg
+                width="44"
+                height="44"
+                viewBox="0 0 44 44"
+            >
+                <circle
+                    cx="22"
+                    cy="22"
+                    r="${size / 2}"
+                    fill="none"
+                    stroke="#a78bfa"
+                    stroke-width="2"
+                />
+            </svg>
+        `;
+    }
+
+    /* ---------------- GRID ---------------- */
+
+    if (cell.type === "grid") {
+
+        const pos =
+            Math.max(
+                0,
+                Math.min(
+                    Number(cell.pos) || 0,
+                    8
+                )
             );
 
-        });
-}
-
-
-// ============================================================
-// COPY TEXT
-// ============================================================
-
-async function copyText(text) {
-
-    try {
-
-        if (
-            navigator.clipboard &&
-            window.isSecureContext
-        ) {
-
-            await navigator.clipboard.writeText(
-                text
-            );
-
-            return true;
-        }
-
-        const textarea =
-            document.createElement("textarea");
-
-        textarea.value = text;
-
-        textarea.style.position =
-            "fixed";
-
-        textarea.style.opacity =
-            "0";
-
-        document.body.appendChild(
-            textarea
-        );
-
-        textarea.focus();
-        textarea.select();
-
-        document.execCommand(
-            "copy"
-        );
-
-        textarea.remove();
-
-        return true;
-
-    } catch (error) {
-
-        console.warn(
-            "[COPY]",
-            error
-        );
-
-        return false;
-    }
-}
-
-
-// ============================================================
-// PAYMENT POLLING
-// ============================================================
-
-function startPaymentPoll() {
-
-    stopPaymentPolling();
-
-    if (!State.payment.paymentId) {
-        return;
-    }
-
-    checkPaymentStatus();
-
-    State.payment.pollTimer =
-        setInterval(
-            checkPaymentStatus,
-            5000
-        );
-}
-
-
-// ============================================================
-// CHECK PAYMENT STATUS
-// ============================================================
-
-async function checkPaymentStatus() {
-
-    const paymentId =
-        State.payment.paymentId;
-
-    if (!paymentId) {
-        stopPaymentPolling();
-        return;
-    }
-
-    try {
-
-        const response = await api(
-            `/api/payment/${encodeURIComponent(paymentId)}`,
-            {},
-            "POST"
-        );
-
-        if (!response?.ok) {
-            return;
-        }
-
-        const status =
-            String(
-                response.status || ""
-            ).toLowerCase();
-
-        // ----------------------------------------
-        // APPROVED
-        // ----------------------------------------
-
-        if (
-            status === "approved" ||
-            status === "paid" ||
-            status === "success"
-        ) {
-
-            stopPaymentPolling();
-
-            await handlePaymentApproved(
-                response
-            );
-
-            return;
-        }
-
-        // ----------------------------------------
-        // REJECTED
-        // ----------------------------------------
-
-        if (
-            status === "rejected" ||
-            status === "cancelled" ||
-            status === "canceled"
-        ) {
-
-            stopPaymentPolling();
-
-            State.payment.status =
-                status;
-
-            showToast(
-                "To‘lov tasdiqlanmadi",
-                "error"
-            );
-
-            return;
-        }
-
-        // ----------------------------------------
-        // PENDING
-        // ----------------------------------------
-
-        State.payment.status =
-            status || "pending";
-
-    } catch (error) {
-
-        /*
-         * Polling xatosida testni buzmaymiz.
-         * Keyingi poll yana urinadi.
-         */
-
-        console.warn(
-            "[PAYMENT POLL]",
-            error
-        );
-    }
-}
-
-
-// ============================================================
-// PAYMENT APPROVED
-// ============================================================
-
-async function handlePaymentApproved(
-    paymentResponse
-) {
-
-    State.payment.status =
-        "approved";
-
-    const product =
-        State.payment.product ||
-        paymentResponse.product ||
-        "";
-
-    const attemptId =
-        State.payment.attemptId ||
-        paymentResponse.attempt_id ||
-        State.test.attemptId ||
-        null;
-
-    const battleId =
-        State.payment.battleId ||
-        paymentResponse.battle_id ||
-        null;
-
-    // --------------------------------------------
-    // BATTLE
-    // --------------------------------------------
-
-    if (
-        product === "battle" ||
-        battleId
-    ) {
-
-        State.payment.creating =
-            false;
-
-        State.payment.paymentId =
-            paymentResponse.payment_id ||
-            State.payment.paymentId;
-
-        showToast(
-            "To‘lov tasdiqlandi",
-            "success"
-        );
-
-        if (battleId) {
-
-            State.battle.id =
-                battleId;
-
-            await loadBattle(
-                battleId
-            );
-        }
-
-        resetPaymentState();
-
-        return;
-    }
-
-    // --------------------------------------------
-    // TEST
-    // --------------------------------------------
-
-    if (!attemptId) {
-
-        showToast(
-            "To‘lov tasdiqlandi, lekin test natijasi topilmadi",
-            "warning"
-        );
-
-        resetPaymentState();
-
-        showScreen("screen-home");
-
-        return;
-    }
-
-    showToast(
-        "To‘lov tasdiqlandi",
-        "success"
-    );
-
-    /*
-     * Muhim:
-     *
-     * Frontenddagi eski local natijaga ishonmaymiz.
-     * To‘lovdan keyin backenddan natijani qayta olamiz.
-     */
-
-    const result =
-        await fetchPaidResult(
-            attemptId
-        );
-
-    if (!result) {
-
-        showToast(
-            "Natijani yuklashda xatolik. Qayta urinib ko‘ring.",
-            "error"
-        );
-
-        return;
-    }
-
-    const type =
-        normalizeTestType(
-            result.test_type ||
-            State.test.type ||
-            getTypeFromProduct(product)
-        );
-
-    completeTestFromResult(
-        type,
-        result
-    );
-
-    State.test.resultData =
-        result;
-
-    resetPaymentState();
-
-    // --------------------------------------------
-    // RENDER RESULT
-    // --------------------------------------------
-
-    if (type === "iq") {
-
-        renderIQResult(
-            result
-        );
-
-    } else if (type === "eq") {
-
-        renderEQResult(
-            result
-        );
-
-    } else if (type === "pq") {
-
-        renderPQResult(
-            result
-        );
-    }
-}
-
-
-// ============================================================
-// FETCH PAID RESULT
-// ============================================================
-
-async function fetchPaidResult(
-    attemptId
-) {
-
-    try {
-
-        const response = await api(
-            `/api/result/${encodeURIComponent(attemptId)}`,
-            {},
-            "GET"
-        );
-
-        if (!response?.ok) {
-            return null;
-        }
-
-        /*
-         * Backend response turlicha bo‘lishi mumkin:
-         * result obyekt ichida yoki response'ning o‘zida.
-         */
-
-        const result =
-            response.result ||
-            response.data ||
-            response;
-
-        if (
-            result.result_visible === false
-        ) {
-            return null;
-        }
-
-        return result;
-
-    } catch (error) {
-
-        console.error(
-            "[FETCH RESULT]",
-            error
-        );
-
-        return null;
-    }
-}
-
-
-// ============================================================
-// NORMALIZE TEST TYPE
-// ============================================================
-
-function normalizeTestType(type) {
-
-    const value =
-        String(type || "")
-            .trim()
-            .toLowerCase();
-
-    if (value === "iq") {
-        return "iq";
-    }
-
-    if (value === "eq") {
-        return "eq";
-    }
-
-    if (value === "pq") {
-        return "pq";
-    }
-
-    return value;
-}
-
-
-// ============================================================
-// PRODUCT -> TEST TYPE
-// ============================================================
-
-function getTypeFromProduct(
-    product
-) {
-
-    const value =
-        String(product || "")
-            .toLowerCase();
-
-    if (value.startsWith("iq")) {
-        return "iq";
-    }
-
-    if (value.startsWith("eq")) {
-        return "eq";
-    }
-
-    if (value.startsWith("pq")) {
-        return "pq";
+        const row = Math.floor(pos / 3);
+        const col = pos % 3;
+
+        return `
+            <svg
+                width="44"
+                height="44"
+                viewBox="0 0 44 44"
+            >
+                <rect
+                    x="3"
+                    y="3"
+                    width="38"
+                    height="38"
+                    rx="4"
+                    fill="none"
+                    stroke="rgba(167,139,250,.3)"
+                    stroke-width="1.5"
+                />
+
+                <circle
+                    cx="${10 + col * 12}"
+                    cy="${10 + row * 12}"
+                    r="5"
+                    fill="#a78bfa"
+                />
+            </svg>
+        `;
     }
 
     return "";
 }
 
+/* ============================================================
+   RENDER — MATRIX
+   ============================================================ */
 
-// ============================================================
-// PAYMENT RECEIPT
-// ============================================================
+function renderMatrix(element, cells) {
 
-function sendReceipt() {
+    if (!element) {
+        return;
+    }
 
-    /*
-     * Bot orqali chek yuborish oqimi.
-     *
-     * Frontend faylni backendga upload qilmaydi.
-     * Telegram WebApp'dan botga qaytish uchun
-     * foydalanuvchiga aniq ko‘rsatma beradi.
-     */
+    if (!Array.isArray(cells)) {
+        element.innerHTML = "";
+        return;
+    }
 
-    const text =
-        "To‘lovni amalga oshirgach, chek/skrinshotni Telegram botga yuboring.";
+    element.innerHTML = cells
+        .map(cell => `
+            <div
+                class="cell ${
+                    cell?.type === "question"
+                        ? "question"
+                        : ""
+                }"
+            >
+                ${renderCell(cell)}
+            </div>
+        `)
+        .join("");
+}
 
-    if (tg) {
+/* ============================================================
+   RENDER — VISUAL OPTIONS
+   ============================================================ */
+
+function renderOptions(element, options, onSelect) {
+
+    if (!element) {
+        return;
+    }
+
+    if (!Array.isArray(options)) {
+        element.innerHTML = "";
+        return;
+    }
+
+    element.innerHTML = options
+        .map((option, index) => `
+            <div
+                class="option"
+                data-idx="${index}"
+            >
+                ${renderCell(option)}
+            </div>
+        `)
+        .join("");
+
+    element
+        .querySelectorAll(".option")
+        .forEach(option => {
+
+            option.addEventListener("click", () => {
+
+                haptic("light");
+
+                element
+                    .querySelectorAll(".option")
+                    .forEach(item => {
+                        item.classList.remove(
+                            "selected"
+                        );
+                    });
+
+                option.classList.add("selected");
+
+                const index =
+                    Number(option.dataset.idx);
+
+                if (typeof onSelect === "function") {
+                    onSelect(index);
+                }
+            });
+        });
+}
+
+/* ============================================================
+   RENDER — TEXT OPTIONS
+   ============================================================ */
+
+function renderTextOptions(
+    element,
+    options,
+    onSelect
+) {
+
+    if (!element) {
+        return;
+    }
+
+    if (!Array.isArray(options)) {
+        element.innerHTML = "";
+        return;
+    }
+
+    element.innerHTML = options
+        .map((option, index) => `
+            <div
+                class="option text-option"
+                data-idx="${index}"
+            >
+                <span class="opt-letter">
+                    ${String.fromCharCode(65 + index)}
+                </span>
+
+                <span class="opt-text">
+                    ${option}
+                </span>
+            </div>
+        `)
+        .join("");
+
+    element
+        .querySelectorAll(".option")
+        .forEach(option => {
+
+            option.addEventListener("click", () => {
+
+                haptic("light");
+
+                element
+                    .querySelectorAll(".option")
+                    .forEach(item => {
+                        item.classList.remove(
+                            "selected"
+                        );
+                    });
+
+                option.classList.add("selected");
+
+                const index =
+                    Number(option.dataset.idx);
+
+                if (typeof onSelect === "function") {
+                    onSelect(index);
+                }
+            });
+        });
+}
+/* ============================================================
+   APP
+   ============================================================ */
+
+const App = {
+
+    /* ========================================================
+       INIT
+       ======================================================== */
+
+    async init() {
+
+        console.log("[APP] init start");
 
         try {
 
-            tg.showPopup(
-                {
-                    title: "Chek yuborish",
-                    message: text,
-                    buttons: [
-                        {
-                            id: "ok",
-                            type: "default",
-                            text: "Tushundim"
-                        }
-                    ]
+            /* ---------- CONFIG ---------- */
+
+            const cfg = await api(
+                "/api/config",
+                null,
+                "GET"
+            );
+
+            if (cfg?.ok) {
+                State.settings = cfg.settings || {};
+            }
+
+            /* ---------- LIVE ---------- */
+
+            await this.refreshLive();
+            this.startLiveLoop();
+
+            /* ---------- USER ---------- */
+
+            getInitData();
+
+            if (initData) {
+
+                const me = await api(
+                    "/api/me",
+                    {
+                        initData
+                    }
+                );
+
+                if (me?.ok) {
+
+                    State.user = me.user || null;
+
+                    State.completed =
+                        me.completed || {};
+
+                    /* ---------- PROFILE ---------- */
+
+                    if (me.user?.full_name) {
+
+                        State.profile.full_name =
+                            me.user.full_name;
+
+                        State.profile.gender =
+                            me.user.gender || null;
+
+                        State.profile.age =
+                            me.user.age || null;
+
+                        State.profile.country =
+                            me.user.country || null;
+                    }
+
+                    /* ---------- UNLOCKS ---------- */
+
+                    this.applyUnlocks();
+
+                    /* ---------- ACTIVE BATTLE ---------- */
+
+                    if (
+                        Array.isArray(me.active_battles) &&
+                        me.active_battles.length > 0
+                    ) {
+
+                        const battle =
+                            me.active_battles[0];
+
+                        State.battle.id =
+                            battle.id;
+
+                        State.battle.code =
+                            battle.battle_code;
+                    }
                 }
+            }
+
+            console.log("[APP] init complete");
+
+        } catch (error) {
+
+            console.error(
+                "[APP] init error:",
+                error
+            );
+        }
+    },
+
+
+    /* ========================================================
+       LIVE COUNTER
+       ======================================================== */
+
+    async refreshLive() {
+
+        try {
+
+            const res = await api(
+                "/api/stats/live",
+                null,
+                "GET"
+            );
+
+            if (!res?.ok) {
+                return;
+            }
+
+            this.animateNumber(
+                "live-total",
+                Number(res.total) || 0
+            );
+
+            this.animateNumber(
+                "live-online",
+                Number(res.online) || 0
             );
 
         } catch (error) {
 
-            showToast(
-                text,
-                "info"
+            console.warn(
+                "[LIVE] refresh error:",
+                error
+            );
+        }
+    },
+
+
+    startLiveLoop() {
+
+        if (State.live.interval) {
+            clearInterval(
+                State.live.interval
             );
         }
 
-    } else {
-
-        showToast(
-            text,
-            "info"
-        );
-    }
-}
-
-
-// ============================================================
-// PAYMENT SCREEN BUTTONS
-// ============================================================
-
-function bindPaymentScreenButtons() {
-
-    const receiptButton =
-        getElement("send-receipt-btn");
-
-    if (
-        receiptButton &&
-        receiptButton.dataset.bound !== "1"
-    ) {
-
-        receiptButton.dataset.bound =
-            "1";
-
-        receiptButton.addEventListener(
-            "click",
-            sendReceipt
-        );
-    }
-
-    const cancelButton =
-        getElement("payment-cancel-btn");
-
-    if (
-        cancelButton &&
-        cancelButton.dataset.bound !== "1"
-    ) {
-
-        cancelButton.dataset.bound =
-            "1";
-
-        cancelButton.addEventListener(
-            "click",
+        State.live.interval = setInterval(
             () => {
+                this.refreshLive();
+            },
+            5000
+        );
+    },
 
-                stopPaymentPolling();
 
-                resetPaymentState();
+    animateNumber(id, target) {
 
-                showScreen(
-                    "screen-home"
+        const el =
+            document.getElementById(id);
+
+        if (!el) {
+            return;
+        }
+
+        target = Number(target) || 0;
+
+        let current =
+            parseInt(
+                String(el.textContent)
+                    .replace(/\D/g, ""),
+                10
+            ) || 0;
+
+        if (current === target) {
+            return;
+        }
+
+        const difference =
+            target - current;
+
+        const step =
+            difference > 0
+                ? Math.max(
+                    1,
+                    Math.floor(
+                        difference / 10
+                    )
+                )
+                : Math.min(
+                    -1,
+                    Math.ceil(
+                        difference / 10
+                    )
                 );
+
+        const timer =
+            setInterval(() => {
+
+                current += step;
+
+                if (
+                    (step > 0 &&
+                        current >= target) ||
+                    (step < 0 &&
+                        current <= target)
+                ) {
+
+                    current = target;
+
+                    clearInterval(timer);
+                }
+
+                el.textContent =
+                    current.toLocaleString();
+
+            }, 40);
+    },
+
+
+    /* ========================================================
+       SCREEN NAVIGATION
+       ======================================================== */
+
+    go(screen) {
+
+        document
+            .querySelectorAll(".screen")
+            .forEach(section => {
+                section.classList.remove(
+                    "active"
+                );
+            });
+
+        const target =
+            document.getElementById(
+                "screen-" + screen
+            );
+
+        if (!target) {
+
+            console.warn(
+                "[NAV] screen not found:",
+                screen
+            );
+
+            return;
+        }
+
+        target.classList.add("active");
+
+        State.currentScreen =
+            screen;
+
+        window.scrollTo({
+            top: 0,
+            behavior: "instant"
+        });
+
+        haptic("light");
+    },
+
+
+    /* ========================================================
+       UNLOCKS
+       ======================================================== */
+
+    applyUnlocks() {
+
+        const completed =
+            State.completed || {};
+
+        console.log(
+            "[UNLOCKS]",
+            completed
+        );
+
+        /* ---------- IQ → EQ ---------- */
+
+        if (
+            completed.iq !== undefined &&
+            completed.iq !== null
+        ) {
+
+            const card =
+                document.getElementById(
+                    "card-eq"
+                );
+
+            if (card) {
+
+                card.classList.remove(
+                    "locked"
+                );
+
+                card.classList.add(
+                    "unlocked"
+                );
+
+                const state =
+                    card.querySelector(
+                        ".card-state"
+                    );
+
+                if (state) {
+                    state.textContent = "";
+                }
+
+                const hint =
+                    card.querySelector(
+                        ".card-hint"
+                    );
+
+                if (hint) {
+                    hint.textContent = "";
+                }
             }
-        );
-    }
-}
-
-
-// ============================================================
-// RESET PAYMENT
-// ============================================================
-
-function clearPaymentData() {
-
-    stopPaymentPolling();
-
-    State.payment = {
-        paymentId: null,
-        product: null,
-        attemptId: null,
-        battleId: null,
-        price: 0,
-        cards: [],
-        status: null,
-        creating: false,
-        pollTimer: null,
-        testType: null
-    };
-}
-
-
-// ============================================================
-// PAYMENT ERROR RECOVERY
-// ============================================================
-
-function retryCurrentPayment() {
-
-    const product =
-        State.payment.product;
-
-    const attemptId =
-        State.payment.attemptId;
-
-    const battleId =
-        State.payment.battleId;
-
-    if (!product) {
-        showToast(
-            "To‘lov ma’lumotlari topilmadi",
-            "error"
-        );
-        return;
-    }
-
-    createPayment(
-        product,
-        attemptId,
-        battleId
-    );
-}
-
-
-// ============================================================
-// EXTEND INIT
-// ============================================================
-
-const previousInitAfterPayment =
-    App.init;
-
-App.init = async function () {
-
-    await previousInitAfterPayment();
-
-    bindPaymentScreenButtons();
-
-    bindPaymentButtons();
-
-    bindEQPQResultButtons();
-
-    applyUnlocks();
-};
-
-
-// ============================================================
-// 5-QISM TUGADI
-// ============================================================
-// ============================================================
-// APP.JS — 6-QISM
-// PROFILE / OVERALL + BATTLE SYSTEM
-// ============================================================
-
-
-// ============================================================
-// PROFILE
-// ============================================================
-
-function openProfile() {
-
-    const iq =
-        State.completed.iq;
-
-    const eq =
-        State.completed.eq;
-
-    const pq =
-        State.completed.pq;
-
-    if (
-        iq === null ||
-        iq === undefined ||
-        eq === null ||
-        eq === undefined ||
-        pq === null ||
-        pq === undefined
-    ) {
-        showToast(
-            "Avval barcha testlarni yakunlang",
-            "warning"
-        );
-
-        return;
-    }
-
-    renderProfile();
-
-    showScreen(
-        "screen-profile"
-    );
-}
-
-
-// ============================================================
-// RENDER PROFILE
-// ============================================================
-
-function renderProfile() {
-
-    const iq =
-        Number(State.completed.iq || 0);
-
-    const eq =
-        Number(State.completed.eq || 0);
-
-    const pq =
-        Number(State.completed.pq || 0);
-
-    const overall =
-        Math.round(
-            (iq + eq + pq) / 3
-        );
-
-    // --------------------------------------------
-    // SCORES
-    // --------------------------------------------
-
-    setText(
-        "profile-iq-score",
-        String(iq)
-    );
-
-    setText(
-        "profile-eq-score",
-        String(eq)
-    );
-
-    setText(
-        "profile-pq-score",
-        String(pq)
-    );
-
-    setText(
-        "profile-overall-score",
-        String(overall)
-    );
-
-    setText(
-        "overall-score",
-        String(overall)
-    );
-
-    // --------------------------------------------
-    // LEVEL
-    // --------------------------------------------
-
-    setText(
-        "profile-overall-level",
-        getOverallLevel(overall)
-    );
-
-    // --------------------------------------------
-    // STRENGTHS / WEAKNESSES
-    // --------------------------------------------
-
-    const scores = [
-        {
-            name: "IQ",
-            value: iq
-        },
-        {
-            name: "EQ",
-            value: eq
-        },
-        {
-            name: "PQ",
-            value: pq
-        }
-    ];
-
-    const sorted =
-        [...scores].sort(
-            (a, b) => b.value - a.value
-        );
-
-    const strengths =
-        sorted
-            .slice(0, 2)
-            .map(item => item.name);
-
-    const weaknesses =
-        sorted
-            .slice(-1)
-            .map(item => item.name);
-
-    setHTML(
-        "profile-strengths",
-        strengths.map(
-            item => `
-                <span class="profile-tag">
-                    ${escapeHtml(item)}
-                </span>
-            `
-        ).join("")
-    );
-
-    setHTML(
-        "profile-weaknesses",
-        weaknesses.map(
-            item => `
-                <span class="profile-tag">
-                    ${escapeHtml(item)}
-                </span>
-            `
-        ).join("")
-    );
-
-    // --------------------------------------------
-    // USER DATA
-    // --------------------------------------------
-
-    const profile =
-        State.profile || {};
-
-    setText(
-        "profile-full-name",
-        profile.full_name ||
-        profile.fullName ||
-        ""
-    );
-
-    setText(
-        "profile-gender",
-        profile.gender || ""
-    );
-
-    setText(
-        "profile-age",
-        profile.age
-            ? String(profile.age)
-            : ""
-    );
-
-    setText(
-        "profile-country",
-        profile.country || ""
-    );
-}
-
-
-// ============================================================
-// OVERALL LEVEL
-// ============================================================
-
-function getOverallLevel(score) {
-
-    score = Number(score || 0);
-
-    if (score >= 85) {
-        return "Juda yuqori";
-    }
-
-    if (score >= 70) {
-        return "Yuqori";
-    }
-
-    if (score >= 50) {
-        return "O‘rtacha";
-    }
-
-    if (score >= 30) {
-        return "Past";
-    }
-
-    return "Juda past";
-}
-
-
-// ============================================================
-// PROFILE BACK
-// ============================================================
-
-function closeProfile() {
-
-    showScreen(
-        "screen-home"
-    );
-}
-
-
-// ============================================================
-// BATTLE STATE
-// ============================================================
-
-function resetBattleState() {
-
-    stopBattlePolling();
-
-    State.battle = {
-        id: null,
-        code: null,
-        status: null,
-
-        creator: null,
-        opponent: null,
-
-        players: [],
-
-        currentQuestion: 0,
-        answers: [],
-
-        started: false,
-        finished: false,
-
-        result: null,
-
-        paymentStatus: null,
-
-        pollTimer: null
-    };
-}
-
-
-// ============================================================
-// OPEN BATTLE
-// ============================================================
-
-function openBattle() {
-
-    resetBattleState();
-
-    showScreen(
-        "screen-battle"
-    );
-
-    renderBattleHome();
-}
-
-
-// ============================================================
-// BATTLE HOME
-// ============================================================
-
-function renderBattleHome() {
-
-    setText(
-        "battle-code-input",
-        ""
-    );
-
-    const input =
-        getElement("battle-code-input");
-
-    if (input) {
-        input.value = "";
-    }
-
-    const createButton =
-        getElement("battle-create-btn");
-
-    if (
-        createButton &&
-        createButton.dataset.bound !== "1"
-    ) {
-
-        createButton.dataset.bound =
-            "1";
-
-        createButton.addEventListener(
-            "click",
-            createBattle
-        );
-    }
-
-    const joinButton =
-        getElement("battle-join-btn");
-
-    if (
-        joinButton &&
-        joinButton.dataset.bound !== "1"
-    ) {
-
-        joinButton.dataset.bound =
-            "1";
-
-        joinButton.addEventListener(
-            "click",
-            joinBattle
-        );
-    }
-}
-
-
-// ============================================================
-// CREATE BATTLE
-// ============================================================
-
-async function createBattle() {
-
-    if (!State.initData) {
-
-        showToast(
-            "Battle Telegram ichida ishlaydi",
-            "warning"
-        );
-
-        return;
-    }
-
-    try {
-
-        const response =
-            await api(
-                "/api/battle/create",
-                {}
-            );
-
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "Battle yaratib bo‘lmadi"
-            );
         }
 
-        State.battle = {
-            ...State.battle,
 
-            id:
-                response.battle_id ||
-                response.id ||
-                null,
+        /* ---------- EQ → PQ ---------- */
 
-            code:
-                response.code ||
-                response.join_code ||
-                null,
+        if (
+            completed.eq !== undefined &&
+            completed.eq !== null
+        ) {
 
-            status:
-                response.status ||
-                "waiting"
-        };
+            const card =
+                document.getElementById(
+                    "card-pq"
+                );
 
-        renderBattleWaiting();
+            if (card) {
 
-        startBattlePolling();
+                card.classList.remove(
+                    "locked"
+                );
 
-    } catch (error) {
+                card.classList.add(
+                    "unlocked"
+                );
 
-        console.error(
-            "[BATTLE CREATE]",
-            error
+                const state =
+                    card.querySelector(
+                        ".card-state"
+                    );
+
+                if (state) {
+                    state.textContent = "";
+                }
+
+                const hint =
+                    card.querySelector(
+                        ".card-hint"
+                    );
+
+                if (hint) {
+                    hint.textContent = "";
+                }
+            }
+        }
+
+
+        /* ---------- ALL → PROFILE ---------- */
+
+        if (
+            completed.iq !== undefined &&
+            completed.eq !== undefined &&
+            completed.pq !== undefined
+        ) {
+
+            const card =
+                document.getElementById(
+                    "card-profile"
+                );
+
+            if (card) {
+
+                card.classList.remove(
+                    "locked"
+                );
+
+                card.classList.add(
+                    "unlocked"
+                );
+
+                const state =
+                    card.querySelector(
+                        ".card-state"
+                    );
+
+                if (state) {
+                    state.textContent = "";
+                }
+            }
+        }
+    },
+
+
+    /* ========================================================
+       IQ START
+       ======================================================== */
+
+    startIQ() {
+
+        /*
+         * IQ boshlanganda profilni har safar
+         * tekshirtiramiz.
+         */
+
+        const savedName =
+            State.profile.full_name || "";
+
+        const nameInput =
+            document.getElementById(
+                "profile-fullname"
+            );
+
+        if (nameInput) {
+            nameInput.value = savedName;
+        }
+
+        /*
+         * Gender/age/country ni tozalaymiz.
+         */
+
+        State.profile.gender = null;
+        State.profile.age = null;
+        State.profile.country = null;
+
+        document
+            .querySelectorAll(
+                "#gender-selector .option"
+            )
+            .forEach(el => {
+                el.classList.remove(
+                    "selected"
+                );
+            });
+
+        document
+            .querySelectorAll(
+                "#country-selector .option"
+            )
+            .forEach(el => {
+                el.classList.remove(
+                    "selected"
+                );
+            });
+
+        const ageInput =
+            document.getElementById(
+                "profile-age"
+            );
+
+        if (ageInput) {
+            ageInput.value = "";
+        }
+
+        this.go(
+            "profile-name"
         );
-
-        showToast(
-            error.message ||
-            "Battle yaratishda xatolik",
-            "error"
-        );
-    }
-}
+    },
 
 
-// ============================================================
-// JOIN BATTLE
-// ============================================================
+    /* ========================================================
+       SAVE PROFILE
+       ======================================================== */
 
-async function joinBattle() {
+    async saveProfile() {
 
-    if (!State.initData) {
+        const nameInput =
+            document.getElementById(
+                "profile-fullname"
+            );
 
-        showToast(
-            "Battle Telegram ichida ishlaydi",
-            "warning"
-        );
+        const ageInput =
+            document.getElementById(
+                "profile-age"
+            );
 
-        return;
-    }
+        const fullName =
+            nameInput?.value
+                ?.trim() || "";
 
-    const input =
-        getElement("battle-code-input");
+        const gender =
+            State.profile.gender;
 
-    const code =
-        input?.value?.trim() || "";
+        const age =
+            parseInt(
+                ageInput?.value,
+                10
+            );
 
-    if (!code) {
+        const country =
+            State.profile.country;
 
-        showToast(
-            "Battle kodini kiriting",
-            "warning"
-        );
 
-        return;
-    }
+        /* ---------- VALIDATION ---------- */
 
-    try {
+        if (
+            !fullName ||
+            fullName.length < 3
+        ) {
 
-        const response =
-            await api(
-                "/api/battle/join",
+            alert(
+                "Ism-familiyani to‘liq kiriting."
+            );
+
+            nameInput?.focus();
+
+            return;
+        }
+
+
+        if (!gender) {
+
+            alert(
+                "Jinsni tanlang."
+            );
+
+            return;
+        }
+
+
+        if (
+            !age ||
+            age < 8 ||
+            age > 100
+        ) {
+
+            alert(
+                "Yoshni to‘g‘ri kiriting (8-100)."
+            );
+
+            ageInput?.focus();
+
+            return;
+        }
+
+
+        if (!country) {
+
+            alert(
+                "Davlatni tanlang."
+            );
+
+            return;
+        }
+
+
+        /* ---------- LOCAL STATE ---------- */
+
+        State.profile.full_name =
+            fullName;
+
+        State.profile.gender =
+            gender;
+
+        State.profile.age =
+            age;
+
+        State.profile.country =
+            country;
+
+
+        /* ---------- BACKEND ---------- */
+
+        if (initData) {
+
+            const res = await api(
+                "/api/profile/save",
                 {
-                    code
+                    initData,
+                    full_name: fullName,
+                    gender,
+                    age,
+                    country
                 }
             );
 
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "Battle'ga qo‘shilib bo‘lmadi"
+            if (!res?.ok) {
+
+                alert(
+                    "Profilni saqlashda xatolik."
+                );
+
+                return;
+            }
+        }
+
+
+        haptic("medium");
+
+        this.go(
+            "iq-intro"
+        );
+    },
+
+
+    /* ========================================================
+       GENDER
+       ======================================================== */
+
+    selectGender(gender) {
+
+        const allowed = [
+            "male",
+            "female"
+        ];
+
+        if (!allowed.includes(gender)) {
+            return;
+        }
+
+        State.profile.gender =
+            gender;
+
+        document
+            .querySelectorAll(
+                "#gender-selector .option"
+            )
+            .forEach(el => {
+                el.classList.remove(
+                    "selected"
+                );
+            });
+
+        const selected =
+            document.querySelector(
+                `#gender-selector [data-gender="${gender}"]`
+            );
+
+        selected?.classList.add(
+            "selected"
+        );
+
+        haptic("light");
+    },
+
+
+    /* ========================================================
+       COUNTRY
+       ======================================================== */
+
+    selectCountry(country) {
+
+        const allowed = [
+            "uz",
+            "ru",
+            "en",
+            "kz",
+            "kg",
+            "tr"
+        ];
+
+        if (!allowed.includes(country)) {
+            return;
+        }
+
+        State.profile.country =
+            country;
+
+        document
+            .querySelectorAll(
+                "#country-selector .option"
+            )
+            .forEach(el => {
+                el.classList.remove(
+                    "selected"
+                );
+            });
+
+        const selected =
+            document.querySelector(
+                `#country-selector [data-country="${country}"]`
+            );
+
+        selected?.classList.add(
+            "selected"
+        );
+
+        haptic("light");
+    },
+
+
+    /* ========================================================
+       IQ TEST SESSION
+       ======================================================== */
+
+    async startIQTest() {
+
+        haptic("medium");
+
+        /*
+         * Eski timer/session qoldig'ini tozalash.
+         */
+
+        if (State.test.timerInterval) {
+
+            clearInterval(
+                State.test.timerInterval
+            );
+
+            State.test.timerInterval =
+                null;
+        }
+
+        State.test.type = "iq";
+
+        State.test.sessionId =
+            null;
+
+        State.test.attemptId =
+            null;
+
+        State.test.current =
+            0;
+
+        State.test.answers =
+            new Array(
+                QUESTIONS.length
+            ).fill(null);
+
+        State.test.startedAt =
+            Date.now();
+
+        State.test.duration =
+            0;
+
+        State.test.resultData =
+            null;
+
+
+        /* ---------- BACKEND SESSION ---------- */
+
+        if (initData) {
+
+            const res = await api(
+                "/api/session/start",
+                {
+                    initData,
+                    test_type: "iq"
+                }
+            );
+
+            if (res?.ok) {
+
+                State.test.sessionId =
+                    res.session_id || null;
+
+                State.test.attemptId =
+                    res.attempt_id || null;
+
+            } else {
+
+                console.warn(
+                    "[IQ] session start failed:",
+                    res
+                );
+            }
+        }
+
+
+        /* ---------- SAMPLE ---------- */
+
+        this.go("sample");
+
+        this.renderSample();
+    },
+
+
+    /* ========================================================
+       SAMPLE QUESTION
+       ======================================================== */
+
+    renderSample() {
+
+        const sample = {
+
+            matrix: [
+                {
+                    type: "dot",
+                    count: 1
+                },
+                {
+                    type: "dot",
+                    count: 2
+                },
+                {
+                    type: "dot",
+                    count: 3
+                },
+
+                {
+                    type: "dot",
+                    count: 2
+                },
+                {
+                    type: "dot",
+                    count: 3
+                },
+                {
+                    type: "dot",
+                    count: 4
+                },
+
+                {
+                    type: "dot",
+                    count: 3
+                },
+                {
+                    type: "dot",
+                    count: 4
+                },
+                {
+                    type: "question"
+                }
+            ],
+
+            options: [
+                {
+                    type: "dot",
+                    count: 4
+                },
+                {
+                    type: "dot",
+                    count: 5
+                },
+                {
+                    type: "dot",
+                    count: 3
+                },
+                {
+                    type: "dot",
+                    count: 6
+                }
+            ],
+
+            correct: 1
+        };
+
+
+        const matrix =
+            document.getElementById(
+                "sample-matrix"
+            );
+
+        const options =
+            document.getElementById(
+                "sample-options"
+            );
+
+        const next =
+            document.getElementById(
+                "sample-next"
+            );
+
+
+        renderMatrix(
+            matrix,
+            sample.matrix
+        );
+
+
+        if (next) {
+            next.disabled = true;
+        }
+
+
+        renderOptions(
+            options,
+            sample.options,
+            index => {
+
+                if (next) {
+                    next.disabled =
+                        false;
+                }
+
+                /*
+                 * Namunaviy savolda javobni
+                 * vizual ko‘rsatamiz.
+                 */
+
+                options
+                    ?.querySelectorAll(
+                        ".option"
+                    )
+                    .forEach(
+                        (option, i) => {
+
+                            option.classList.remove(
+                                "correct",
+                                "wrong"
+                            );
+
+                            if (
+                                i ===
+                                sample.correct
+                            ) {
+
+                                option.classList.add(
+                                    "correct"
+                                );
+
+                            } else if (
+                                i === index
+                            ) {
+
+                                option.classList.add(
+                                    "wrong"
+                                );
+                            }
+                        }
+                    );
+            }
+        );
+    },
+
+
+    /* ========================================================
+       GO TO REAL IQ TEST
+       ======================================================== */
+
+    goTest() {
+
+        this.go(
+            "test"
+        );
+
+        this.renderQuestion();
+
+        this.startTimer();
+    },
+
+
+    /* ========================================================
+       TIMER
+       ======================================================== */
+
+    startTimer() {
+
+        if (
+            State.test.timerInterval
+        ) {
+
+            clearInterval(
+                State.test.timerInterval
             );
         }
 
-        State.battle = {
-            ...State.battle,
+        State.test.timerInterval =
+            setInterval(() => {
 
-            id:
-                response.battle_id ||
-                response.id ||
-                null,
+                if (
+                    !State.test.startedAt
+                ) {
+                    return;
+                }
 
-            code,
+                const elapsed =
+                    Math.floor(
+                        (
+                            Date.now() -
+                            State.test.startedAt
+                        ) / 1000
+                    );
 
-            status:
-                response.status ||
-                "waiting"
-        };
+                State.test.duration =
+                    elapsed;
 
-        renderBattleWaiting();
+                const minutes =
+                    String(
+                        Math.floor(
+                            elapsed / 60
+                        )
+                    ).padStart(2, "0");
 
-        startBattlePolling();
+                const seconds =
+                    String(
+                        elapsed % 60
+                    ).padStart(2, "0");
 
-    } catch (error) {
+                const timer =
+                    document.getElementById(
+                        "test-timer"
+                    );
 
-        console.error(
-            "[BATTLE JOIN]",
-            error
-        );
+                if (timer) {
 
-        showToast(
-            error.message ||
-            "Battle kodini tekshiring",
-            "error"
-        );
-    }
-}
+                    timer.textContent =
+                        `${minutes}:${seconds}`;
+                }
 
-
-// ============================================================
-// BATTLE WAITING
-// ============================================================
-
-function renderBattleWaiting() {
-
-    setText(
-        "battle-code-display",
-        State.battle.code || "—"
-    );
-
-    setText(
-        "battle-id-display",
-        State.battle.id || "—"
-    );
-
-    const status =
-        State.battle.status;
-
-    if (
-        status === "ready" ||
-        status === "playing"
-    ) {
-
-        showScreen(
-            "screen-battle-test"
-        );
-
-        return;
-    }
-
-    showScreen(
-        "screen-battle-waiting"
-    );
-}
+            }, 1000);
+    },
 
 
-// ============================================================
-// BATTLE POLLING
-// ============================================================
+    /* ========================================================
+       RENDER IQ QUESTION
+       ======================================================== */
 
-function startBattlePolling() {
+    renderQuestion() {
 
-    stopBattlePolling();
+        const index =
+            State.test.current;
 
-    if (!State.battle.id) {
-        return;
-    }
+        const question =
+            QUESTIONS[index];
 
-    checkBattle();
-
-    State.battle.pollTimer =
-        setInterval(
-            checkBattle,
-            4000
-        );
-}
+        if (!question) {
+            return;
+        }
 
 
-// ============================================================
-// CHECK BATTLE
-// ============================================================
-
-async function checkBattle() {
-
-    if (!State.battle.id) {
-        stopBattlePolling();
-        return;
-    }
-
-    try {
-
-        const response =
-            await api(
-                `/api/battle/${encodeURIComponent(State.battle.id)}`,
-                {},
-                "GET"
+        const progressText =
+            document.getElementById(
+                "test-progress-text"
             );
 
-        if (!response?.ok) {
-            return;
+        const progress =
+            document.getElementById(
+                "progress-fill"
+            );
+
+        const difficulty =
+            document.getElementById(
+                "difficulty-bar"
+            );
+
+
+        if (progressText) {
+
+            progressText.textContent =
+                `Q${index + 1} / ${QUESTIONS.length}`;
         }
 
-        const battle =
-            response.battle ||
-            response.data ||
-            response;
 
-        State.battle = {
-            ...State.battle,
-            ...battle
-        };
+        if (progress) {
 
-        const status =
-            String(
-                battle.status || ""
-            ).toLowerCase();
-
-        // ----------------------------------------
-        // WAITING
-        // ----------------------------------------
-
-        if (
-            status === "waiting" ||
-            status === "waiting_for_player"
-        ) {
-
-            renderBattleWaiting();
-
-            return;
+            progress.style.width =
+                (
+                    index /
+                    QUESTIONS.length *
+                    100
+                ) + "%";
         }
 
-        // ----------------------------------------
-        // WAITING FOR PAYMENT
-        // ----------------------------------------
 
-        if (
-            status === "waiting_for_payment"
-        ) {
+        /* ---------- DIFFICULTY ---------- */
 
-            stopBattlePolling();
+        if (difficulty) {
 
-            renderBattlePayment();
+            let html = "";
 
-            return;
-        }
+            for (
+                let i = 0;
+                i < QUESTIONS.length;
+                i++
+            ) {
 
-        // ----------------------------------------
-        // READY / PLAYING
-        // ----------------------------------------
+                let level;
 
-        if (
-            status === "ready" ||
-            status === "playing"
-        ) {
+                if (i >= 12) {
+                    level = "hard";
+                } else if (i >= 6) {
+                    level = "medium";
+                } else {
+                    level = "easy";
+                }
 
-            if (!State.battle.started) {
+                if (
+                    i <= index
+                ) {
 
-                stopBattlePolling();
+                    html += `
+                        <span
+                            class="${level}"
+                        ></span>
+                    `;
 
-                startBattleTest();
+                } else {
 
+                    html += `
+                        <span></span>
+                    `;
+                }
             }
 
+            difficulty.innerHTML =
+                html;
+        }
+
+
+        /* ---------- MATRIX ---------- */
+
+        renderMatrix(
+            document.getElementById(
+                "test-matrix"
+            ),
+            question.matrix
+        );
+
+
+        /* ---------- NEXT ---------- */
+
+        const next =
+            document.getElementById(
+                "test-next"
+            );
+
+        if (next) {
+
+            next.disabled = true;
+
+            next.textContent =
+                index === QUESTIONS.length - 1
+                    ? "YAKUNLASH →"
+                    : "KEYINGISI →";
+        }
+
+
+        /* ---------- OPTIONS ---------- */
+
+        renderOptions(
+            document.getElementById(
+                "test-options"
+            ),
+            question.options,
+            selectedIndex => {
+
+                State.test.answers[index] =
+                    selectedIndex;
+
+                if (next) {
+                    next.disabled =
+                        false;
+                }
+            }
+        );
+
+
+        /* ---------- RESTORE ANSWER ---------- */
+
+        const previous =
+            State.test.answers[index];
+
+        if (
+            previous !== null &&
+            previous !== undefined
+        ) {
+
+            const options =
+                document.querySelectorAll(
+                    "#test-options .option"
+                );
+
+            const selected =
+                options[previous];
+
+            selected?.classList.add(
+                "selected"
+            );
+
+            if (next) {
+                next.disabled = false;
+            }
+        }
+    },
+
+
+    /* ========================================================
+       NEXT IQ QUESTION
+       ======================================================== */
+
+    nextQuestion() {
+
+        haptic("light");
+
+        const current =
+            State.test.current;
+
+
+        /* ---------- Q6 ---------- */
+
+        if (current === 5) {
+
+            this.go("q6");
+
             return;
         }
 
-        // ----------------------------------------
-        // FINISHED
-        // ----------------------------------------
+
+        /* ---------- Q12 ---------- */
+
+        if (current === 11) {
+
+            this.go("q12");
+
+            return;
+        }
+
+
+        /* ---------- LAST ---------- */
 
         if (
-            status === "finished" ||
-            status === "completed"
+            current ===
+            QUESTIONS.length - 1
         ) {
 
-            stopBattlePolling();
+            this.finish();
 
-            renderBattleResult(
-                battle.result ||
-                battle
+            return;
+        }
+
+
+        /* ---------- NEXT ---------- */
+
+        State.test.current =
+            current + 1;
+
+        this.renderQuestion();
+    },
+
+
+    /* ========================================================
+       CONTINUE AFTER Q6
+       ======================================================== */
+
+    continueAfterQ6() {
+
+        State.test.current = 6;
+
+        this.go("test");
+
+        this.renderQuestion();
+    },
+
+
+    /* ========================================================
+       CONTINUE AFTER Q12
+       ======================================================== */
+
+    continueAfterQ12() {
+
+        State.test.current = 12;
+
+        this.go("test");
+
+        this.renderQuestion();
+    },
+
+
+    /* ========================================================
+       IQ FINISH — DAVOMI KEYINGI QISMDA
+       ======================================================== */
+    /* ========================================================
+       IQ FINISH
+       ======================================================== */
+
+    async finish() {
+
+        if (
+            State.test.answers.length !==
+            QUESTIONS.length
+        ) {
+            console.warn(
+                "[IQ] answers length mismatch"
             );
         }
 
-    } catch (error) {
+        if (State.test.timerInterval) {
 
-        console.warn(
-            "[BATTLE POLL]",
-            error
+            clearInterval(
+                State.test.timerInterval
+            );
+
+            State.test.timerInterval =
+                null;
+        }
+
+        this.go("iq-loading");
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 2500)
         );
-    }
-}
 
 
-// ============================================================
-// BATTLE PAYMENT
-// ============================================================
+        let score = 0;
+        let correct = 0;
+        let level = "RIVOJLANTIRISH";
 
-function renderBattlePayment() {
+        let resultVisible = true;
+        let paymentRequired = false;
 
-    const price =
-        getPrice("battle");
+        let attemptId =
+            State.test.attemptId || null;
 
-    setText(
-        "battle-payment-price",
-        `${formatNumber(price)} so‘m`
-    );
 
-    const button =
-        getElement("battle-pay-btn");
+        /* ====================================================
+           BACKEND
+           ==================================================== */
 
-    if (
-        button &&
-        button.dataset.bound !== "1"
+        if (
+            initData &&
+            State.test.sessionId
+        ) {
+
+            const res = await api(
+                "/api/test/submit",
+                {
+                    initData,
+
+                    session_id:
+                        State.test.sessionId,
+
+                    answers:
+                        State.test.answers,
+
+                    duration:
+                        State.test.duration
+                }
+            );
+
+
+            if (res?.ok) {
+
+                score =
+                    Number(res.score) || 0;
+
+                correct =
+                    Number(res.correct) || 0;
+
+                level =
+                    res.level ||
+                    "RIVOJLANTIRISH";
+
+                resultVisible =
+                    res.result_visible !== false;
+
+                paymentRequired =
+                    res.payment_required === true;
+
+                attemptId =
+                    res.attempt_id ||
+                    attemptId;
+
+                State.test.attemptId =
+                    attemptId;
+
+            } else {
+
+                console.warn(
+                    "[IQ] submit failed:",
+                    res
+                );
+
+                /*
+                 * Backend ishlamasa lokal hisob.
+                 * Bu faqat fallback.
+                 */
+
+                const local =
+                    this.calculateIQ();
+
+                score = local.score;
+                correct = local.correct;
+                level = local.level;
+            }
+
+        } else {
+
+            /*
+             * Telegram tashqarisida test
+             * ishlatilsa lokal fallback.
+             */
+
+            const local =
+                this.calculateIQ();
+
+            score = local.score;
+            correct = local.correct;
+            level = local.level;
+        }
+
+
+        /* ====================================================
+           RESULT STATE
+           ==================================================== */
+
+        State.test.resultData = {
+            score,
+            correct,
+            level,
+            attemptId,
+            resultVisible,
+            paymentRequired
+        };
+
+
+        /*
+         * MUHIM:
+         *
+         * Payment hali tasdiqlanmagan bo'lsa,
+         * completed.iq ni frontendda unlock qilmaymiz.
+         *
+         * Backend tasdiqlagan natija / /api/me orqali
+         * haqiqiy completed state keladi.
+         */
+
+        if (!paymentRequired) {
+
+            State.completed.iq =
+                score;
+        }
+
+
+        /* ====================================================
+           PAYMENT REQUIRED
+           ==================================================== */
+
+        if (
+            paymentRequired &&
+            !resultVisible
+        ) {
+
+            const price =
+                Number(
+                    State.settings.iq_price || 0
+                );
+
+            const priceEl =
+                document.getElementById(
+                    "payreq-price"
+                );
+
+            if (priceEl) {
+
+                priceEl.textContent =
+                    price.toLocaleString(
+                        "uz-UZ"
+                    ) + " so‘m";
+            }
+
+            this.go(
+                "payment-required"
+            );
+
+            return;
+        }
+
+
+        /* ====================================================
+           FREE / VISIBLE RESULT
+           ==================================================== */
+
+        this.renderResult(
+            score,
+            correct,
+            level
+        );
+
+        this.go("result");
+
+        this.applyUnlocks();
+    },
+
+
+    /* ========================================================
+       LOCAL IQ CALCULATION
+       ======================================================== */
+
+    calculateIQ() {
+
+        let weighted = 0;
+        let maxWeighted = 0;
+        let correct = 0;
+
+
+        QUESTIONS.forEach(
+            (question, index) => {
+
+                const weight =
+                    Number(
+                        question.weight
+                    ) || 0;
+
+                maxWeighted += weight;
+
+
+                const answer =
+                    State.test.answers[index];
+
+
+                if (
+                    answer ===
+                    question.correct
+                ) {
+
+                    weighted += weight;
+
+                    correct++;
+                }
+            }
+        );
+
+
+        let score = 70;
+
+        if (maxWeighted > 0) {
+
+            score = Math.round(
+                70 +
+                (
+                    weighted /
+                    maxWeighted
+                ) * 60
+            );
+        }
+
+
+        let level;
+
+        if (score >= 115) {
+
+            level =
+                "YUQORI DARAJA";
+
+        } else if (score >= 100) {
+
+            level =
+                "O‘RTA DARAJA";
+
+        } else {
+
+            level =
+                "RIVOJLANTIRISH";
+        }
+
+
+        return {
+            score,
+            correct,
+            weighted,
+            maxWeighted,
+            level
+        };
+    },
+
+
+    /* ========================================================
+       IQ RESULT
+       ======================================================== */
+
+    renderResult(
+        score,
+        correct,
+        level
     ) {
 
-        button.dataset.bound =
-            "1";
+        const scoreEl =
+            document.getElementById(
+                "res-score"
+            );
 
-        button.addEventListener(
-            "click",
-            startBattlePayment
+        const levelEl =
+            document.getElementById(
+                "res-level"
+            );
+
+        const correctEl =
+            document.getElementById(
+                "res-correct"
+            );
+
+        const timeEl =
+            document.getElementById(
+                "res-time"
+            );
+
+
+        if (scoreEl) {
+            scoreEl.textContent =
+                score;
+        }
+
+        if (levelEl) {
+            levelEl.textContent =
+                level;
+        }
+
+        if (correctEl) {
+
+            correctEl.textContent =
+                `${correct} / ${QUESTIONS.length}`;
+        }
+
+
+        const duration =
+            Number(
+                State.test.duration
+            ) || 0;
+
+        const minutes =
+            String(
+                Math.floor(
+                    duration / 60
+                )
+            ).padStart(2, "0");
+
+        const seconds =
+            String(
+                duration % 60
+            ).padStart(2, "0");
+
+        if (timeEl) {
+
+            timeEl.textContent =
+                `${minutes}:${seconds}`;
+        }
+
+
+        /* ====================================================
+           ANALYSIS
+           ==================================================== */
+
+        const directions = [
+
+            {
+                label: "Mantiq",
+                val: Math.min(
+                    100,
+                    50 + correct * 3
+                )
+            },
+
+            {
+                label: "Pattern",
+                val: Math.min(
+                    100,
+                    55 + correct * 2.5
+                )
+            },
+
+            {
+                label: "Raqamlar",
+                val: Math.min(
+                    100,
+                    45 + correct * 3.2
+                )
+            },
+
+            {
+                label: "Fazoviy fikr",
+                val: Math.min(
+                    100,
+                    40 + correct * 3.5
+                )
+            }
+        ];
+
+
+        document
+            .querySelectorAll(".dir")
+            .forEach((element, index) => {
+
+                const direction =
+                    directions[index];
+
+                if (!direction) {
+                    return;
+                }
+
+                element.dataset.label =
+                    direction.label;
+
+
+                const fill =
+                    element.querySelector(
+                        ".dir-fill"
+                    );
+
+                const value =
+                    element.querySelector(
+                        "span"
+                    );
+
+
+                if (value) {
+
+                    value.textContent =
+                        Math.round(
+                            direction.val
+                        ) + "%";
+                }
+
+
+                if (fill) {
+
+                    fill.style.width =
+                        "0%";
+
+                    setTimeout(() => {
+
+                        fill.style.width =
+                            direction.val +
+                            "%";
+
+                    }, 100 + index * 150);
+                }
+            });
+
+
+        const strongest =
+            directions.reduce(
+                (best, item) =>
+                    item.val > best.val
+                        ? item
+                        : best,
+                directions[0]
+            );
+
+
+        const strongestEl =
+            document.getElementById(
+                "res-strongest"
+            );
+
+        if (strongestEl) {
+
+            strongestEl.textContent =
+                strongest?.label || "—";
+        }
+    },
+
+
+    /* ========================================================
+       CERTIFICATE
+       ======================================================== */
+
+    async getCertificate() {
+
+        if (!initData) {
+
+            alert(
+                "Sertifikat uchun Telegram kerak."
+            );
+
+            return;
+        }
+
+        haptic("medium");
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/api/certificate/generate",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                initData
+                            })
+                    }
+                );
+
+
+            if (!response.ok) {
+
+                alert(
+                    "Sertifikat topilmadi. " +
+                    "Avval IQ testni yakunlang."
+                );
+
+                return;
+            }
+
+
+            const blob =
+                await response.blob();
+
+            const url =
+                window.URL.createObjectURL(
+                    blob
+                );
+
+
+            const link =
+                document.createElement(
+                    "a"
+                );
+
+            link.href = url;
+
+            link.download =
+                "IQ-TEST-BOT-Sertifikat.png";
+
+            document.body.appendChild(
+                link
+            );
+
+            link.click();
+
+            link.remove();
+
+            window.URL.revokeObjectURL(
+                url
+            );
+
+        } catch (error) {
+
+            console.error(
+                "[CERTIFICATE]",
+                error
+            );
+
+            alert(
+                "Sertifikat yuklashda xatolik."
+            );
+        }
+    },
+
+
+    /* ========================================================
+       SHARE RESULT
+       ======================================================== */
+
+    shareResult() {
+
+        const score =
+            document.getElementById(
+                "res-score"
+            )?.textContent || "0";
+
+
+        const text =
+            `IQ TEST BOT\n\n` +
+            `Men IQ-style testda ` +
+            `${score} ball oldim!\n` +
+            `Siz ham sinab ko‘ring.`;
+
+
+        const botUrl =
+            "https://t.me/iqtest_ubot";
+
+
+        const shareUrl =
+            `https://t.me/share/url` +
+            `?url=${encodeURIComponent(botUrl)}` +
+            `&text=${encodeURIComponent(text)}`;
+
+
+        if (tg?.openTelegramLink) {
+
+            tg.openTelegramLink(
+                shareUrl
+            );
+
+            return;
+        }
+
+
+        if (
+            navigator.clipboard
+        ) {
+
+            navigator.clipboard
+                .writeText(
+                    `${text}\n${botUrl}`
+                )
+                .then(() => {
+
+                    alert(
+                        "Natija matni nusxalandi."
+                    );
+
+                })
+                .catch(() => {
+
+                    alert(
+                        `${text}\n${botUrl}`
+                    );
+                });
+
+        } else {
+
+            alert(
+                `${text}\n${botUrl}`
+            );
+        }
+    },
+
+
+    /* ========================================================
+       RETRY IQ
+       ======================================================== */
+
+    retry() {
+
+        const price =
+            Number(
+                State.settings.iq_retry_price ||
+                0
+            );
+
+
+        /*
+         * Agar backend retry uchun to'lov
+         * talab qilsa, payment keyin yaratiladi.
+         */
+
+        if (
+            price > 0 &&
+            State.completed.iq
+        ) {
+
+            const confirmed =
+                confirm(
+                    `IQ testni qayta ishlash ` +
+                    `${price.toLocaleString("uz-UZ")} so‘m.\n\n` +
+                    `Davom etasizmi?`
+                );
+
+            if (!confirmed) {
+                return;
+            }
+        }
+
+
+        State.test = {
+
+            type: "iq",
+
+            sessionId: null,
+
+            attemptId: null,
+
+            current: 0,
+
+            answers:
+                new Array(
+                    QUESTIONS.length
+                ).fill(null),
+
+            startedAt: null,
+
+            duration: 0,
+
+            timerInterval: null,
+
+            resultData: null
+        };
+
+
+        this.startIQ();
+    },
+
+
+    /* ========================================================
+       START IQ PAYMENT
+       ======================================================== */
+
+    async startIQPayment() {
+
+        const attemptId =
+            State.test.resultData?.attemptId ||
+            State.test.attemptId ||
+            null;
+
+
+        await this.createPayment(
+            "iq",
+            attemptId,
+            null
         );
-    }
-
-    if (button) {
-        button.disabled = false;
-    }
-
-    showScreen(
-        "screen-battle-payment"
-    );
-}
+    },
 
 
-// ============================================================
-// START BATTLE PAYMENT
-// ============================================================
+    /* ========================================================
+       START BATTLE PAYMENT
+       ======================================================== */
 
-async function startBattlePayment() {
+    async startBattlePayment() {
 
-    if (!State.battle.id) {
+        if (!State.battle.id) {
 
-        showToast(
-            "Battle topilmadi",
-            "error"
-        );
+            alert(
+                "Battle topilmadi."
+            );
 
-        return;
-    }
+            return;
+        }
 
-    const price =
-        getPrice("battle");
 
-    if (price <= 0) {
-
-        await createPayment(
+        await this.createPayment(
             "battle",
             null,
             State.battle.id
         );
-
-        return;
-    }
-
-    await createPayment(
-        "battle",
-        null,
-        State.battle.id
-    );
-}
+    },
 
 
-// ============================================================
-// START BATTLE TEST
-// ============================================================
+    /* ========================================================
+       CREATE PAYMENT
+       ======================================================== */
 
-async function startBattleTest() {
-
-    if (
-        State.battle.started
+    async createPayment(
+        product,
+        attemptId = null,
+        battleId = null
     ) {
-        return;
-    }
 
-    State.battle.started =
-        true;
+        if (!initData) {
 
-    State.battle.finished =
-        false;
+            alert(
+                "To‘lov faqat Telegram orqali amalga oshiriladi."
+            );
 
-    State.battle.currentQuestion =
-        0;
+            return;
+        }
 
-    State.battle.answers = [];
-
-    // Battle uchun IQ savollaridan foydalanamiz.
-    renderBattleQuestion();
-}
+        haptic("medium");
 
 
-// ============================================================
-// RENDER BATTLE QUESTION
-// ============================================================
+        const res =
+            await api(
+                "/api/payment/create",
+                {
+                    initData,
 
-function renderBattleQuestion() {
+                    product,
 
-    const index =
-        State.battle.currentQuestion;
+                    attempt_id:
+                        attemptId,
 
-    const question =
-        QUESTIONS[index];
-
-    if (!question) {
-
-        finishBattle();
-
-        return;
-    }
-
-    const total =
-        QUESTIONS.length;
-
-    setText(
-        "battle-question-number",
-        `${index + 1}/${total}`
-    );
-
-    setText(
-        "battle-question-title",
-        question.title ||
-        `Savol ${index + 1}`
-    );
-
-    setHTML(
-        "battle-question-content",
-        renderMatrix(
-            question.matrix
-        )
-    );
-
-    setHTML(
-        "battle-question-options",
-        renderOptions(
-            question
-        )
-    );
-
-    document
-        .querySelectorAll(
-            "#battle-question-options .answer-option"
-        )
-        .forEach(button => {
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    const answer =
-                        Number(
-                            button.dataset.answer
-                        );
-
-                    selectBattleAnswer(
-                        answer
-                    );
+                    battle_id:
+                        battleId
                 }
             );
 
-        });
 
-    showScreen(
-        "screen-battle-test"
-    );
-}
+        if (!res?.ok) {
 
-
-// ============================================================
-// SELECT BATTLE ANSWER
-// ============================================================
-
-function selectBattleAnswer(
-    answer
-) {
-
-    if (
-        State.battle.finished
-    ) {
-        return;
-    }
-
-    State.battle.answers[
-        State.battle.currentQuestion
-    ] = answer;
-
-    document
-        .querySelectorAll(
-            "#battle-question-options .answer-option"
-        )
-        .forEach(button => {
-
-            button.classList.remove(
-                "selected"
+            console.error(
+                "[PAYMENT CREATE]",
+                res
             );
 
+            alert(
+                res?.error ||
+                "To‘lov yaratishda xatolik."
+            );
+
+            return;
+        }
+
+
+        /* ====================================================
+           FREE PRODUCT
+           ==================================================== */
+
+        if (res.free) {
+
             if (
-                Number(button.dataset.answer) ===
-                answer
+                product === "iq"
             ) {
 
-                button.classList.add(
-                    "selected"
-                );
+                const result =
+                    State.test.resultData;
+
+                if (result) {
+
+                    State.completed.iq =
+                        result.score;
+
+                    this.renderResult(
+                        result.score,
+                        result.correct,
+                        result.level
+                    );
+
+                    this.go("result");
+
+                    this.applyUnlocks();
+                }
+
+                return;
             }
 
-        });
-
-    setTimeout(
-        () => {
 
             if (
-                State.battle.currentQuestion >=
-                QUESTIONS.length - 1
+                product === "battle"
             ) {
 
-                finishBattle();
+                this.checkBattle();
+
+                return;
+            }
+
+
+            /*
+             * EQ / PQ uchun ham free
+             * bo'lsa, ularning natijasi
+             * o'z finish funksiyasida
+             * boshqariladi.
+             */
+
+            return;
+        }
+
+
+        /* ====================================================
+           PAYMENT STATE
+           ==================================================== */
+
+        State.payment.id =
+            res.payment_id || null;
+
+        State.payment.product =
+            product;
+
+        State.payment.amount =
+            Number(res.amount) || 0;
+
+        State.payment.cards =
+            Array.isArray(res.cards)
+                ? res.cards
+                : [];
+
+        State.payment.attemptId =
+            attemptId;
+
+        State.payment.battleId =
+            battleId;
+
+
+        /* ====================================================
+           PAYMENT UI
+           ==================================================== */
+
+        const amountEl =
+            document.getElementById(
+                "pay-amount"
+            );
+
+        if (amountEl) {
+
+            amountEl.textContent =
+                State.payment.amount
+                    .toLocaleString("uz-UZ") +
+                " so‘m";
+        }
+
+
+        const cardsEl =
+            document.getElementById(
+                "pay-cards"
+            );
+
+
+        if (cardsEl) {
+
+            if (
+                State.payment.cards.length
+            ) {
+
+                cardsEl.innerHTML =
+                    State.payment.cards
+                        .map(card => `
+                            <div class="pay-card">
+
+                                <div
+                                    class="pay-card-num"
+                                >
+                                    ${card.card_number || ""}
+                                </div>
+
+                                <div
+                                    class="pay-card-holder"
+                                >
+                                    ${card.holder || ""}
+                                </div>
+
+                                <div
+                                    class="pay-card-bank"
+                                >
+                                    ${card.bank || ""}
+                                </div>
+
+                            </div>
+                        `)
+                        .join("");
 
             } else {
 
-                State.battle.currentQuestion += 1;
+                cardsEl.innerHTML = `
+                    <div>
+                        Karta mavjud emas.
+                    </div>
+                `;
+            }
+        }
 
-                renderBattleQuestion();
+
+        this.go("payment");
+
+        this.startPaymentPoll();
+    },
+
+
+    /* ========================================================
+       PAYMENT POLLING
+       ======================================================== */
+
+    startPaymentPoll() {
+
+        if (
+            State.payment.pollInterval
+        ) {
+
+            clearInterval(
+                State.payment.pollInterval
+            );
+        }
+
+
+        State.payment.pollInterval =
+            setInterval(
+                async () => {
+
+                    if (
+                        !State.payment.id
+                    ) {
+                        return;
+                    }
+
+
+                    const res =
+                        await api(
+                            `/api/payment/${State.payment.id}`,
+                            {
+                                initData
+                            }
+                        );
+
+
+                    if (
+                        !res?.ok ||
+                        !res.payment
+                    ) {
+                        return;
+                    }
+
+
+                    if (
+                        res.payment.status !==
+                        "approved"
+                    ) {
+                        return;
+                    }
+
+
+                    clearInterval(
+                        State.payment.pollInterval
+                    );
+
+                    State.payment.pollInterval =
+                        null;
+
+
+                    const product =
+                        State.payment.product;
+
+
+                    /* ---------- IQ ---------- */
+
+                    if (
+                        product === "iq"
+                    ) {
+
+                        const result =
+                            State.test.resultData;
+
+                        if (result) {
+
+                            State.completed.iq =
+                                result.score;
+
+                            this.renderResult(
+                                result.score,
+                                result.correct,
+                                result.level
+                            );
+
+                            this.go("result");
+
+                            this.applyUnlocks();
+                        }
+
+                        return;
+                    }
+
+
+                    /* ---------- BATTLE ---------- */
+
+                    if (
+                        product === "battle"
+                    ) {
+
+                        await this.checkBattle();
+
+                        return;
+                    }
+
+
+                    /*
+                     * EQ/PQ payment approval:
+                     * natijani serverdan qayta
+                     * olish keyingi qismda
+                     * bajariladi.
+                     */
+                },
+                5000
+            );
+    },
+
+
+    /* ========================================================
+       RECEIPT MESSAGE
+       ======================================================== */
+
+    async sendReceipt() {
+
+        alert(
+            "Chek rasmini Telegram botga yuboring.\n\n" +
+            "Bot → chek rasmini yuboring."
+        );
+    },
+
+
+    /* ========================================================
+       EQ — START
+       ======================================================== */
+
+    async startEQ() {
+
+        const alreadyCompleted =
+            State.completed.eq !==
+            undefined &&
+            State.completed.eq !==
+            null;
+
+
+        if (alreadyCompleted) {
+
+            const retryPrice =
+                Number(
+                    State.settings.eq_retry_price ||
+                    0
+                );
+
+
+            if (retryPrice > 0) {
+
+                const confirmed =
+                    confirm(
+                        `EQ testni qayta ishlash ` +
+                        `${retryPrice.toLocaleString("uz-UZ")} so‘m.\n\n` +
+                        `Davom etasizmi?`
+                    );
+
+                if (!confirmed) {
+                    return;
+                }
+            }
+        }
+
+
+        haptic("medium");
+
+
+        if (State.test.timerInterval) {
+
+            clearInterval(
+                State.test.timerInterval
+            );
+
+            State.test.timerInterval =
+                null;
+        }
+
+
+        State.test.type = "eq";
+
+        State.test.sessionId =
+            null;
+
+        State.test.attemptId =
+            null;
+
+        State.test.current =
+            0;
+
+        State.test.answers =
+            new Array(
+                EQ_QUESTIONS.length
+            ).fill(null);
+
+        State.test.startedAt =
+            Date.now();
+
+        State.test.duration =
+            0;
+
+        State.test.resultData =
+            null;
+
+
+        if (initData) {
+
+            const res =
+                await api(
+                    "/api/session/start",
+                    {
+                        initData,
+                        test_type: "eq"
+                    }
+                );
+
+            if (res?.ok) {
+
+                State.test.sessionId =
+                    res.session_id || null;
+
+                State.test.attemptId =
+                    res.attempt_id || null;
+            }
+        }
+
+
+        this.go("eq-intro");
+    },
+
+
+    /* ========================================================
+       EQ TEST
+       ======================================================== */
+
+    goEQTest() {
+
+        this.go("eq-test");
+
+        this.renderEQQuestion();
+    },
+
+
+    renderEQQuestion() {
+
+        const index =
+            State.test.current;
+
+        const question =
+            EQ_QUESTIONS[index];
+
+        if (!question) {
+            return;
+        }
+
+
+        const progress =
+            document.getElementById(
+                "eq-progress-text"
+            );
+
+        const fill =
+            document.getElementById(
+                "eq-progress-fill"
+            );
+
+        const text =
+            document.getElementById(
+                "eq-question-text"
+            );
+
+        const next =
+            document.getElementById(
+                "eq-next"
+            );
+
+
+        if (progress) {
+
+            progress.textContent =
+                `Q${index + 1} / ${EQ_QUESTIONS.length}`;
+        }
+
+
+        if (fill) {
+
+            fill.style.width =
+                (
+                    index /
+                    EQ_QUESTIONS.length *
+                    100
+                ) + "%";
+        }
+
+
+        if (text) {
+
+            text.textContent =
+                question.text;
+        }
+
+
+        if (next) {
+
+            next.disabled = true;
+
+            next.textContent =
+                index ===
+                EQ_QUESTIONS.length - 1
+                    ? "YAKUNLASH →"
+                    : "KEYINGISI →";
+        }
+
+
+        renderTextOptions(
+            document.getElementById(
+                "eq-options"
+            ),
+            question.options,
+            selected => {
+
+                State.test.answers[index] =
+                    selected;
+
+                if (next) {
+                    next.disabled =
+                        false;
+                }
+            }
+        );
+    },
+
+
+    /* ========================================================
+       EQ NEXT
+       ======================================================== */
+
+    nextEQQuestion() {
+
+        haptic("light");
+
+        if (
+            State.test.current ===
+            EQ_QUESTIONS.length - 1
+        ) {
+
+            this.finishEQ();
+
+            return;
+        }
+
+
+        State.test.current++;
+
+        this.renderEQQuestion();
+    },
+
+
+    /* ========================================================
+       EQ FINISH — KEYINGI QISMDA DAVOM
+       ======================================================== */
+    /* ========================================================
+       EQ FINISH
+       ======================================================== */
+
+    async finishEQ() {
+
+        this.go("iq-loading");
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 2500)
+        );
+
+
+        let total = 0;
+
+
+        EQ_QUESTIONS.forEach(
+            (question, index) => {
+
+                const answer =
+                    State.test.answers[index];
+
+                if (
+                    answer !== null &&
+                    answer !== undefined
+                ) {
+
+                    total +=
+                        Number(
+                            question.scores[answer]
+                        ) || 0;
+                }
+            }
+        );
+
+
+        const maxScore =
+            EQ_QUESTIONS.length * 4;
+
+
+        const percent =
+            Math.round(
+                (total / maxScore) * 100
+            );
+
+
+        let level;
+
+        if (percent >= 80) {
+
+            level =
+                "JUDA YUQORI";
+
+        } else if (percent >= 60) {
+
+            level =
+                "YUQORI";
+
+        } else if (percent >= 40) {
+
+            level =
+                "O‘RTA";
+
+        } else {
+
+            level =
+                "RIVOJLANTIRISH";
+        }
+
+
+        /* ====================================================
+           BACKENDGA YUBORISH
+           ==================================================== */
+
+        let paymentRequired = false;
+
+        let attemptId =
+            State.test.attemptId ||
+            null;
+
+
+        if (
+            initData &&
+            State.test.sessionId
+        ) {
+
+            const res =
+                await api(
+                    "/api/test/submit",
+                    {
+                        initData,
+
+                        session_id:
+                            State.test.sessionId,
+
+                        answers:
+                            State.test.answers,
+
+                        duration:
+                            Math.floor(
+                                (
+                                    Date.now() -
+                                    State.test.startedAt
+                                ) / 1000
+                            )
+                    }
+                );
+
+
+            if (res?.ok) {
+
+                paymentRequired =
+                    res.payment_required === true;
+
+                attemptId =
+                    res.attempt_id ||
+                    attemptId;
+
+                State.test.attemptId =
+                    attemptId;
+            }
+        }
+
+
+        State.test.resultData = {
+
+            score: percent,
+
+            correct: total,
+
+            level,
+
+            attemptId,
+
+            paymentRequired
+        };
+
+
+        /* ====================================================
+           PAYMENT KERAK BO'LSA
+           ==================================================== */
+
+        if (paymentRequired) {
+
+            const price =
+                Number(
+                    State.settings.eq_price ||
+                    State.settings.eq_retry_price ||
+                    0
+                );
+
+
+            const priceEl =
+                document.getElementById(
+                    "payreq-price"
+                );
+
+            if (priceEl) {
+
+                priceEl.textContent =
+                    price.toLocaleString(
+                        "uz-UZ"
+                    ) + " so‘m";
             }
 
-        },
-        220
-    );
-}
+
+            this.go(
+                "payment-required"
+            );
+
+            return;
+        }
 
 
-// ============================================================
-// FINISH BATTLE
-// ============================================================
+        /* ====================================================
+           FREE RESULT
+           ==================================================== */
 
-async function finishBattle() {
+        State.completed.eq =
+            percent;
 
-    if (
-        State.battle.finished
-    ) {
-        return;
-    }
 
-    State.battle.finished =
-        true;
+        const scoreEl =
+            document.getElementById(
+                "eq-res-score"
+            );
 
-    try {
+        const levelEl =
+            document.getElementById(
+                "eq-res-level"
+            );
 
-        const response =
+
+        if (scoreEl) {
+
+            scoreEl.textContent =
+                percent + "%";
+        }
+
+
+        if (levelEl) {
+
+            levelEl.textContent =
+                level;
+        }
+
+
+        this.go("eq-result");
+
+        this.applyUnlocks();
+    },
+
+
+    /* ========================================================
+       PQ START
+       ======================================================== */
+
+    async startPQ() {
+
+        const alreadyCompleted =
+            State.completed.pq !==
+            undefined &&
+            State.completed.pq !==
+            null;
+
+
+        if (alreadyCompleted) {
+
+            const retryPrice =
+                Number(
+                    State.settings.pq_retry_price ||
+                    0
+                );
+
+
+            if (retryPrice > 0) {
+
+                const confirmed =
+                    confirm(
+                        `PQ testni qayta ishlash ` +
+                        `${retryPrice.toLocaleString("uz-UZ")} so‘m.\n\n` +
+                        `Davom etasizmi?`
+                    );
+
+                if (!confirmed) {
+                    return;
+                }
+            }
+        }
+
+
+        haptic("medium");
+
+
+        if (State.test.timerInterval) {
+
+            clearInterval(
+                State.test.timerInterval
+            );
+
+            State.test.timerInterval =
+                null;
+        }
+
+
+        State.test.type = "pq";
+
+        State.test.sessionId =
+            null;
+
+        State.test.attemptId =
+            null;
+
+        State.test.current =
+            0;
+
+        State.test.answers =
+            new Array(
+                PQ_QUESTIONS.length
+            ).fill(null);
+
+        State.test.startedAt =
+            Date.now();
+
+        State.test.duration =
+            0;
+
+        State.test.resultData =
+            null;
+
+
+        /* ====================================================
+           BACKEND SESSION
+           ==================================================== */
+
+        if (initData) {
+
+            const res =
+                await api(
+                    "/api/session/start",
+                    {
+                        initData,
+                        test_type: "pq"
+                    }
+                );
+
+
+            if (res?.ok) {
+
+                State.test.sessionId =
+                    res.session_id ||
+                    null;
+
+                State.test.attemptId =
+                    res.attempt_id ||
+                    null;
+            }
+        }
+
+
+        this.go("pq-intro");
+    },
+
+
+    /* ========================================================
+       PQ TEST START
+       ======================================================== */
+
+    goPQTest() {
+
+        this.go("pq-test");
+
+        this.renderPQQuestion();
+    },
+
+
+    /* ========================================================
+       PQ QUESTION
+       ======================================================== */
+
+    renderPQQuestion() {
+
+        const index =
+            State.test.current;
+
+        const question =
+            PQ_QUESTIONS[index];
+
+
+        if (!question) {
+            return;
+        }
+
+
+        const progress =
+            document.getElementById(
+                "pq-progress-text"
+            );
+
+        const fill =
+            document.getElementById(
+                "pq-progress-fill"
+            );
+
+        const text =
+            document.getElementById(
+                "pq-question-text"
+            );
+
+        const next =
+            document.getElementById(
+                "pq-next"
+            );
+
+
+        /* ---------- PROGRESS ---------- */
+
+        if (progress) {
+
+            progress.textContent =
+                `Q${index + 1} / ${PQ_QUESTIONS.length}`;
+        }
+
+
+        if (fill) {
+
+            fill.style.width =
+                (
+                    index /
+                    PQ_QUESTIONS.length *
+                    100
+                ) + "%";
+        }
+
+
+        /* ---------- QUESTION ---------- */
+
+        if (text) {
+
+            text.textContent =
+                question.text;
+        }
+
+
+        /* ---------- NEXT ---------- */
+
+        if (next) {
+
+            next.disabled = true;
+
+            next.textContent =
+                index ===
+                PQ_QUESTIONS.length - 1
+
+                    ? "YAKUNLASH →"
+
+                    : "KEYINGISI →";
+        }
+
+
+        /* ---------- OPTIONS ---------- */
+
+        renderTextOptions(
+
+            document.getElementById(
+                "pq-options"
+            ),
+
+            question.options,
+
+            selectedIndex => {
+
+                State.test.answers[index] =
+                    selectedIndex;
+
+
+                if (next) {
+
+                    next.disabled =
+                        false;
+                }
+            }
+        );
+
+
+        /* ====================================================
+           OLD ANSWERNI QAYTA KO'RSATISH
+           ==================================================== */
+
+        const previous =
+            State.test.answers[index];
+
+
+        if (
+            previous !== null &&
+            previous !== undefined
+        ) {
+
+            const options =
+                document.querySelectorAll(
+                    "#pq-options .option"
+                );
+
+
+            options[
+                previous
+            ]?.classList.add(
+                "selected"
+            );
+
+
+            if (next) {
+                next.disabled = false;
+            }
+        }
+    },
+
+
+    /* ========================================================
+       PQ NEXT
+       ======================================================== */
+
+    nextPQQuestion() {
+
+        haptic("light");
+
+
+        if (
+            State.test.current ===
+            PQ_QUESTIONS.length - 1
+        ) {
+
+            this.finishPQ();
+
+            return;
+        }
+
+
+        State.test.current++;
+
+        this.renderPQQuestion();
+    },
+
+
+    /* ========================================================
+       PQ FINISH
+       ======================================================== */
+
+    async finishPQ() {
+
+        this.go("iq-loading");
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 2500)
+        );
+
+
+        let total = 0;
+
+
+        PQ_QUESTIONS.forEach(
+            (question, index) => {
+
+                const answer =
+                    State.test.answers[index];
+
+
+                if (
+                    answer !== null &&
+                    answer !== undefined
+                ) {
+
+                    total +=
+                        Number(
+                            question.scores[answer]
+                        ) || 0;
+                }
+            }
+        );
+
+
+        const maxScore =
+            PQ_QUESTIONS.length * 4;
+
+
+        const percent =
+            Math.round(
+                (total / maxScore) * 100
+            );
+
+
+        let level;
+
+        if (percent >= 80) {
+
+            level =
+                "JUDA YAXSHI";
+
+        } else if (percent >= 60) {
+
+            level =
+                "YAXSHI";
+
+        } else if (percent >= 40) {
+
+            level =
+                "O‘RTA";
+
+        } else {
+
+            level =
+                "RIVOJLANTIRISH KERAK";
+        }
+
+
+        /* ====================================================
+           BACKEND
+           ==================================================== */
+
+        let paymentRequired = false;
+
+        let attemptId =
+            State.test.attemptId ||
+            null;
+
+
+        if (
+            initData &&
+            State.test.sessionId
+        ) {
+
+            const res =
+                await api(
+                    "/api/test/submit",
+                    {
+                        initData,
+
+                        session_id:
+                            State.test.sessionId,
+
+                        answers:
+                            State.test.answers,
+
+                        duration:
+                            Math.floor(
+                                (
+                                    Date.now() -
+                                    State.test.startedAt
+                                ) / 1000
+                            )
+                    }
+                );
+
+
+            if (res?.ok) {
+
+                paymentRequired =
+                    res.payment_required === true;
+
+                attemptId =
+                    res.attempt_id ||
+                    attemptId;
+
+                State.test.attemptId =
+                    attemptId;
+            }
+        }
+
+
+        State.test.resultData = {
+
+            score: percent,
+
+            correct: total,
+
+            level,
+
+            attemptId,
+
+            paymentRequired
+        };
+
+
+        /* ====================================================
+           PAYMENT REQUIRED
+           ==================================================== */
+
+        if (paymentRequired) {
+
+            const price =
+                Number(
+                    State.settings.pq_price ||
+                    State.settings.pq_retry_price ||
+                    0
+                );
+
+
+            const priceEl =
+                document.getElementById(
+                    "payreq-price"
+                );
+
+
+            if (priceEl) {
+
+                priceEl.textContent =
+                    price.toLocaleString(
+                        "uz-UZ"
+                    ) + " so‘m";
+            }
+
+
+            this.go(
+                "payment-required"
+            );
+
+            return;
+        }
+
+
+        /* ====================================================
+           RESULT
+           ==================================================== */
+
+        State.completed.pq =
+            percent;
+
+
+        const scoreEl =
+            document.getElementById(
+                "pq-res-score"
+            );
+
+        const levelEl =
+            document.getElementById(
+                "pq-res-level"
+            );
+
+
+        if (scoreEl) {
+
+            scoreEl.textContent =
+                percent + "%";
+        }
+
+
+        if (levelEl) {
+
+            levelEl.textContent =
+                level;
+        }
+
+
+        this.go("pq-result");
+
+        this.applyUnlocks();
+    },
+
+
+    /* ========================================================
+       PROFILE
+       ======================================================== */
+
+    openProfile() {
+
+        const iq =
+            State.completed.iq;
+
+        const eq =
+            State.completed.eq;
+
+        const pq =
+            State.completed.pq;
+
+
+        if (
+            iq === undefined ||
+            iq === null ||
+            eq === undefined ||
+            eq === null ||
+            pq === undefined ||
+            pq === null
+        ) {
+
+            alert(
+                "Avval IQ, EQ va PQ testlarini tugatishingiz kerak."
+            );
+
+            return;
+        }
+
+
+        const iqEl =
+            document.getElementById(
+                "prof-iq"
+            );
+
+        const eqEl =
+            document.getElementById(
+                "prof-eq"
+            );
+
+        const pqEl =
+            document.getElementById(
+                "prof-pq"
+            );
+
+
+        if (iqEl) {
+            iqEl.textContent =
+                iq;
+        }
+
+        if (eqEl) {
+            eqEl.textContent =
+                eq + "%";
+        }
+
+        if (pqEl) {
+            pqEl.textContent =
+                pq + "%";
+        }
+
+
+        /* ====================================================
+           STRENGTHS / WEAKNESSES
+           ==================================================== */
+
+        const strengths = [];
+        const weaknesses = [];
+
+
+        if (iq >= 115) {
+
+            strengths.push(
+                "Kuchli mantiqiy fikrlash"
+            );
+
+        } else {
+
+            weaknesses.push(
+                "Mantiqiy fikrlashni rivojlantirish"
+            );
+        }
+
+
+        if (eq >= 70) {
+
+            strengths.push(
+                "Yaxshi hissiy intellekt"
+            );
+
+        } else {
+
+            weaknesses.push(
+                "Emotsiyalarni boshqarish"
+            );
+        }
+
+
+        if (pq >= 70) {
+
+            strengths.push(
+                "Ishni o‘z vaqtida bajarish"
+            );
+
+        } else {
+
+            weaknesses.push(
+                "Prokrastinatsiyani kamaytirish"
+            );
+        }
+
+
+        const strengthsEl =
+            document.getElementById(
+                "prof-strengths"
+            );
+
+        const weaknessesEl =
+            document.getElementById(
+                "prof-weaknesses"
+            );
+
+
+        if (strengthsEl) {
+
+            strengthsEl.innerHTML =
+                strengths.length
+
+                    ? strengths
+                        .map(
+                            item =>
+                                `<li>${item}</li>`
+                        )
+                        .join("")
+
+                    : "<li>—</li>";
+        }
+
+
+        if (weaknessesEl) {
+
+            weaknessesEl.innerHTML =
+                weaknesses.length
+
+                    ? weaknesses
+                        .map(
+                            item =>
+                                `<li>${item}</li>`
+                        )
+                        .join("")
+
+                    : "<li>—</li>";
+        }
+
+
+        /* ====================================================
+           OVERALL
+           ==================================================== */
+
+        const overall =
+            Math.round(
+                (
+                    (
+                        (iq - 70) /
+                        60 *
+                        100
+                    ) * 0.5
+                ) +
+                (
+                    eq * 0.25
+                ) +
+                (
+                    pq * 0.25
+                )
+            );
+
+
+        const overallEl =
+            document.getElementById(
+                "prof-overall"
+            );
+
+
+        if (overallEl) {
+
+            overallEl.textContent =
+                overall;
+        }
+
+
+        const summaryEl =
+            document.getElementById(
+                "prof-summary"
+            );
+
+
+        if (summaryEl) {
+
+            summaryEl.textContent =
+                overall >= 75
+
+                    ? "Siz analitik va hissiy jihatdan kuchli insonsiz."
+
+                    : overall >= 55
+
+                        ? "Sizning profilingiz o‘rtacha, rivojlanish uchun joy bor."
+
+                        : "Sizga bir nechta yo‘nalishda rivojlanish kerak.";
+        }
+
+
+        this.go("profile");
+    },
+        /* ========================================================
+       BATTLE
+       ======================================================== */
+
+    openBattle() {
+
+        this.go("battle-home");
+    },
+
+
+    /* ========================================================
+       CREATE BATTLE
+       ======================================================== */
+
+    async createBattle() {
+
+        if (!initData) {
+
+            alert(
+                "Battle faqat Telegram orqali ishlaydi."
+            );
+
+            return;
+        }
+
+        haptic("medium");
+
+
+        const res =
             await api(
-                `/api/battle/${encodeURIComponent(State.battle.id)}/submit`,
+                "/api/battle/create",
                 {
+                    initData
+                }
+            );
+
+
+        if (res?.ok) {
+
+            State.battle.id =
+                res.battle_id;
+
+            State.battle.code =
+                res.code;
+
+            State.battle.role =
+                "creator";
+
+
+            const codeEl =
+                document.getElementById(
+                    "battle-code-display"
+                );
+
+            const priceEl =
+                document.getElementById(
+                    "battle-price-display"
+                );
+
+
+            if (codeEl) {
+
+                codeEl.textContent =
+                    res.code;
+            }
+
+
+            if (priceEl) {
+
+                priceEl.textContent =
+                    Number(
+                        res.price || 0
+                    ).toLocaleString(
+                        "uz-UZ"
+                    ) +
+                    " so‘m";
+            }
+
+
+            this.go("battle-wait");
+
+            this.startBattlePoll();
+
+            return;
+        }
+
+
+        /* ====================================================
+           ACTIVE BATTLE
+           ==================================================== */
+
+        if (
+            res?.error ===
+            "ACTIVE_BATTLE_EXISTS"
+        ) {
+
+            State.battle.id =
+                res.battle_id;
+
+            State.battle.code =
+                res.code;
+
+            State.battle.role =
+                "creator";
+
+            this.go("battle-wait");
+
+            this.startBattlePoll();
+
+            return;
+        }
+
+
+        alert(
+            res?.error ||
+            "Battle yaratishda xatolik."
+        );
+    },
+
+
+    /* ========================================================
+       JOIN BATTLE
+       ======================================================== */
+
+    async joinBattle() {
+
+        const input =
+            document.getElementById(
+                "battle-join-code"
+            );
+
+
+        const code =
+            input?.value
+                ?.trim()
+                .toUpperCase() || "";
+
+
+        if (
+            !/^[A-Z0-9]{4}$/.test(code)
+        ) {
+
+            alert(
+                "4 xonali kod kiriting."
+            );
+
+            input?.focus();
+
+            return;
+        }
+
+
+        if (!initData) {
+
+            alert(
+                "Battle faqat Telegram orqali ishlaydi."
+            );
+
+            return;
+        }
+
+
+        haptic("medium");
+
+
+        const res =
+            await api(
+                "/api/battle/join",
+                {
+                    initData,
+                    code
+                }
+            );
+
+
+        if (res?.ok) {
+
+            State.battle.id =
+                res.battle_id;
+
+            State.battle.code =
+                code;
+
+            State.battle.role =
+                "opponent";
+
+
+            this.go("battle-wait");
+
+            this.startBattlePoll();
+
+            return;
+        }
+
+
+        const errors = {
+
+            NOT_FOUND:
+                "Kod topilmadi.",
+
+            OWN_BATTLE:
+                "O‘z battlingizga qo‘shila olmaysiz.",
+
+            BATTLE_NOT_OPEN:
+                "Battle allaqachon boshlangan.",
+
+            BATTLE_FULL:
+                "Battle to‘lgan.",
+
+            ACTIVE_BATTLE_EXISTS:
+                "Sizda faol battle bor."
+        };
+
+
+        alert(
+            errors[res?.error] ||
+            res?.error ||
+            "Battlega qo‘shilishda xatolik."
+        );
+    },
+
+
+    /* ========================================================
+       BATTLE POLLING
+       ======================================================== */
+
+    startBattlePoll() {
+
+        if (
+            State.battle.pollInterval
+        ) {
+
+            clearInterval(
+                State.battle.pollInterval
+            );
+        }
+
+
+        /*
+         * Birinchi tekshiruvni darhol qilamiz.
+         */
+
+        this.checkBattle();
+
+
+        State.battle.pollInterval =
+            setInterval(
+                () => {
+
+                    this.checkBattle();
+
+                },
+                5000
+            );
+    },
+
+
+    stopBattlePoll() {
+
+        if (
+            State.battle.pollInterval
+        ) {
+
+            clearInterval(
+                State.battle.pollInterval
+            );
+
+            State.battle.pollInterval =
+                null;
+        }
+    },
+
+
+    /* ========================================================
+       CHECK BATTLE
+       ======================================================== */
+
+    async checkBattle() {
+
+        if (!State.battle.id) {
+            return;
+        }
+
+
+        const res =
+            await api(
+                `/api/battle/${State.battle.id}`,
+                {
+                    initData
+                }
+            );
+
+
+        if (!res?.ok) {
+            return;
+        }
+
+
+        State.battle.players =
+            Array.isArray(res.players)
+                ? res.players
+                : [];
+
+
+        const battle =
+            res.battle || {};
+
+
+        const players =
+            State.battle.players;
+
+
+        const myPlayer =
+            players.find(
+                player =>
+                    player.is_me
+            );
+
+
+        /* ====================================================
+           STATUS
+           ==================================================== */
+
+        const statusEl =
+            document.getElementById(
+                "battle-wait-status"
+            );
+
+
+        if (statusEl) {
+
+            if (
+                battle.status ===
+                "waiting_for_player"
+            ) {
+
+                statusEl.textContent =
+                    "Do‘stingiz kodni kiritishini kuting...";
+
+            } else if (
+                battle.status ===
+                "waiting_for_payment"
+            ) {
+
+                statusEl.textContent =
+                    "To‘lovni amalga oshiring.";
+
+            } else if (
+                battle.status ===
+                "ready"
+            ) {
+
+                statusEl.textContent =
+                    "Ikkalangiz tayyorsiz! Testni boshlashingiz mumkin.";
+
+            } else if (
+                battle.status ===
+                "in_progress"
+            ) {
+
+                statusEl.textContent =
+                    "Test davom etmoqda.";
+
+            } else if (
+                battle.status ===
+                "completed" ||
+                battle.status ===
+                "draw"
+            ) {
+
+                this.openBattleResult(res);
+
+                return;
+            }
+        }
+
+
+        /* ====================================================
+           PLAYERS
+           ==================================================== */
+
+        const playersEl =
+            document.getElementById(
+                "battle-players-list"
+            );
+
+
+        if (playersEl) {
+
+            playersEl.innerHTML =
+                players
+                    .map(player => {
+
+                        const name =
+                            player.is_me
+                                ? "SIZ"
+                                : (
+                                    player.name ||
+                                    "O‘yinchi"
+                                );
+
+
+                        const question =
+                            Number(
+                                player.current_question
+                            ) || 0;
+
+
+                        let status =
+                            "—";
+
+
+                        if (
+                            player.test_status ===
+                            "completed"
+                        ) {
+
+                            status =
+                                "✓";
+
+                        } else if (
+                            player.test_status ===
+                            "in_progress"
+                        ) {
+
+                            status =
+                                "…";
+                        }
+
+
+                        return `
+                            <div
+                                class="battle-player-row ${
+                                    player.is_me
+                                        ? "me"
+                                        : ""
+                                }"
+                            >
+
+                                <span
+                                    class="bp-name"
+                                >
+                                    ${name}
+                                </span>
+
+                                <span
+                                    class="bp-progress"
+                                >
+                                    ${question}/18
+                                </span>
+
+                                <span
+                                    class="bp-status"
+                                >
+                                    ${status}
+                                </span>
+
+                            </div>
+                        `;
+                    })
+                    .join("");
+        }
+
+
+        /* ====================================================
+           BUTTONS
+           ==================================================== */
+
+        const startBtn =
+            document.getElementById(
+                "battle-start-btn"
+            );
+
+
+        const continueBtn =
+            document.getElementById(
+                "battle-continue-btn"
+            );
+
+
+        if (
+            startBtn &&
+            battle.status === "ready" &&
+            myPlayer &&
+            myPlayer.test_status ===
+                "not_started"
+        ) {
+
+            startBtn.style.display =
+                "block";
+
+        } else if (startBtn) {
+
+            startBtn.style.display =
+                "none";
+        }
+
+
+        if (
+            continueBtn &&
+            myPlayer &&
+            myPlayer.test_status ===
+                "in_progress"
+        ) {
+
+            continueBtn.style.display =
+                "block";
+
+        } else if (continueBtn) {
+
+            continueBtn.style.display =
+                "none";
+        }
+    },
+
+
+    /* ========================================================
+       START BATTLE TEST
+       ======================================================== */
+
+    async startBattleTest() {
+
+        if (!State.battle.id) {
+
+            alert(
+                "Battle topilmadi."
+            );
+
+            return;
+        }
+
+
+        const res =
+            await api(
+                `/api/battle/${State.battle.id}/start`,
+                {
+                    initData
+                }
+            );
+
+
+        if (!res?.ok) {
+
+            alert(
+                res?.error ||
+                "Battle boshlanmadi."
+            );
+
+            return;
+        }
+
+
+        State.battle.sessionId =
+            res.session_id || null;
+
+        State.battle.current =
+            0;
+
+        State.battle.answers =
+            new Array(
+                QUESTIONS.length
+            ).fill(null);
+
+        State.battle.startedAt =
+            Date.now();
+
+
+        haptic("medium");
+
+        this.go("battle-test");
+
+        this.renderBattleQuestion();
+    },
+
+
+    /* ========================================================
+       CONTINUE BATTLE
+       ======================================================== */
+
+    async continueBattle() {
+
+        if (!State.battle.id) {
+            return;
+        }
+
+
+        const res =
+            await api(
+                `/api/battle/${State.battle.id}`,
+                {
+                    initData
+                }
+            );
+
+
+        if (!res?.ok) {
+            return;
+        }
+
+
+        const myPlayer =
+            (
+                res.players || []
+            ).find(
+                player =>
+                    player.is_me
+            );
+
+
+        if (
+            myPlayer &&
+            myPlayer.test_status ===
+                "in_progress"
+        ) {
+
+            State.battle.current =
+                Number(
+                    myPlayer.current_question
+                ) || 0;
+
+
+            /*
+             * Serverdagi javoblar
+             * mavjud bo'lsa tiklaymiz.
+             */
+
+            State.battle.answers =
+                Array.isArray(
+                    myPlayer.answers
+                )
+                    ? myPlayer.answers
+                    : new Array(
+                        QUESTIONS.length
+                    ).fill(null);
+
+
+            State.battle.startedAt =
+                Date.now();
+
+
+            this.go("battle-test");
+
+            this.renderBattleQuestion();
+
+            return;
+        }
+
+
+        if (
+            myPlayer &&
+            myPlayer.test_status ===
+                "not_started"
+        ) {
+
+            await this.startBattleTest();
+        }
+    },
+
+
+    /* ========================================================
+       RENDER BATTLE QUESTION
+       ======================================================== */
+
+    renderBattleQuestion() {
+
+        const index =
+            State.battle.current;
+
+
+        const question =
+            QUESTIONS[index];
+
+
+        if (!question) {
+            return;
+        }
+
+
+        const progress =
+            document.getElementById(
+                "battle-progress-text"
+            );
+
+        const fill =
+            document.getElementById(
+                "battle-progress-fill"
+            );
+
+
+        if (progress) {
+
+            progress.textContent =
+                `Q${index + 1} / ${QUESTIONS.length}`;
+        }
+
+
+        if (fill) {
+
+            fill.style.width =
+                (
+                    index /
+                    QUESTIONS.length *
+                    100
+                ) + "%";
+        }
+
+
+        renderMatrix(
+            document.getElementById(
+                "battle-matrix"
+            ),
+            question.matrix
+        );
+
+
+        const next =
+            document.getElementById(
+                "battle-next"
+            );
+
+
+        if (next) {
+
+            next.disabled = true;
+
+            next.textContent =
+                index ===
+                QUESTIONS.length - 1
+
+                    ? "YAKUNLASH →"
+
+                    : "KEYINGISI →";
+        }
+
+
+        renderOptions(
+
+            document.getElementById(
+                "battle-options"
+            ),
+
+            question.options,
+
+            selectedIndex => {
+
+                State.battle.answers[index] =
+                    selectedIndex;
+
+
+                if (next) {
+                    next.disabled =
+                        false;
+                }
+
+
+                /*
+                 * Javobni serverga
+                 * darhol sync qilamiz.
+                 */
+
+                this.syncBattle();
+            }
+        );
+
+
+        /* ====================================================
+           OLD ANSWER
+           ==================================================== */
+
+        const previous =
+            State.battle.answers[index];
+
+
+        if (
+            previous !== null &&
+            previous !== undefined
+        ) {
+
+            const options =
+                document.querySelectorAll(
+                    "#battle-options .option"
+                );
+
+
+            options[
+                previous
+            ]?.classList.add(
+                "selected"
+            );
+
+
+            if (next) {
+                next.disabled = false;
+            }
+        }
+    },
+
+
+    /* ========================================================
+       SYNC BATTLE
+       ======================================================== */
+
+    async syncBattle() {
+
+        if (!State.battle.id) {
+            return;
+        }
+
+
+        try {
+
+            await api(
+                `/api/battle/${State.battle.id}/sync`,
+                {
+                    initData,
+
+                    current_question:
+                        State.battle.current + 1,
+
                     answers:
                         State.battle.answers
                 }
             );
 
-        if (!response?.ok) {
-            throw new Error(
-                response?.error ||
-                "Battle natijasini yuborib bo‘lmadi"
+        } catch (error) {
+
+            /*
+             * Sync xatosi testni
+             * to‘xtatmasligi kerak.
+             */
+
+            console.warn(
+                "[BATTLE SYNC]",
+                error
             );
         }
+    },
 
-        State.battle.result =
-            response.result ||
-            response;
 
-        // ----------------------------------------
-        // WAITING FOR OPPONENT
-        // ----------------------------------------
+    /* ========================================================
+       NEXT BATTLE QUESTION
+       ======================================================== */
+
+    nextBattleQuestion() {
+
+        haptic("light");
+
 
         if (
-            response.status === "waiting" ||
-            response.waiting === true
+            State.battle.current ===
+            QUESTIONS.length - 1
         ) {
 
-            State.battle.finished =
-                false;
-
-            showScreen(
-                "screen-battle-waiting-result"
-            );
-
-            startBattlePolling();
+            this.finishBattle();
 
             return;
         }
 
-        renderBattleResult(
-            State.battle.result
+
+        State.battle.current++;
+
+
+        /*
+         * Keyingi savolga o'tishdan oldin
+         * progress serverga yuboriladi.
+         */
+
+        this.syncBattle();
+
+        this.renderBattleQuestion();
+    },
+
+
+    /* ========================================================
+       FINISH BATTLE
+       ======================================================== */
+
+    async finishBattle() {
+
+        if (!State.battle.id) {
+            return;
+        }
+
+
+        this.go("iq-loading");
+
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 1000)
         );
 
-    } catch (error) {
-
-        console.error(
-            "[BATTLE FINISH]",
-            error
-        );
-
-        State.battle.finished =
-            false;
-
-        showToast(
-            error.message ||
-            "Battle natijasini yuborishda xatolik",
-            "error"
-        );
-    }
-}
-
-
-// ============================================================
-// RENDER BATTLE RESULT
-// ============================================================
-
-function renderBattleResult(
-    result
-) {
 
-    const battle =
-        result || {};
-
-    const winner =
-        battle.winner ||
-        battle.winner_user ||
-        null;
+        const duration =
+            State.battle.startedAt
+                ? Math.floor(
+                    (
+                        Date.now() -
+                        State.battle.startedAt
+                    ) / 1000
+                )
+                : 0;
 
-    const myScore =
-        Number(
-            battle.my_score ??
-            battle.user_score ??
-            battle.score ??
-            0
-        );
 
-    const opponentScore =
-        Number(
-            battle.opponent_score ??
-            battle.other_score ??
-            0
-        );
+        const res =
+            await api(
+                `/api/battle/${State.battle.id}/finish`,
+                {
+                    initData,
 
-    setText(
-        "battle-my-score",
-        String(myScore)
-    );
+                    answers:
+                        State.battle.answers,
 
-    setText(
-        "battle-opponent-score",
-        String(opponentScore)
-    );
+                    duration
+                }
+            );
 
-    // --------------------------------------------
-    // WINNER
-    // --------------------------------------------
 
-    let winnerText =
-        "Natija";
+        if (!res?.ok) {
 
-    if (
-        winner === "draw" ||
-        battle.is_draw === true
-    ) {
+            alert(
+                res?.error ||
+                "Battle yakunlashda xatolik."
+            );
 
-        winnerText =
-            "Durrang";
+            this.go("battle-home");
 
-    } else if (
-        winner === "me" ||
-        battle.winner_is_me === true
-    ) {
+            return;
+        }
 
-        winnerText =
-            "Siz g‘oldingiz";
 
-    } else if (
-        winner === "opponent"
-    ) {
+        this.stopBattlePoll();
 
-        winnerText =
-            "Raqib g‘alaba qozondi";
 
-    } else if (
-        typeof winner === "string" &&
-        winner
-    ) {
+        /* ====================================================
+           MY SCORE
+           ==================================================== */
 
-        winnerText =
-            winner;
-    }
+        const myScoreEl =
+            document.getElementById(
+                "battle-my-score"
+            );
 
-    setText(
-        "battle-winner",
-        winnerText
-    );
 
-    showScreen(
-        "screen-battle-result"
-    );
-}
+        if (myScoreEl) {
 
+            myScoreEl.textContent =
+                Number(
+                    res.score
+                ) || 0;
+        }
 
-// ============================================================
-// BATTLE HOME
-// ============================================================
 
-function closeBattle() {
+        /* ====================================================
+           OPPONENT SCORE
+           ==================================================== */
 
-    stopBattlePolling();
+        const opponentScore =
+            res.opponent_score;
 
-    resetBattleState();
 
-    showScreen(
-        "screen-home"
-    );
-}
+        const opponentEl =
+            document.getElementById(
+                "battle-opp-score"
+            );
 
 
-// ============================================================
-// BATTLE RESULT HOME
-// ============================================================
+        const winnerEl =
+            document.getElementById(
+                "battle-winner"
+            );
 
-function closeBattleResult() {
 
-    stopBattlePolling();
+        if (
+            opponentScore !== null &&
+            opponentScore !== undefined
+        ) {
 
-    resetBattleState();
+            if (opponentEl) {
 
-    showScreen(
-        "screen-home"
-    );
-}
+                opponentEl.textContent =
+                    Number(
+                        opponentScore
+                    ) || 0;
+            }
 
 
-// ============================================================
-// BATTLE EVENTS
-// ============================================================
+            const myScore =
+                Number(
+                    res.score
+                ) || 0;
 
-function bindBattleEvents() {
 
-    const battleButton =
-        getElement("battle-btn");
+            const enemyScore =
+                Number(
+                    opponentScore
+                ) || 0;
 
-    if (
-        battleButton &&
-        battleButton.dataset.bound !== "1"
-    ) {
 
-        battleButton.dataset.bound =
-            "1";
+            if (winnerEl) {
 
-        battleButton.addEventListener(
-            "click",
-            openBattle
-        );
-    }
+                if (
+                    myScore > enemyScore
+                ) {
 
-    const battleBack =
-        getElement("battle-back-btn");
+                    winnerEl.textContent =
+                        "SIZ G‘OLIB";
 
-    if (
-        battleBack &&
-        battleBack.dataset.bound !== "1"
-    ) {
+                    winnerEl.className =
+                        "battle-winner win";
 
-        battleBack.dataset.bound =
-            "1";
+                } else if (
+                    myScore < enemyScore
+                ) {
 
-        battleBack.addEventListener(
-            "click",
-            closeBattle
-        );
-    }
+                    winnerEl.textContent =
+                        "DO‘STINGIZ G‘OLIB";
 
-    const battleResultHome =
-        getElement("battle-result-home-btn");
+                    winnerEl.className =
+                        "battle-winner lose";
 
-    if (
-        battleResultHome &&
-        battleResultHome.dataset.bound !== "1"
-    ) {
+                } else {
 
-        battleResultHome.dataset.bound =
-            "1";
+                    winnerEl.textContent =
+                        "DURANG";
 
-        battleResultHome.addEventListener(
-            "click",
-            closeBattleResult
-        );
-    }
-}
+                    winnerEl.className =
+                        "battle-winner draw";
+                }
+            }
 
+        } else {
 
-// ============================================================
-// FINAL GLOBAL BINDINGS
-// ============================================================
+            if (opponentEl) {
 
-function bindFinalEvents() {
+                opponentEl.textContent =
+                    "—";
+            }
 
-    // --------------------------------------------
-    // PROFILE
-    // --------------------------------------------
 
-    const profileBack =
-        getElement("profile-back-btn");
+            if (winnerEl) {
 
-    if (
-        profileBack &&
-        profileBack.dataset.bound !== "1"
-    ) {
+                winnerEl.textContent =
+                    "Kutilmoqda";
 
-        profileBack.dataset.bound =
-            "1";
+                winnerEl.className =
+                    "battle-winner";
+            }
+        }
 
-        profileBack.addEventListener(
-            "click",
-            closeProfile
-        );
-    }
 
-    // --------------------------------------------
-    // BATTLE
-    // --------------------------------------------
+        this.go("battle-result");
+    },
 
-    bindBattleEvents();
 
-    // --------------------------------------------
-    // HOME
-    // --------------------------------------------
+    /* ========================================================
+       OPEN BATTLE RESULT
+       ======================================================== */
 
-    const homeButtons =
-        document.querySelectorAll(
-            "[data-go-home]"
-        );
+    openBattleResult(data) {
 
-    homeButtons.forEach(
-        button => {
+        this.stopBattlePoll();
+
+
+        const players =
+            Array.isArray(data.players)
+                ? data.players
+                : [];
+
+
+        const myPlayer =
+            players.find(
+                player =>
+                    player.is_me
+            );
+
+
+        const opponent =
+            players.find(
+                player =>
+                    !player.is_me
+            );
+
+
+        const myScoreEl =
+            document.getElementById(
+                "battle-my-score"
+            );
+
+
+        const opponentEl =
+            document.getElementById(
+                "battle-opp-score"
+            );
+
+
+        const winnerEl =
+            document.getElementById(
+                "battle-winner"
+            );
+
+
+        if (myScoreEl) {
+
+            myScoreEl.textContent =
+                myPlayer?.score ??
+                "—";
+        }
+
+
+        if (opponentEl) {
+
+            opponentEl.textContent =
+                opponent?.score ??
+                "—";
+        }
+
+
+        const battle =
+            data.battle || {};
+
+
+        if (winnerEl) {
 
             if (
-                button.dataset.bound === "1"
+                battle.status ===
+                "draw"
             ) {
+
+                winnerEl.textContent =
+                    "DURANG";
+
+                winnerEl.className =
+                    "battle-winner draw";
+
+            } else if (
+                battle.winner_id !==
+                undefined &&
+                battle.winner_id !== null &&
+                String(
+                    battle.winner_id
+                ) ===
+                String(
+                    State.user?.user_id
+                )
+            ) {
+
+                winnerEl.textContent =
+                    "SIZ G‘OLIB";
+
+                winnerEl.className =
+                    "battle-winner win";
+
+            } else {
+
+                winnerEl.textContent =
+                    "DO‘STINGIZ G‘OLIB";
+
+                winnerEl.className =
+                    "battle-winner lose";
+            }
+        }
+
+
+        this.go("battle-result");
+    },
+        /* ========================================================
+       BACK / NAVIGATION
+       ======================================================== */
+
+    back() {
+
+        const screen =
+            State.currentScreen;
+
+
+        const backMap = {
+
+            "profile-name": "home",
+            "iq-intro": "home",
+            "sample": "iq-intro",
+            "test": "home",
+
+            "q6": "test",
+            "q12": "test",
+
+            "result": "home",
+
+            "eq-intro": "home",
+            "eq-test": "home",
+            "eq-result": "home",
+
+            "pq-intro": "home",
+            "pq-test": "home",
+            "pq-result": "home",
+
+            "profile": "home",
+
+            "battle-home": "home",
+            "battle-wait": "battle-home",
+            "battle-test": "battle-home",
+            "battle-result": "battle-home",
+
+            "payment": "home",
+            "payment-required": "home",
+
+            "iq-loading": "home"
+        };
+
+
+        const previous =
+            backMap[screen] || "home";
+
+
+        /*
+         * Test davomida tasodifan chiqib
+         * ketishni oldini olamiz.
+         */
+
+        if (
+            screen === "test" ||
+            screen === "eq-test" ||
+            screen === "pq-test" ||
+            screen === "battle-test"
+        ) {
+
+            const confirmed =
+                confirm(
+                    "Testni tark etsangiz, joriy natijalar saqlanmasligi mumkin.\n\n" +
+                    "Chiqishni xohlaysizmi?"
+                );
+
+
+            if (!confirmed) {
+                return;
+            }
+        }
+
+
+        this.go(previous);
+    },
+
+
+    /* ========================================================
+       HOME
+       ======================================================== */
+
+    home() {
+
+        this.go("home");
+
+        /*
+         * Home ochilganda unlock holatini
+         * qayta qo‘llaymiz.
+         */
+
+        this.applyUnlocks();
+    },
+
+
+    /* ========================================================
+       PAYMENT SCREEN
+       ======================================================== */
+
+    openPayment() {
+
+        if (
+            !State.payment.id
+        ) {
+
+            alert(
+                "Faol to‘lov topilmadi."
+            );
+
+            return;
+        }
+
+        this.go("payment");
+    },
+
+
+    /* ========================================================
+       COPY BATTLE CODE
+       ======================================================== */
+
+    async copyBattleCode() {
+
+        const code =
+            State.battle.code ||
+            document.getElementById(
+                "battle-code-display"
+            )?.textContent ||
+            "";
+
+
+        if (!code) {
+            return;
+        }
+
+
+        try {
+
+            await navigator.clipboard.writeText(
+                code
+            );
+
+
+            haptic("light");
+
+
+            alert(
+                "Battle kodi nusxalandi."
+            );
+
+        } catch (error) {
+
+            /*
+             * Clipboard API ishlamasa
+             * Telegram orqali fallback.
+             */
+
+            if (tg?.showPopup) {
+
+                tg.showPopup({
+                    title: "Battle kodi",
+                    message: code,
+                    buttons: [
+                        {
+                            type: "ok"
+                        }
+                    ]
+                });
+
+            } else {
+
+                alert(
+                    `Battle kodi: ${code}`
+                );
+            }
+        }
+    },
+
+
+    /* ========================================================
+       TELEGRAM USER
+       ======================================================== */
+
+    getTelegramUser() {
+
+        try {
+
+            return (
+                tg?.initDataUnsafe
+                    ?.user ||
+                null
+            );
+
+        } catch {
+
+            return null;
+        }
+    },
+
+
+    /* ========================================================
+       TELEGRAM CLOSE
+       ======================================================== */
+
+    close() {
+
+        try {
+
+            if (tg) {
+
+                tg.close();
+
                 return;
             }
 
-            button.dataset.bound =
-                "1";
+        } catch (error) {
 
-            button.addEventListener(
-                "click",
-                () => {
-                    showScreen(
-                        "screen-home"
-                    );
-                }
+            console.warn(
+                "[Telegram close]",
+                error
             );
         }
-    );
-}
 
 
-// ============================================================
-// FINAL INIT WRAPPER
-// ============================================================
+        window.history.back();
+    },
 
-const previousFinalInit =
-    App.init;
 
-App.init = async function () {
+    /* ========================================================
+       SHARE APP
+       ======================================================== */
 
-    await previousFinalInit();
+    shareApp() {
 
-    bindFinalEvents();
+        const url =
+            "https://t.me/iqtest_ubot";
 
-    bindPaymentButtons();
 
-    bindPaymentScreenButtons();
+        const text =
+            "IQ TEST BOT — IQ, EQ va PQ testlarini sinab ko‘ring!";
 
-    bindEQPQResultButtons();
 
-    applyUnlocks();
+        const shareUrl =
+            "https://t.me/share/url" +
+            "?url=" +
+            encodeURIComponent(url) +
+            "&text=" +
+            encodeURIComponent(text);
 
-    updateProfileHeader();
 
-    updateLiveCounter();
+        if (tg?.openTelegramLink) {
+
+            tg.openTelegramLink(
+                shareUrl
+            );
+
+            return;
+        }
+
+
+        window.open(
+            shareUrl,
+            "_blank"
+        );
+    },
+
+
+    /* ========================================================
+       RESET BATTLE
+       ======================================================== */
+
+    resetBattle() {
+
+        this.stopBattlePoll();
+
+
+        State.battle = {
+
+            id: null,
+
+            code: null,
+
+            role: null,
+
+            players: [],
+
+            sessionId: null,
+
+            current: 0,
+
+            answers: [],
+
+            startedAt: null,
+
+            pollInterval: null
+        };
+    },
+
+
+    /* ========================================================
+       RESET PAYMENT
+       ======================================================== */
+
+    resetPayment() {
+
+        if (
+            State.payment.pollInterval
+        ) {
+
+            clearInterval(
+                State.payment.pollInterval
+            );
+        }
+
+
+        State.payment = {
+
+            id: null,
+
+            product: null,
+
+            amount: 0,
+
+            cards: [],
+
+            pollInterval: null,
+
+            attemptId: null,
+
+            battleId: null
+        };
+    }
 };
 
 
-// ============================================================
-// 6-QISM TUGADI
-// ============================================================
-// ============================================================
-// APP.JS — 7-QISM
-// FINAL EVENTS + NAVIGATION + TELEGRAM + CLEANUP
-// ============================================================
+/* ============================================================
+   EVENT BINDINGS
+   ============================================================ */
+
+function bindClick(
+    selector,
+    handler
+) {
+
+    const element =
+        document.querySelector(
+            selector
+        );
 
 
-// ============================================================
-// SAFE NAVIGATION
-// ============================================================
+    if (!element) {
 
-function goHome() {
+        console.warn(
+            "[EVENT] element not found:",
+            selector
+        );
 
-    stopTestTimer();
-    stopPaymentPolling();
-    stopBattlePolling();
+        return;
+    }
 
-    showScreen(
-        "screen-home"
+
+    /*
+     * Duplicate listenerdan himoya.
+     */
+
+    if (
+        element.dataset.bound ===
+        "1"
+    ) {
+        return;
+    }
+
+
+    element.dataset.bound =
+        "1";
+
+
+    element.addEventListener(
+        "click",
+        handler
     );
 }
 
 
-// ============================================================
-// GENERIC BACK
-// ============================================================
+/* ============================================================
+   DOM READY
+   ============================================================ */
 
-function goBack() {
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
 
-    const active =
-        document.querySelector(
-            ".screen.active"
+        console.log(
+            "[APP] DOM ready"
         );
 
-    if (!active) {
-        goHome();
-        return;
-    }
 
-    const id =
-        active.id || "";
+        /* ====================================================
+           INIT
+           ==================================================== */
 
-    // Test ichida orqaga bosilsa
-    if (
-        id === "screen-test"
-    ) {
-
-        const confirmed =
-            window.confirm(
-                "Testdan chiqmoqchimisiz? Hozirgi javoblar saqlanmaydi."
-            );
-
-        if (confirmed) {
-            stopTestTimer();
-            resetTestState();
-            goHome();
-        }
-
-        return;
-    }
-
-    // IQ sample
-    if (
-        id === "screen-iq-sample"
-    ) {
-        goHome();
-        return;
-    }
-
-    // Payment
-    if (
-        id === "screen-payment" ||
-        id === "screen-payment-required"
-    ) {
-
-        stopPaymentPolling();
-        resetPaymentState();
-
-        goHome();
-
-        return;
-    }
-
-    // EQ result
-    if (
-        id === "screen-eq-result"
-    ) {
-        goHome();
-        return;
-    }
-
-    // PQ result
-    if (
-        id === "screen-pq-result"
-    ) {
-        goHome();
-        return;
-    }
-
-    // IQ result
-    if (
-        id === "screen-result"
-    ) {
-        goHome();
-        return;
-    }
-
-    // Profile
-    if (
-        id === "screen-profile"
-    ) {
-        goHome();
-        return;
-    }
-
-    // Battle
-    if (
-        id === "screen-battle" ||
-        id === "screen-battle-waiting" ||
-        id === "screen-battle-payment"
-    ) {
-
-        stopBattlePolling();
-        resetBattleState();
-
-        goHome();
-
-        return;
-    }
-
-    if (
-        id === "screen-battle-result"
-    ) {
-
-        closeBattleResult();
-
-        return;
-    }
-
-    // Default
-    goHome();
-}
+        App.init();
 
 
-// ============================================================
-// TELEGRAM BACK BUTTON
-// ============================================================
+        /* ====================================================
+           IQ
+           ==================================================== */
 
-function setupTelegramBackButton() {
-
-    if (!tg) {
-        return;
-    }
-
-    try {
-
-        if (
-            !tg.BackButton
-        ) {
-            return;
-        }
-
-        tg.BackButton.onClick(
-            goBack
-        );
-
-        updateTelegramBackButton();
-
-    } catch (error) {
-
-        console.warn(
-            "[TELEGRAM BACK BUTTON]",
-            error
-        );
-    }
-}
-
-
-// ============================================================
-// UPDATE TELEGRAM BACK BUTTON
-// ============================================================
-
-function updateTelegramBackButton() {
-
-    if (
-        !tg ||
-        !tg.BackButton
-    ) {
-        return;
-    }
-
-    const active =
-        document.querySelector(
-            ".screen.active"
-        );
-
-    if (!active) {
-        tg.BackButton.hide();
-        return;
-    }
-
-    const id =
-        active.id || "";
-
-    if (
-        id === "screen-home"
-    ) {
-
-        tg.BackButton.hide();
-
-    } else {
-
-        tg.BackButton.show();
-    }
-}
-
-
-// ============================================================
-// SCREEN OBSERVER
-// ============================================================
-
-function setupScreenObserver() {
-
-    const observer =
-        new MutationObserver(
+        bindClick(
+            '[data-test="iq"]',
             () => {
 
-                updateTelegramBackButton();
+                haptic("medium");
 
+                App.startIQ();
             }
         );
 
-    document
-        .querySelectorAll(
-            ".screen"
-        )
-        .forEach(
-            screen => {
 
-                observer.observe(
-                    screen,
-                    {
-                        attributes: true,
-                        attributeFilter: [
-                            "class"
-                        ]
-                    }
-                );
+        /* ====================================================
+           EQ
+           ==================================================== */
 
-            }
-        );
-}
+        bindClick(
+            "#card-eq",
+            () => {
 
-
-// ============================================================
-// BUTTON DOUBLE CLICK PROTECTION
-// ============================================================
-
-function protectButtons() {
-
-    document
-        .addEventListener(
-            "click",
-            event => {
-
-                const button =
-                    event.target.closest(
-                        "button"
+                const card =
+                    document.getElementById(
+                        "card-eq"
                     );
 
-                if (!button) {
-                    return;
-                }
 
                 if (
-                    button.disabled
+                    card?.classList.contains(
+                        "locked"
+                    )
                 ) {
-                    event.preventDefault();
+
+                    haptic("rigid");
+
                     return;
                 }
 
-                /*
-                 * Payment/test tugmalari uchun
-                 * qisqa vaqt ichida ikkinchi clickni
-                 * bloklaymiz.
-                 */
+
+                App.startEQ();
+            }
+        );
+
+
+        /* ====================================================
+           PQ
+           ==================================================== */
+
+        bindClick(
+            "#card-pq",
+            () => {
+
+                const card =
+                    document.getElementById(
+                        "card-pq"
+                    );
+
 
                 if (
-                    button.dataset.busy === "1"
+                    card?.classList.contains(
+                        "locked"
+                    )
                 ) {
 
-                    event.preventDefault();
-                    event.stopPropagation();
+                    haptic("rigid");
 
                     return;
                 }
 
-                const isImportant =
-                    button.id?.includes("payment") ||
-                    button.id?.includes("start-") ||
-                    button.id?.includes("battle") ||
-                    button.id?.includes("retry");
 
-                if (!isImportant) {
+                App.startPQ();
+            }
+        );
+
+
+        /* ====================================================
+           PROFILE
+           ==================================================== */
+
+        bindClick(
+            "#card-profile",
+            () => {
+
+                const card =
+                    document.getElementById(
+                        "card-profile"
+                    );
+
+
+                if (
+                    card?.classList.contains(
+                        "locked"
+                    )
+                ) {
+
+                    haptic("rigid");
+
                     return;
                 }
 
-                button.dataset.busy =
+
+                App.openProfile();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE
+           ==================================================== */
+
+        bindClick(
+            "#battle-card",
+            () => {
+
+                App.openBattle();
+            }
+        );
+
+
+        /* ====================================================
+           PROFILE SAVE
+           ==================================================== */
+
+        bindClick(
+            "#profile-save",
+            () => {
+
+                App.saveProfile();
+            }
+        );
+
+
+        /* ====================================================
+           SAMPLE NEXT
+           ==================================================== */
+
+        bindClick(
+            "#sample-next",
+            () => {
+
+                App.goTest();
+            }
+        );
+
+
+        /* ====================================================
+           IQ NEXT
+           ==================================================== */
+
+        bindClick(
+            "#test-next",
+            () => {
+
+                App.nextQuestion();
+            }
+        );
+
+
+        /* ====================================================
+           Q6 CONTINUE
+           ==================================================== */
+
+        bindClick(
+            "#q6-next",
+            () => {
+
+                App.continueAfterQ6();
+            }
+        );
+
+
+        /* ====================================================
+           Q12 CONTINUE
+           ==================================================== */
+
+        bindClick(
+            "#q12-next",
+            () => {
+
+                App.continueAfterQ12();
+            }
+        );
+
+
+        /* ====================================================
+           EQ INTRO
+           ==================================================== */
+
+        bindClick(
+            "#eq-start",
+            () => {
+
+                App.goEQTest();
+            }
+        );
+
+
+        /* ====================================================
+           EQ NEXT
+           ==================================================== */
+
+        bindClick(
+            "#eq-next",
+            () => {
+
+                App.nextEQQuestion();
+            }
+        );
+
+
+        /* ====================================================
+           PQ INTRO
+           ==================================================== */
+
+        bindClick(
+            "#pq-start",
+            () => {
+
+                App.goPQTest();
+            }
+        );
+
+
+        /* ====================================================
+           PQ NEXT
+           ==================================================== */
+
+        bindClick(
+            "#pq-next",
+            () => {
+
+                App.nextPQQuestion();
+            }
+        );
+
+
+        /* ====================================================
+           PROFILE GENDER
+           ==================================================== */
+
+        document
+            .querySelectorAll(
+                "#gender-selector [data-gender]"
+            )
+            .forEach(element => {
+
+                if (
+                    element.dataset.bound ===
+                    "1"
+                ) {
+                    return;
+                }
+
+
+                element.dataset.bound =
                     "1";
 
-                setTimeout(
+
+                element.addEventListener(
+                    "click",
                     () => {
-                        button.dataset.busy =
-                            "0";
-                    },
-                    700
+
+                        App.selectGender(
+                            element.dataset.gender
+                        );
+                    }
                 );
+            });
 
-            },
-            true
+
+        /* ====================================================
+           PROFILE COUNTRY
+           ==================================================== */
+
+        document
+            .querySelectorAll(
+                "#country-selector [data-country]"
+            )
+            .forEach(element => {
+
+                if (
+                    element.dataset.bound ===
+                    "1"
+                ) {
+                    return;
+                }
+
+
+                element.dataset.bound =
+                    "1";
+
+
+                element.addEventListener(
+                    "click",
+                    () => {
+
+                        App.selectCountry(
+                            element.dataset.country
+                        );
+                    }
+                );
+            });
+
+
+        /* ====================================================
+           IQ PAYMENT
+           ==================================================== */
+
+        bindClick(
+            "#iq-pay-btn",
+            () => {
+
+                App.startIQPayment();
+            }
         );
-}
 
 
-// ============================================================
-// TELEGRAM MAIN BUTTON
-// ============================================================
+        /* ====================================================
+           RECEIPT
+           ==================================================== */
 
-function setupTelegramMainButton() {
+        bindClick(
+            "#send-receipt-btn",
+            () => {
 
-    if (
-        !tg ||
-        !tg.MainButton
-    ) {
-        return;
-    }
+                App.sendReceipt();
+            }
+        );
 
-    try {
 
-        tg.MainButton.hide();
+        /* ====================================================
+           CERTIFICATE
+           ==================================================== */
 
-    } catch (error) {
+        bindClick(
+            "#certificate-btn",
+            () => {
 
-        console.warn(
-            "[TELEGRAM MAIN BUTTON]",
-            error
+                App.getCertificate();
+            }
+        );
+
+
+        /* ====================================================
+           SHARE RESULT
+           ==================================================== */
+
+        bindClick(
+            "#share-result-btn",
+            () => {
+
+                App.shareResult();
+            }
+        );
+
+
+        /* ====================================================
+           RETRY
+           ==================================================== */
+
+        bindClick(
+            "#retry-btn",
+            () => {
+
+                App.retry();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE CREATE
+           ==================================================== */
+
+        bindClick(
+            "#battle-create-btn",
+            () => {
+
+                App.createBattle();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE JOIN
+           ==================================================== */
+
+        bindClick(
+            "#battle-join-btn",
+            () => {
+
+                App.joinBattle();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE START
+           ==================================================== */
+
+        bindClick(
+            "#battle-start-btn",
+            () => {
+
+                App.startBattleTest();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE CONTINUE
+           ==================================================== */
+
+        bindClick(
+            "#battle-continue-btn",
+            () => {
+
+                App.continueBattle();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE NEXT
+           ==================================================== */
+
+        bindClick(
+            "#battle-next",
+            () => {
+
+                App.nextBattleQuestion();
+            }
+        );
+
+
+        /* ====================================================
+           BATTLE COPY
+           ==================================================== */
+
+        bindClick(
+            "#battle-copy-btn",
+            () => {
+
+                App.copyBattleCode();
+            }
+        );
+
+
+        console.log(
+            "[APP] event bindings complete"
         );
     }
-}
+);
 
 
-// ============================================================
-// TELEGRAM USER SYNC
-// ============================================================
+/* ============================================================
+   GLOBAL NAVIGATION BUTTONS
+   ============================================================ */
 
-function syncTelegramUser() {
+document.addEventListener(
+    "click",
+    event => {
 
-    if (!tg) {
-        return;
-    }
+        const target =
+            event.target.closest(
+                "[data-screen]"
+            );
 
-    try {
 
-        const user =
-            tg.initDataUnsafe?.user;
-
-        if (!user) {
+        if (!target) {
             return;
         }
 
-        State.telegramUser =
-            user;
 
-        if (!State.user) {
+        const screen =
+            target.dataset.screen;
 
-            State.user = {
-                id:
-                    user.id,
 
-                first_name:
-                    user.first_name ||
-                    "",
-
-                last_name:
-                    user.last_name ||
-                    "",
-
-                username:
-                    user.username ||
-                    ""
-            };
+        if (!screen) {
+            return;
         }
 
-        updateProfileHeader();
 
-    } catch (error) {
+        /*
+         * Agar data-screen ishlatilgan bo‘lsa,
+         * App.go orqali o'tamiz.
+         */
+
+        event.preventDefault();
+
+        App.go(screen);
+    }
+);
+
+
+/* ============================================================
+   BACK BUTTONS
+   ============================================================ */
+
+document.addEventListener(
+    "click",
+    event => {
+
+        const target =
+            event.target.closest(
+                "[data-back]"
+            );
+
+
+        if (!target) {
+            return;
+        }
+
+
+        event.preventDefault();
+
+        App.back();
+    }
+);
+
+
+/* ============================================================
+   VISIBILITY
+   ============================================================ */
+
+document.addEventListener(
+    "visibilitychange",
+    () => {
+
+        if (
+            document.visibilityState ===
+            "visible"
+        ) {
+
+            /*
+             * Telegram WebApp qayta ochilganda
+             * server state yangilanadi.
+             */
+
+            App.refreshLive();
+
+
+            if (
+                State.currentScreen ===
+                "battle-wait" &&
+                State.battle.id
+            ) {
+
+                App.checkBattle();
+            }
+        }
+    }
+);
+
+
+/* ============================================================
+   ONLINE / OFFLINE
+   ============================================================ */
+
+window.addEventListener(
+    "online",
+    () => {
+
+        console.log(
+            "[NETWORK] online"
+        );
+
+
+        const offline =
+            document.getElementById(
+                "offline-banner"
+            );
+
+
+        if (offline) {
+
+            offline.style.display =
+                "none";
+        }
+
+
+        App.refreshLive();
+    }
+);
+
+
+window.addEventListener(
+    "offline",
+    () => {
 
         console.warn(
-            "[TELEGRAM USER]",
-            error
+            "[NETWORK] offline"
         );
+
+
+        const offline =
+            document.getElementById(
+                "offline-banner"
+            );
+
+
+        if (offline) {
+
+            offline.style.display =
+                "block";
+        }
     }
-}
+);
 
 
-// ============================================================
-// PAGE VISIBILITY
-// ============================================================
-
-function setupVisibilityHandler() {
-
-    document.addEventListener(
-        "visibilitychange",
-        () => {
-
-            if (
-                document.visibilityState ===
-                "visible"
-            ) {
-
-                // Payment davom etayotgan bo‘lsa
-                if (
-                    State.payment?.paymentId
-                ) {
-
-                    checkPaymentStatus();
-                }
-
-                // Battle davom etayotgan bo‘lsa
-                if (
-                    State.battle?.id &&
-                    !State.battle.finished
-                ) {
-
-                    checkBattle();
-                }
-
-            }
-
-        }
-    );
-}
-
-
-// ============================================================
-// ONLINE / OFFLINE
-// ============================================================
-
-function setupConnectionHandler() {
-
-    window.addEventListener(
-        "online",
-        () => {
-
-            showToast(
-                "Internet aloqasi tiklandi",
-                "success"
-            );
-
-            if (
-                State.payment?.paymentId
-            ) {
-
-                checkPaymentStatus();
-            }
-
-            if (
-                State.battle?.id
-            ) {
-
-                checkBattle();
-            }
-        }
-    );
-
-    window.addEventListener(
-        "offline",
-        () => {
-
-            showToast(
-                "Internet aloqasi uzildi",
-                "warning"
-            );
-        }
-    );
-}
-
-
-// ============================================================
-// PREVENT ACCIDENTAL PAGE EXIT DURING TEST
-// ============================================================
-
-function setupBeforeUnload() {
-
-    window.addEventListener(
-        "beforeunload",
-        event => {
-
-            const active =
-                document.querySelector(
-                    ".screen.active"
-                );
-
-            if (!active) {
-                return;
-            }
-
-            const id =
-                active.id || "";
-
-            const testRunning =
-                id === "screen-test" &&
-                !State.test.finished;
-
-            const battleRunning =
-                id === "screen-battle-test" &&
-                !State.battle.finished;
-
-            if (
-                testRunning ||
-                battleRunning
-            ) {
-
-                event.preventDefault();
-
-                event.returnValue =
-                    "";
-            }
-        }
-    );
-}
-
-
-// ============================================================
-// ERROR HANDLING
-// ============================================================
+/* ============================================================
+   GLOBAL ERROR HANDLER
+   ============================================================ */
 
 window.addEventListener(
     "error",
     event => {
 
         console.error(
-            "[APP ERROR]",
+            "[GLOBAL ERROR]",
             event.error ||
             event.message
         );
@@ -6181,148 +7561,123 @@ window.addEventListener(
     event => {
 
         console.error(
-            "[APP UNHANDLED PROMISE]",
+            "[UNHANDLED PROMISE]",
             event.reason
         );
     }
 );
 
 
-// ============================================================
-// DEBUG HELPER
-// ============================================================
+/* ============================================================
+   TELEGRAM MAIN BUTTON
+   ============================================================ */
 
-window.ZAKO_DEBUG = {
-
-    getState() {
-        return State;
-    },
-
-    getUser() {
-        return State.user;
-    },
-
-    getCompleted() {
-        return State.completed;
-    },
-
-    getPayment() {
-        return State.payment;
-    },
-
-    getBattle() {
-        return State.battle;
-    },
-
-    goHome() {
-        goHome();
-    }
-
-};
-
-
-// ============================================================
-// FINAL SETUP
-// ============================================================
-
-function finalSetup() {
-
-    setupTelegramBackButton();
-
-    setupTelegramMainButton();
-
-    syncTelegramUser();
-
-    setupScreenObserver();
-
-    protectButtons();
-
-    setupVisibilityHandler();
-
-    setupConnectionHandler();
-
-    setupBeforeUnload();
-
-    updateTelegramBackButton();
-
-    updateLiveCounter();
-
-    updateProfileHeader();
-
-    applyUnlocks();
-}
-
-
-// ============================================================
-// FINAL DOM READY
-// ============================================================
-
-function bootApp() {
+if (tg?.MainButton) {
 
     try {
 
-        finalSetup();
-
-        console.log(
-            "[APP] ZAKO IQ application ready"
-        );
+        tg.MainButton.hide();
 
     } catch (error) {
 
-        console.error(
-            "[APP] Final setup error:",
+        console.warn(
+            "[Telegram MainButton]",
             error
         );
     }
 }
 
 
-if (
-    document.readyState === "loading"
-) {
+/* ============================================================
+   TELEGRAM BACK BUTTON
+   ============================================================ */
 
-    document.addEventListener(
-        "DOMContentLoaded",
-        bootApp,
-        {
-            once: true
-        }
-    );
+if (tg?.BackButton) {
 
-} else {
+    try {
 
-    bootApp();
+        tg.BackButton.onClick(
+            () => {
+
+                App.back();
+            }
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "[Telegram BackButton]",
+            error
+        );
+    }
 }
 
 
-// ============================================================
-// FINAL SAFETY CHECK
-// ============================================================
+/* ============================================================
+   PAGE UNLOAD
+   ============================================================ */
 
-setTimeout(
+window.addEventListener(
+    "beforeunload",
     () => {
 
-        try {
+        if (
+            State.test.timerInterval
+        ) {
 
-            applyUnlocks();
-
-            updateTelegramBackButton();
-
-            updateLiveCounter();
-
-        } catch (error) {
-
-            console.error(
-                "[APP] Safety check error:",
-                error
+            clearInterval(
+                State.test.timerInterval
             );
         }
 
-    },
-    1000
+
+        if (
+            State.battle.pollInterval
+        ) {
+
+            clearInterval(
+                State.battle.pollInterval
+            );
+        }
+
+
+        if (
+            State.payment.pollInterval
+        ) {
+
+            clearInterval(
+                State.payment.pollInterval
+            );
+        }
+
+
+        if (
+            State.live.interval
+        ) {
+
+            clearInterval(
+                State.live.interval
+            );
+        }
+    }
 );
 
 
-// ============================================================
-// APP.JS — END
-// ============================================================
+/* ============================================================
+   DEBUG
+   ============================================================ */
+
+window.IQTestApp = App;
+
+window.IQTestState = State;
+
+window.IQQuestions = QUESTIONS;
+
+
+/* ============================================================
+   FINAL
+   ============================================================ */
+
+console.log(
+    "[IQ TEST BOT] app.js loaded successfully"
+);
