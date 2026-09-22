@@ -505,30 +505,33 @@ const App = {
   applyUnlocks() {
     const c = State.completed || {};
     console.log("[applyUnlocks]", c);
+    // IQ → EQ unlock (bir marta)
     if (c.iq) {
-      const el = document.getElementById("card-eq");
-      if (el) {
-        el.classList.remove("locked"); el.classList.add("unlocked");
-        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
-      }
+        const el = document.getElementById("card-eq");
+        if (el) {
+            el.classList.remove("locked"); el.classList.add("unlocked");
+            const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+            const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
+        }
     }
+    // EQ → PQ unlock
     if (c.eq) {
-      const el = document.getElementById("card-pq");
-      if (el) {
-        el.classList.remove("locked"); el.classList.add("unlocked");
-        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
-      }
+        const el = document.getElementById("card-pq");
+        if (el) {
+            el.classList.remove("locked"); el.classList.add("unlocked");
+            const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+            const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
+        }
     }
+    // IQ+EQ+PQ → Profile unlock
     if (c.iq && c.eq && c.pq) {
-      const el = document.getElementById("card-profile");
-      if (el) {
-        el.classList.remove("locked"); el.classList.add("unlocked");
-        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
-      }
+        const el = document.getElementById("card-profile");
+        if (el) {
+            el.classList.remove("locked"); el.classList.add("unlocked");
+            const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+        }
     }
-  },
+},
 
   async saveProfile() {
     const fullName = document.getElementById("profile-fullname")?.value.trim() || State.profile.full_name;
