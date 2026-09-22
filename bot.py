@@ -4,21 +4,21 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from urllib.parse import unquote
 import asyncpg
-from aiogramInfo import Bot, Dispatcher, types, F
-,from aiogram.client.default import DefaultBotProperties
-from In aiogram.enums import ParseMode
-from aiogramline.filtersKeyboard import CommandStart, Command
-from aiogram.types import (UpdateMark, WebAppup,
-    InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton,
-    ReplyKeyboardRemove, BufferedInputFile, CallbackQuery)
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import CommandStart, Command
+from aiogram.types import (
+    Update, WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton,
+    ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
+    BufferedInputFile, CallbackQuery
+)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
-
-load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
