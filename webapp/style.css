@@ -885,3 +885,22 @@ img, svg { display: block; max-width: 100%; }
 .battle-winner.win { color: #22c55e; text-shadow: 0 0 30px rgba(34,197,94,.7); }
 .battle-winner.lose { color: #ef4444; }
 .battle-winner.draw { color: #f59e0b; }
+/* ============ PAYMENT CARD COPY BUTTON ============ */
+.pay-card-copy {
+  margin-top: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(167,139,250,.35);
+  border-radius: 12px;
+  background: rgba(167,139,250,.12);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.pay-card-copy:active {
+  transform: scale(.97);
+  background: rgba(167,139,250,.22);
+}
