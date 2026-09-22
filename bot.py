@@ -1,6 +1,6 @@
 # bot.py
-# IQ TEST BOT — Professional Backend
-# Part 1/2: Core, DB, IQ, EQ, PQ, Auth, HMAC (DEBUG)
+# IQ TEST BOT — FINAL
+# Bitta fayl: Core + DB + IQ + EQ + PQ + Battle + Payment + Admin
 
 import os
 import io
@@ -13,7 +13,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
-from urllib.parse import unquote_plus
+from urllib.parse import unquote
 
 import asyncpg
 from aiogram import Bot, Dispatcher, types, F
@@ -23,7 +23,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import (
     Update, WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton,
     ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
-    BufferedInputFile, CallbackQuery, FSInputFile
+    BufferedInputFile, CallbackQuery
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from fastapi import FastAPI, Request, HTTPException
@@ -53,17 +53,11 @@ if not DATABASE_URL:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# ===== STARTUP DEBUG (logger yaratilgandan keyin) =====
 logger.warning("=" * 60)
 logger.warning(f"STARTUP token_len={len(BOT_TOKEN)}")
-logger.warning(f"STARTUP token_repr={repr(BOT_TOKEN)}")
-logger.warning(f"STARTUP token_first15={BOT_TOKEN[:15]}")
-logger.warning(f"STARTUP token_last10={BOT_TOKEN[-10:]}")
 logger.warning(f"STARTUP webapp_url={WEBAPP_URL}")
 logger.warning(f"STARTUP public_base_url={PUBLIC_BASE_URL}")
-logger.warning(f"STARTUP webhook_secret_len={len(WEBHOOK_SECRET)}")
 logger.warning("=" * 60)
-# ======================================================
 
 db_pool: asyncpg.Pool = None
 
@@ -86,8 +80,6 @@ TEXTS = {
         "lang_changed": "✅ Til o‘zgartirildi: O‘zbekcha",
         "cert_found": "✅ <b>Sertifikat topildi</b>\n\n👤 {name}\n📊 IQ-style Score: <b>{score}</b>\n📅 Sana: {date}",
         "cert_not_found": "❌ Sertifikat topilmadi.",
-        "maintenance": "🛠 Bot texnik xizmatda.",
-        "start_first": "Iltimos, avval /start buyrug‘ini bosing.",
     },
     "ru": {
         "choose_lang": "🌐 Выберите язык:",
@@ -100,13 +92,11 @@ TEXTS = {
         "menu_lang": "🌐 Язык",
         "no_cert": "📜 У вас пока нет сертификата.",
         "ranking_title": "🏆 <b>РЕЙТИНГ</b>\n\n",
-        "earn_title": "💰 <b>ЗАРАБОТОК</b>\n\n🔗 {link}\n\n👥 Приглашено: <b>{count}</b>",
-        "help": "ℹ️ <b>ЦЕНЫ</b>\n\n🧠 IQ — {iq_price} сум\n🎭 EQ — бесплатно\n⏳ PQ — бесплатно\n🔄 Повтор IQ — {iq_retry} сум\n⚔️ Батл — {battle_price} сум\n\n👤 @omono_v",
+        "earn_title": "💰 <b>ЗАРАБОТОК</b>\n\n🔗 {link}\n\n🧠👥 Приглашено: <b>{count}</b> IQ",
+        "help —": "ℹ️ <b>ЦЕНЫ</b>\n\n {iq_price} сум\n🎭 EQ — бесплатно\n⏳ PQ — бесплатно\n🔄 Повтор IQ — {iq_retry} сум\n⚔️ Батл — {battle_price} сум\n\n👤 @omono_v",
         "lang_changed": "✅ Язык изменён: Русский",
         "cert_found": "✅ <b>Сертификат найден</b>\n\n👤 {name}\n📊 Score: <b>{score}</b>\n📅 {date}",
         "cert_not_found": "❌ Не найден.",
-        "maintenance": "🛠 Бот на техобслуживании.",
-        "start_first": "Сначала /start.",
     },
     "en": {
         "choose_lang": "🌐 Choose language:",
@@ -124,8 +114,6 @@ TEXTS = {
         "lang_changed": "✅ Language: English",
         "cert_found": "✅ <b>Certificate found</b>\n\n👤 {name}\n📊 Score: <b>{score}</b>\n📅 {date}",
         "cert_not_found": "❌ Not found.",
-        "maintenance": "🛠 Under maintenance.",
-        "start_first": "Please /start first.",
     }
 }
 
@@ -134,7 +122,7 @@ def t(lang: str, key: str, **kwargs):
     return text.format(**kwargs) if kwargs else text
 
 
-# ==================== IQ QUESTIONS (BACKEND ANSWER KEY) ====================
+# ==================== IQ ANSWERS (18 ta) ====================
 IQ_ANSWERS = [
     {"id": 1,  "correct": 2, "weight": 1, "category": "Raqamlar"},
     {"id": 2,  "correct": 0, "weight": 1, "category": "Pattern"},
@@ -157,21 +145,21 @@ IQ_ANSWERS = [
 ]
 
 EQ_ANSWERS = [
-    {"id": 1, "scores": [4, 2, 3, 1], "category": "stress"},
-    {"id": 2, "scores": [4, 1, 2, 1], "category": "empathy"},
-    {"id": 3, "scores": [4, 3, 1, 1], "category": "self-awareness"},
-    {"id": 4, "scores": [4, 2, 1, 2], "category": "conflict"},
-    {"id": 5, "scores": [4, 2, 3, 1], "category": "emotion regulation"},
-    {"id": 6, "scores": [4, 2, 1, 2], "category": "social perception"},
+    {"id": 1, "scores": [4, 2, 3, 1]},
+    {"id": 2, "scores": [4, 1, 2, 1]},
+    {"id": 3, "scores": [4, 3, 1, 1]},
+    {"id": 4, "scores": [4, 2, 1, 2]},
+    {"id": 5, "scores": [4, 2, 3, 1]},
+    {"id": 6, "scores": [4, 2, 1, 2]},
 ]
 
 PQ_ANSWERS = [
-    {"id": 1, "scores": [2, 1, 2, 1], "category": "task avoidance"},
-    {"id": 2, "scores": [4, 2, 1, 0], "category": "delay"},
-    {"id": 3, "scores": [4, 1, 2, 2], "category": "motivation"},
-    {"id": 4, "scores": [4, 3, 1, 0], "category": "distraction"},
-    {"id": 5, "scores": [4, 2, 1, 0], "category": "deadline"},
-    {"id": 6, "scores": [4, 3, 1, 0], "category": "self-control"},
+    {"id": 1, "scores": [2, 1, 2, 1]},
+    {"id": 2, "scores": [4, 2, 1, 0]},
+    {"id": 3, "scores": [4, 1, 2, 2]},
+    {"id": 4, "scores": [4, 3, 1, 0]},
+    {"id": 5, "scores": [4, 2, 1, 0]},
+    {"id": 6, "scores": [4, 3, 1, 0]},
 ]
 
 
@@ -182,14 +170,9 @@ async def init_db(pool: asyncpg.Pool):
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT UNIQUE NOT NULL,
-                username TEXT,
-                first_name TEXT,
-                last_name TEXT,
+                username TEXT, first_name TEXT, last_name TEXT,
                 language TEXT DEFAULT 'uz',
-                gender TEXT,
-                age INTEGER,
-                country TEXT,
-                full_name TEXT,
+                gender TEXT, age INTEGER, country TEXT, full_name TEXT,
                 last_seen TIMESTAMPTZ DEFAULT NOW(),
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
@@ -227,9 +210,7 @@ async def init_db(pool: asyncpg.Pool):
                 session_id TEXT,
                 started_at TIMESTAMPTZ DEFAULT NOW(),
                 finished_at TIMESTAMPTZ,
-                score INTEGER,
-                correct_count INTEGER,
-                duration INTEGER,
+                score INTEGER, correct_count INTEGER, duration INTEGER,
                 status TEXT DEFAULT 'in_progress',
                 payment_status TEXT DEFAULT 'free',
                 result_visible BOOLEAN DEFAULT TRUE
@@ -240,9 +221,7 @@ async def init_db(pool: asyncpg.Pool):
                 id SERIAL PRIMARY KEY,
                 attempt_id INTEGER NOT NULL,
                 question_number INTEGER NOT NULL,
-                answer INTEGER,
-                is_correct BOOLEAN,
-                time_spent INTEGER
+                answer INTEGER, is_correct BOOLEAN, time_spent INTEGER
             )
         """)
         await conn.execute("""
@@ -265,8 +244,7 @@ async def init_db(pool: asyncpg.Pool):
                 amount INTEGER NOT NULL,
                 status TEXT DEFAULT 'pending',
                 receipt_file_id TEXT,
-                attempt_id INTEGER,
-                battle_id INTEGER,
+                attempt_id INTEGER, battle_id INTEGER,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 approved_at TIMESTAMPTZ
             )
@@ -315,8 +293,7 @@ async def init_db(pool: asyncpg.Pool):
                 session_id TEXT,
                 current_question INTEGER DEFAULT 0,
                 answers JSONB,
-                score INTEGER,
-                weighted INTEGER,
+                score INTEGER, weighted INTEGER,
                 finished_at TIMESTAMPTZ,
                 joined_at TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(battle_id, user_id)
@@ -332,7 +309,7 @@ async def init_db(pool: asyncpg.Pool):
             )
         """)
 
-        # MIGRATIONS
+        # Migrations
         migrations = [
             "ALTER TABLE users ALTER COLUMN last_name DROP NOT NULL",
             "ALTER TABLE users ALTER COLUMN username DROP NOT NULL",
@@ -367,22 +344,16 @@ async def init_db(pool: asyncpg.Pool):
             except Exception as e:
                 logger.warning(f"Migration skip: {e}")
 
-        # Default settings
         defaults = {
-            "iq_price": "10000",
-            "iq_retry_price": "5000",
-            "eq_price": "0",
-            "eq_retry_price": "5000",
-            "pq_price": "0",
-            "pq_retry_price": "5000",
+            "iq_price": "10000", "iq_retry_price": "5000",
+            "eq_price": "0", "eq_retry_price": "5000",
+            "pq_price": "0", "pq_retry_price": "5000",
             "battle_price": "7500",
-            "free_launch_end": "2026-09-30",
             "support_username": "omono_v",
             "maintenance_mode": "0",
             "live_mode": "fake",
             "live_fake_base": "95114",
             "live_fake_online": "342",
-            "live_fake_interval": "3",
             "live_fake_delta": "8",
             "live_real_online_minutes": "5",
         }
@@ -410,8 +381,7 @@ async def init_db(pool: asyncpg.Pool):
 
 # ==================== HELPERS ====================
 def gen_code(prefix="IQ", length=6):
-    chars = string.ascii_uppercase + string.digits
-    return f"{prefix}-" + "".join(random.choices(chars, k=length))
+    return f"{prefix}-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 def gen_payment_id():
     return "PAY-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
@@ -423,54 +393,45 @@ def gen_battle_code():
     chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return "".join(random.choices(chars, k=4))
 
+
 def validate_init_data(init_data: str, bot_token: str):
+    """Telegram initData validation.
+    MUHIM: data_check URL-encoded shaklda tuziladi (unquote YO'Q).
+    """
     try:
         if not init_data:
-            logger.warning("INITDATA_EMPTY")
             return None
         parsed = {}
         for pair in init_data.split("&"):
             if "=" in pair:
                 k, v = pair.split("=", 1)
-                parsed[k] = unquote_plus(v)
-
+                parsed[k] = v    # <-- UNQUOTE YO'Q
         hash_val = parsed.pop("hash", None)
         if not hash_val:
-            logger.warning("NO_HASH")
             return None
-
-        # signature chiqarib tashlanadi
         parsed.pop("signature", None)
 
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
 
-        # ===== HMAC DEBUG =====
-        logger.warning("=" * 60)
-        logger.warning(f"HMAC_DEBUG token_len={len(bot_token)}")
-        logger.warning(f"HMAC_DEBUG token_repr={repr(bot_token)}")
-        logger.warning(f"HMAC_DEBUG data_check_FULL={data_check}")
-        logger.warning(f"HMAC_DEBUG calc={calc}")
-        logger.warning(f"HMAC_DEBUG got ={hash_val}")
-        logger.warning(f"HMAC_DEBUG MATCH={calc == hash_val}")
-        logger.warning("=" * 60)
-        # ======================
+        logger.warning(f"HMAC calc={calc[:20]}... got={hash_val[:20]}... match={calc == hash_val}")
 
         if calc != hash_val:
-            logger.warning("HMAC_FAIL")
             return None
 
         auth_date = int(parsed.get("auth_date", "0"))
         if datetime.now(timezone.utc).timestamp() - auth_date > 86400 * 2:
-            logger.warning("EXPIRED")
             return None
 
-        user = json.loads(parsed.get("user", "{}"))
+        # user ni decode qilish (faqat ma'lumot olish uchun)
+        user_raw = parsed.get("user", "%7B%7D")
+        user = json.loads(unquote(user_raw))
         return user
     except Exception as e:
         logger.error(f"validate_init_data error: {e}")
         return None
+
 
 async def get_setting(key: str, default=None):
     async with db_pool.acquire() as conn:
@@ -530,12 +491,25 @@ def main_menu_kb(lang: str):
     b.adjust(1, 2, 2, 1)
     return b.as_markup(resize_keyboard=True)
 
+def admin_kb():
+    b = InlineKeyboardBuilder()
+    b.button(text="👥 Users", callback_data="admin:users")
+    b.button(text="📊 Statistics", callback_data="admin:stats")
+    b.button(text="💳 Payments", callback_data="admin:payments")
+    b.button(text="📢 Broadcast", callback_data="admin:broadcast")
+    b.button(text="💰 Products", callback_data="admin:products")
+    b.button(text="📜 Certificates", callback_data="admin:certs")
+    b.button(text="⚔️ Battles", callback_data="admin:battles")
+    b.button(text="💳 Cards", callback_data="admin:cards")
+    b.button(text="🎯 Live Counter", callback_data="admin:live")
+    b.button(text="⚙️ Settings", callback_data="admin:settings")
+    b.adjust(2, 2, 2, 2, 2)
+    return b.as_markup()
+
 
 # ==================== BOT ====================
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
-
-
 # ==================== /start ====================
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -554,11 +528,9 @@ async def cmd_start(message: types.Message):
                         """, ref_id, message.from_user.id)
             except Exception:
                 pass
-
         if not user or not user["language"]:
             await message.answer(t("uz", "choose_lang"), reply_markup=lang_kb())
             return
-
         lang = user["language"]
         await message.answer(
             t(lang, "welcome", name=message.from_user.first_name or "do‘stim"),
@@ -603,8 +575,7 @@ async def menu_cert(message: types.Message):
             return
         name = cert["full_name"] or cert["first_name"] or "User"
         png = generate_iq_certificate_png(
-            name=name,
-            score=cert["score"],
+            name=name, score=cert["score"],
             code=cert["verification_code"],
             date=cert["created_at"].strftime("%d.%m.%Y")
         )
@@ -625,8 +596,7 @@ async def menu_rank(message: types.Message):
                 JOIN users u ON u.user_id = r.user_id
                 WHERE r.test_type='iq'
                 GROUP BY u.user_id, u.first_name, u.username
-                ORDER BY best DESC
-                LIMIT 10
+                ORDER BY best DESC LIMIT 10
             """)
         text = t(lang, "ranking_title")
         medals = ["🥇", "🥈", "🥉"]
@@ -683,15 +653,15 @@ async def verify_cert(message: types.Message):
         async with db_pool.acquire() as conn:
             cert = await conn.fetchrow("""
                 SELECT c.*, u.first_name, u.full_name FROM certificates c
-                JOIN users u ON u.user_id = c.user_id                WHERE c.verification_code=$1
+                JOIN users u ON u.user_id = c.user_id
+                WHERE c.verification_code=$1
             """, code)
         if not cert:
             await message.answer(t("uz", "cert_not_found"))
             return
         name = cert["full_name"] or cert["first_name"] or "User"
         await message.answer(t("uz", "cert_found",
-            name=name,
-            score=cert["score"],
+            name=name, score=cert["score"],
             date=cert["created_at"].strftime("%d.%m.%Y")
         ))
     except Exception as e:
@@ -703,17 +673,12 @@ def generate_iq_certificate_png(name: str, score: int, code: str, date: str) -> 
     W, H = 1600, 1100
     img = Image.new("RGB", (W, H), "#0a0e1a")
     draw = ImageDraw.Draw(img)
-
     for y in range(H):
         ratio = y / H
-        r = int(10 + 20 * ratio)
-        g = int(14 + 20 * ratio)
-        b = int(26 + 40 * ratio)
+        r = int(10 + 20 * ratio); g = int(14 + 20 * ratio); b = int(26 + 40 * ratio)
         draw.line([(0, y), (W, y)], fill=(r, g, b))
-
     draw.rectangle([30, 30, W-30, H-30], outline="#d4af37", width=6)
     draw.rectangle([50, 50, W-50, H-50], outline="#d4af37", width=2)
-
     try:
         f_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", 110)
         f_name = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf", 80)
@@ -735,25 +700,19 @@ def generate_iq_certificate_png(name: str, score: int, code: str, date: str) -> 
     draw.line([(300, 440), (W-300, 440)], fill="#d4af37", width=2)
     center("IQ-STYLE SCORE", f_label, 490, "#c9a227")
     center(str(score), f_score, 540, "#ffffff")
-    if score >= 130:
-        level = "JUDA YUQORI"
-    elif score >= 115:
-        level = "YUQORI DARAJA"
-    elif score >= 100:
-        level = "O‘RTA DARAJA"
-    else:
-        level = "RIVOJLANTIRISH KERAK"
+    if score >= 130: level = "JUDA YUQORI"
+    elif score >= 115: level = "YUQORI DARAJA"
+    elif score >= 100: level = "O‘RTA DARAJA"
+    else: level = "RIVOJLANTIRISH KERAK"
     center(level, f_label, 800, "#d4af37")
     draw.text((150, H-150), f"Sana: {date}", font=f_small, fill="#c9a227")
     draw.text((150, H-100), f"Kod: {code}", font=f_small, fill="#c9a227")
     draw.text((W-450, H-100), "IQ TEST BOT", font=f_small, fill="#c9a227")
-
     seal_x, seal_y = W - 220, 220
     draw.ellipse([seal_x-100, seal_y-100, seal_x+100, seal_y+100], outline="#d4af37", width=6)
     draw.ellipse([seal_x-85, seal_y-85, seal_x+85, seal_y+85], outline="#d4af37", width=2)
     bbox = draw.textbbox((0, 0), "VERIFIED", font=f_small)
     draw.text((seal_x - (bbox[2]-bbox[0])/2, seal_y - 15), "VERIFIED", font=f_small, fill="#d4af37")
-
     buf = io.BytesIO()
     img.save(buf, format="PNG", quality=95)
     return buf.getvalue()
@@ -840,14 +799,11 @@ async def api_me(request: Request):
                 INSERT INTO users (user_id, username, first_name, last_name)
                 VALUES ($1, $2, $3, $4)
             """, uid, user.get("username"), user.get("first_name"), user.get("last_name"))
+            u = await conn.fetchrow("SELECT * FROM users WHERE user_id=$1", uid)
         results = await conn.fetch("""
             SELECT test_type, MAX(score) as best FROM results
             WHERE user_id=$1 AND test_type IN ('iq','eq','pq')
             GROUP BY test_type
-        """, uid)
-        active_sessions = await conn.fetch("""
-            SELECT * FROM test_sessions
-            WHERE user_id=$1 AND status='active' AND expires_at > NOW()
         """, uid)
         pending_payments = await conn.fetch("""
             SELECT * FROM payments WHERE user_id=$1 AND status='pending'
@@ -857,9 +813,7 @@ async def api_me(request: Request):
             JOIN battle_players bp ON bp.battle_id = b.id
             WHERE bp.user_id=$1 AND b.status NOT IN ('completed','draw','cancelled')
         """, uid)
-    completed = {}
-    for r in results:
-        completed[r["test_type"]] = r["best"]
+    completed = {r["test_type"]: r["best"] for r in results}
     return {
         "ok": True,
         "user": {
@@ -872,7 +826,6 @@ async def api_me(request: Request):
             "full_name": u["full_name"] if u else None,
         },
         "completed": completed,
-        "active_sessions": [dict(s) for s in active_sessions],
         "pending_payments": [dict(p) for p in pending_payments],
         "active_battles": [dict(b) for b in active_battles],
     }
@@ -959,10 +912,7 @@ async def api_test_submit(request: Request):
             raise HTTPException(409, "Attempt already completed")
 
         test_type = sess["test_type"]
-        score = 0
-        correct = 0
-        level = ""
-        weighted = 0
+        score = 0; correct = 0; level = ""; weighted = 0
         payment_status = "free"
         result_visible = True
 
@@ -1005,8 +955,8 @@ async def api_test_submit(request: Request):
 
         await conn.execute("""
             UPDATE test_attempts
-            SET finished_at=NOW(), score=$1, correct_count=$2, duration=$3, status='completed',
-                payment_status=$4, result_visible=$5
+            SET finished_at=NOW(), score=$1, correct_count=$2, duration=$3,
+                status='completed', payment_status=$4, result_visible=$5
             WHERE id=$6
         """, score, correct, duration, payment_status, result_visible, attempt["id"])
 
@@ -1032,12 +982,8 @@ async def api_test_submit(request: Request):
             """, gen_code("CERT"), certificate_code, user["id"], res["id"], score)
 
     return {
-        "ok": True,
-        "score": score,
-        "correct": correct,
-        "total": len(answers),
-        "level": level,
-        "weighted": weighted,
+        "ok": True, "score": score, "correct": correct, "total": len(answers),
+        "level": level, "weighted": weighted,
         "result_visible": result_visible,
         "payment_required": payment_status == "pending",
         "attempt_id": attempt["id"],
@@ -1062,19 +1008,8 @@ async def api_certificate(code: str):
         "score": cert["score"],
         "date": cert["created_at"].strftime("%d.%m.%Y"),
     }}
-
-
-# ==================== 2-QISM BOSHLANADI ====================
-# Quyidagi qismni AVVALGI javobdan (2-QISM) oling:
-# - Battle API
-# - Payment API
-# - Admin panel
-# - Certificate battle PNG
-# - Runner
-#
-# 2-QISM ni SHU YERGA paste qiling.
-
-# ==================== BATTLE API ====================
+    
+    # ==================== BATTLE API ====================
 
 @app.post("/api/battle/create")
 async def api_battle_create(request: Request):
@@ -1088,7 +1023,6 @@ async def api_battle_create(request: Request):
         """, user["id"])
         if existing:
             return {"ok": False, "error": "ACTIVE_BATTLE_EXISTS", "battle_id": existing["id"], "code": existing["battle_code"]}
-
         code = gen_battle_code()
         for _ in range(10):
             chk = await conn.fetchval(
@@ -1098,7 +1032,6 @@ async def api_battle_create(request: Request):
             if not chk:
                 break
             code = gen_battle_code()
-
         b = await conn.fetchrow("""
             INSERT INTO battles (battle_code, creator_id, status)
             VALUES ($1, $2, 'waiting_for_player') RETURNING id
@@ -1126,7 +1059,6 @@ async def api_battle_join(request: Request):
             return {"ok": False, "error": "BATTLE_NOT_OPEN"}
         if b["opponent_id"]:
             return {"ok": False, "error": "BATTLE_FULL"}
-
         existing = await conn.fetchrow("""
             SELECT b2.* FROM battles b2
             JOIN battle_players bp ON bp.battle_id = b2.id
@@ -1134,7 +1066,6 @@ async def api_battle_join(request: Request):
         """, user["id"])
         if existing:
             return {"ok": False, "error": "ACTIVE_BATTLE_EXISTS"}
-
         await conn.execute("""
             UPDATE battles SET opponent_id=$1, status='waiting_for_payment' WHERE id=$2
         """, user["id"], b["id"])
@@ -1163,7 +1094,6 @@ async def api_battle_get(battle_id: int, request: Request):
         is_member = any(p["user_id"] == user["id"] for p in players)
         if not is_member:
             raise HTTPException(403, "Not a battle member")
-
     players_out = []
     for p in players:
         item = {
@@ -1177,17 +1107,12 @@ async def api_battle_get(battle_id: int, request: Request):
         if p["test_status"] == "completed" and b["status"] in ("completed", "draw"):
             item["score"] = p["score"]
         players_out.append(item)
-
     return {
         "ok": True,
         "battle": {
-            "id": b["id"],
-            "code": b["battle_code"],
-            "status": b["status"],
-            "creator_id": b["creator_id"],
-            "opponent_id": b["opponent_id"],
+            "id": b["id"], "code": b["battle_code"], "status": b["status"],
+            "creator_id": b["creator_id"], "opponent_id": b["opponent_id"],
             "winner_id": b["winner_id"],
-            "created_at": b["created_at"].isoformat() if b["created_at"] else None,
         },
         "players": players_out,
     }
@@ -1245,7 +1170,6 @@ async def api_battle_finish(battle_id: int, request: Request):
     user, body = await require_user(request)
     answers = body.get("answers", [])
     duration = body.get("duration", 0)
-
     async with db_pool.acquire() as conn:
         b = await conn.fetchrow("SELECT * FROM battles WHERE id=$1", battle_id)
         if not b:
@@ -1259,9 +1183,7 @@ async def api_battle_finish(battle_id: int, request: Request):
         if bp["test_status"] == "completed":
             raise HTTPException(409, "Already finished")
 
-        weighted = 0
-        max_w = 0
-        correct = 0
+        weighted = 0; max_w = 0; correct = 0
         for i, q in enumerate(IQ_ANSWERS):
             max_w += q["weight"]
             ans = answers[i] if i < len(answers) and answers[i] is not None else None
@@ -1279,62 +1201,43 @@ async def api_battle_finish(battle_id: int, request: Request):
 
         all_players = await conn.fetch("SELECT * FROM battle_players WHERE battle_id=$1", battle_id)
         completed = [p for p in all_players if p["test_status"] == "completed"]
-
         opponent_score = None
         winner_id = None
         final_status = None
 
         if len(completed) >= 2:
-            p1 = completed[0]
-            p2 = completed[1]
+            p1 = completed[0]; p2 = completed[1]
             opponent_score = p2["score"] if p1["user_id"] == user["id"] else p1["score"]
-
             if p1["score"] > p2["score"]:
-                winner_id = p1["user_id"]
-                final_status = "completed"
+                winner_id = p1["user_id"]; final_status = "completed"
             elif p2["score"] > p1["score"]:
-                winner_id = p2["user_id"]
-                final_status = "completed"
+                winner_id = p2["user_id"]; final_status = "completed"
             else:
-                winner_id = None
-                final_status = "draw"
-
+                winner_id = None; final_status = "draw"
             await conn.execute("""
                 UPDATE battles SET status=$1, winner_id=$2, finished_at=NOW() WHERE id=$3
             """, final_status, winner_id, battle_id)
-
             if winner_id:
                 winner_bp = next(p for p in completed if p["user_id"] == winner_id)
-                winner_score = winner_bp["score"]
-                code = gen_code("BT")
                 await conn.execute("""
                     INSERT INTO certificates (certificate_id, verification_code, user_id, result_id, score, type)
                     VALUES ($1, $2, $3, 0, $4, 'battle')
-                """, gen_code("CERT"), code, winner_id, winner_score)
+                """, gen_code("CERT"), gen_code("BT"), winner_id, winner_bp["score"])
                 try:
-                    await bot.send_message(
-                        winner_id,
-                        f"🏆 <b>BATTLE G‘ALABASI!</b>\n\nSiz battle’da g‘olib bo‘ldingiz!\n\nSertifikat: /start → 📜 Sertifikatim"
-                    )
+                    await bot.send_message(winner_id, "🏆 <b>BATTLE G‘ALABASI!</b>\n\nSiz g‘olib bo‘ldingiz!")
                 except Exception:
                     pass
             else:
                 try:
-                    await bot.send_message(user["id"], "🤝 <b>DURANG!</b>\n\nIkkalangizning natijangiz bir xil.")
+                    await bot.send_message(user["id"], "🤝 <b>DURANG!</b>")
                 except Exception:
                     pass
         else:
             final_status = b["status"]
             await conn.execute("UPDATE battles SET status='player_1_finished' WHERE id=$1", battle_id)
-
     return {
-        "ok": True,
-        "score": score,
-        "weighted": weighted,
-        "correct": correct,
-        "opponent_score": opponent_score,
-        "winner_id": winner_id,
-        "final_status": final_status,
+        "ok": True, "score": score, "weighted": weighted, "correct": correct,
+        "opponent_score": opponent_score, "winner_id": winner_id, "final_status": final_status,
     }
 
 
@@ -1359,7 +1262,6 @@ async def api_payment_create(request: Request):
     amount = price_map.get(product)
     if amount is None:
         raise HTTPException(400, "Invalid product")
-
     if amount == 0:
         if product == "iq" and attempt_id:
             async with db_pool.acquire() as conn:
@@ -1383,9 +1285,7 @@ async def api_payment_create(request: Request):
                 INSERT INTO payments (payment_id, user_id, product, amount, attempt_id, battle_id)
                 VALUES ($1, $2, $3, $4, $5, $6)
             """, pid, user["id"], product, amount, attempt_id, battle_id)
-
         cards = await conn.fetch("SELECT card_number, holder, bank FROM payment_cards WHERE active=TRUE")
-
     return {"ok": True, "payment_id": pid, "amount": amount, "cards": [dict(c) for c in cards]}
 
 
@@ -1404,10 +1304,8 @@ async def api_payment_receipt(request: Request):
         p = await conn.fetchrow("SELECT * FROM payments WHERE payment_id=$1", pid)
     if ADMIN_USER_ID and p:
         try:
-            await bot.send_message(
-                ADMIN_USER_ID,
-                f"💳 <b>Yangi chek!</b>\n\nUser: <code>{user['id']}</code>\nProduct: <b>{p['product']}</b>\nAmount: <b>{p['amount']:,} so‘m</b>\n\n/admin → Payments"
-            )
+            await bot.send_message(ADMIN_USER_ID,
+                f"💳 <b>Yangi chek!</b>\n\nUser: <code>{user['id']}</code>\nProduct: <b>{p['product']}</b>\nAmount: <b>{p['amount']:,} so‘m</b>")
         except Exception:
             pass
     return {"ok": True}
@@ -1423,53 +1321,14 @@ async def api_payment_get(payment_id: str, request: Request):
     if not p:
         raise HTTPException(404, "Not found")
     return {"ok": True, "payment": {
-        "payment_id": p["payment_id"],
-        "product": p["product"],
-        "amount": p["amount"],
-        "status": p["status"],
-        "created_at": p["created_at"].isoformat() if p["created_at"] else None,
+        "payment_id": p["payment_id"], "product": p["product"],
+        "amount": p["amount"], "status": p["status"],
     }}
-
-
-@app.post("/api/result/check_payment")
-async def api_result_check_payment(request: Request):
-    user, body = await require_user(request)
-    attempt_id = body.get("attempt_id")
-    if not attempt_id:
-        raise HTTPException(400, "attempt_id required")
-    async with db_pool.acquire() as conn:
-        attempt = await conn.fetchrow("""
-            SELECT * FROM test_attempts WHERE id=$1 AND user_id=$2
-        """, attempt_id, user["id"])
-    if not attempt:
-        raise HTTPException(404, "Attempt not found")
-    return {
-        "ok": True,
-        "payment_status": attempt["payment_status"],
-        "result_visible": attempt["result_visible"],
-    }
 
 
 # ==================== ADMIN PANEL ====================
 
 ADMIN_STATE = {}
-
-
-def admin_kb():
-    b = InlineKeyboardBuilder()
-    b.button(text="👥 Users", callback_data="admin:users")
-    b.button(text="📊 Statistics", callback_data="admin:stats")
-    b.button(text="💳 Payments", callback_data="admin:payments")
-    b.button(text="📢 Broadcast", callback_data="admin:broadcast")
-    b.button(text="💰 Products", callback_data="admin:products")
-    b.button(text="🏆 Ranking", callback_data="admin:ranking")
-    b.button(text="📜 Certificates", callback_data="admin:certs")
-    b.button(text="⚔️ Battles", callback_data="admin:battles")
-    b.button(text="💳 Cards", callback_data="admin:cards")
-    b.button(text="🎯 Live Counter", callback_data="admin:live")
-    b.button(text="⚙️ Settings", callback_data="admin:settings")
-    b.adjust(2, 2, 2, 2, 2, 1)
-    return b.as_markup()
 
 
 @dp.message(Command("admin"))
@@ -1692,8 +1551,7 @@ async def admin_products(cb: CallbackQuery):
             f"🔄 IQ retry: <b>{iqr}</b> so‘m\n"
             f"🔄 EQ retry: <b>{eqr}</b> so‘m\n"
             f"🔄 PQ retry: <b>{pqr}</b> so‘m\n"
-            f"⚔️ Battle: <b>{battle}</b> so‘m\n\n"
-            f"O‘zgartirish uchun tugmani bosing:"
+            f"⚔️ Battle: <b>{battle}</b> so‘m"
         )
         b = InlineKeyboardBuilder()
         b.button(text=f"🧠 IQ ({iq})", callback_data="set:iq_price")
@@ -1870,10 +1728,8 @@ async def handle_receipt(message: types.Message):
         await message.answer("✅ Chek qabul qilindi. Admin tasdiqlashini kuting.")
         if ADMIN_USER_ID:
             try:
-                await bot.send_message(
-                    ADMIN_USER_ID,
-                    f"💳 Yangi chek!\nUser: <code>{message.from_user.id}</code>\nProduct: {p['product']}\nAmount: {p['amount']:,} so‘m"
-                )
+                await bot.send_message(ADMIN_USER_ID,
+                    f"💳 Yangi chek!\nUser: <code>{message.from_user.id}</code>\nProduct: {p['product']}\nAmount: {p['amount']:,} so‘m")
             except Exception:
                 pass
     except Exception as e:
@@ -1889,7 +1745,6 @@ async def handle_admin_text(message: types.Message):
     if not await is_admin(uid):
         ADMIN_STATE.pop(uid, None)
         return
-
     action = state.get("action")
 
     if action == "set_price":
@@ -1921,8 +1776,7 @@ async def handle_admin_text(message: types.Message):
             parts = [p.strip() for p in message.text.split("|")]
             if len(parts) < 2:
                 raise ValueError
-            card_number = parts[0]
-            holder = parts[1]
+            card_number = parts[0]; holder = parts[1]
             bank = parts[2] if len(parts) > 2 else ""
             async with db_pool.acquire() as conn:
                 await conn.execute("""
@@ -1941,8 +1795,7 @@ async def handle_admin_text(message: types.Message):
             if len(parts) < 2:
                 raise ValueError
             cid = state["id"]
-            card_number = parts[0]
-            holder = parts[1]
+            card_number = parts[0]; holder = parts[1]
             bank = parts[2] if len(parts) > 2 else ""
             async with db_pool.acquire() as conn:
                 await conn.execute("""
@@ -1967,8 +1820,7 @@ async def cmd_broadcast(message: types.Message):
         text = parts[1]
         async with db_pool.acquire() as conn:
             users = await conn.fetch("SELECT user_id FROM users")
-        sent = 0
-        failed = 0
+        sent = 0; failed = 0
         for u in users:
             try:
                 await bot.send_message(u["user_id"], text)
@@ -1995,12 +1847,10 @@ async def admin_settings(cb: CallbackQuery):
         return
     try:
         support = await get_setting("support_username", "omono_v")
-        free_end = await get_setting("free_launch_end", "—")
         maintenance = await get_setting("maintenance_mode", "0")
         text = (
             f"⚙️ <b>SETTINGS</b>\n\n"
             f"👤 Support: @{support}\n"
-            f"📅 Free launch: {free_end}\n"
             f"🛠 Maintenance: {'ON' if maintenance == '1' else 'OFF'}"
         )
         b = InlineKeyboardBuilder()
@@ -2009,14 +1859,6 @@ async def admin_settings(cb: CallbackQuery):
     except Exception as e:
         logger.error(f"admin_settings error: {e}")
     await cb.answer()
-
-
-@dp.callback_query(F.data == "admin:ranking")
-async def admin_ranking(cb: CallbackQuery):
-    if not await is_admin(cb.from_user.id):
-        return
-    await cb.answer("Reyting bot menyusida")
-    await admin_menu(cb)
 
 
 @dp.callback_query(F.data == "admin:certs")
