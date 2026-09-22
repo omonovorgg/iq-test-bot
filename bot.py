@@ -1,14 +1,14 @@
-# bot.py — IQ TEST BOT v4.0 FINAL
+# bot.py — IQ TEST BOT v5.0 FINAL
 import os, io, json, random, string, hashlib, hmac, asyncio, logging
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from urllib.parse import unquote
 import asyncpg
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, Command
-from aiogram.types import (Update, WebAppInfo, InlineKeyboardMarkup,
+from aiogramInfo import Bot, Dispatcher, types, F
+,from aiogram.client.default import DefaultBotProperties
+from In aiogram.enums import ParseMode
+from aiogramline.filtersKeyboard import CommandStart, Command
+from aiogram.types import (UpdateMark, WebAppup,
     InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton,
     ReplyKeyboardRemove, BufferedInputFile, CallbackQuery)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
@@ -51,6 +51,8 @@ TEXTS = {
         "lang_changed": "✅ O‘zbekcha",
         "cert_found": "✅ <b>Sertifikat topildi</b>\n\n👤 {name}\n📊 Score: <b>{score}</b>\n📅 {date}",
         "cert_not_found": "❌ Topilmadi.",
+        "payment_help": "💳 <b>TO‘LOV</b>\n\nKartaga o‘tkazing va chek rasmini yuboring.\n\nAdmin 1-2 daqiqada tasdiqlaydi.",
+        "receipt_received": "✅ Chek qabul qilindi. Admin tasdiqlashini kuting.",
     },
     "ru": {
         "choose_lang": "🌐 Выберите язык:",
@@ -68,6 +70,8 @@ TEXTS = {
         "lang_changed": "✅ Русский",
         "cert_found": "✅ <b>Сертификат найден</b>\n\n👤 {name}\n📊 Score: <b>{score}</b>\n📅 {date}",
         "cert_not_found": "❌ Не найден.",
+        "payment_help": "💳 <b>ОПЛАТА</b>\n\nПереведите на карту и отправьте чек.",
+        "receipt_received": "✅ Чек получен.",
     },
     "en": {
         "choose_lang": "🌐 Choose language:",
@@ -85,6 +89,8 @@ TEXTS = {
         "lang_changed": "✅ English",
         "cert_found": "✅ <b>Certificate found</b>\n\n👤 {name}\n📊 Score: <b>{score}</b>\n📅 {date}",
         "cert_not_found": "❌ Not found.",
+        "payment_help": "💳 <b>PAYMENT</b>\n\nTransfer to card and send receipt.",
+        "receipt_received": "✅ Receipt received.",
     }
 }
 
@@ -204,8 +210,6 @@ async def init_db(pool):
             "ALTER TABLE payments ADD COLUMN IF NOT EXISTS battle_id INTEGER",
             "ALTER TABLE certificates ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'iq'",
             "ALTER TABLE certificates ADD COLUMN IF NOT EXISTS full_name TEXT",
-            "ALTER TABLE certificates ADD COLUMN IF NOT EXISTS verification_code TEXT",
-            "ALTER TABLE certificates ADD COLUMN IF NOT EXISTS certificate_id TEXT",
         ]
         for m in migrations:
             try:
@@ -244,42 +248,35 @@ def gen_battle_code():
     chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return "".join(random.choices(chars, k=4))
 
-from urllib.parse import parse_qsl
-
-def validate_init_data(init_data: str, bot_token: str):
+def validate_init_data(init_data, bot_token):
     try:
         if not init_data:
             return None
-
-        # parse_qsl avtomatik URL-decode qiladi
-        parsed = dict(parse_qsl(init_data, strict_parsing=True))
-
+        parsed = {}
+        for pair in init_data.split("&"):
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                parsed[k] = v  # URL-encoded SAQLANADI
         hash_val = parsed.pop("hash", None)
         if not hash_val:
             return None
-        # DIQQAT: signature va query_id OLIB TASHLANMAYDI — Telegram
-        # hash'ni ularni HAM qo'shib hisoblaydi.
-
+        # signature va query_id OLIB TASHLANMAYDI
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
-
         if calc != hash_val:
             logger.warning(f"HMAC FAIL calc={calc[:16]} got={hash_val[:16]}")
+            logger.warning(f"data_check={data_check[:200]}")
             return None
-
         auth_date = int(parsed.get("auth_date", "0"))
         if datetime.now(timezone.utc).timestamp() - auth_date > 86400 * 2:
             return None
-
-        # parsed["user"] parse_qsl orqali ALLAQACHON decode qilingan —
-        # yana unquote() qilish shart emas (double-decode xato beradi)
-        user = json.loads(parsed.get("user", "{}"))
+        user_raw = parsed.get("user", "%7B%7D")
+        user = json.loads(unquote(user_raw))
         return user
     except Exception as e:
         logger.error(f"validate_init_data error: {e}")
         return None
-
 
 async def get_setting(key, default=None):
     async with db_pool.acquire() as conn:
@@ -458,8 +455,9 @@ async def menu_help(message: types.Message):
         iq_str = "BEPUL" if iq_price == "0" else f"{iq_price} so‘m"
         eq_str = "BEPUL" if eq_price == "0" else f"{eq_price} so‘m"
         pq_str = "BEPUL" if pq_price == "0" else f"{pq_price} so‘m"
+        battle_str = "BEPUL" if battle_price == "0" else f"{battle_price} so‘m"
         await message.answer(t(lang, "help", iq_price=iq_str, eq_price=eq_str,
-            pq_price=pq_str, iq_retry=iq_retry, battle_price=battle_price))
+            pq_price=pq_str, iq_retry=iq_retry, battle_price=battle_str))
     except Exception as e:
         logger.error(f"menu_help error: {e}")
 
@@ -573,7 +571,7 @@ async def health():
         async with db_pool.acquire() as conn:
             await conn.execute("SELECT 1")
         return {"status": "ok"}
-    except Exception as e:
+    except:
         return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.get("/app", response_class=HTMLResponse)
@@ -778,17 +776,7 @@ async def api_certificate_generate(request: Request):
         code=cert["verification_code"], date=cert["created_at"].strftime("%d.%m.%Y"))
     return Response(content=png, media_type="image/png",
         headers={"Content-Disposition": f'attachment; filename="{cert["verification_code"]}.png"'})
-
-@app.post("/api/certificate/check")
-async def api_certificate_check(request: Request):
-    user, body = await require_user(request)
-    async with db_pool.acquire() as conn:
-        cert = await conn.fetchrow("SELECT verification_code FROM certificates WHERE user_id=$1 AND type='iq' ORDER BY created_at DESC LIMIT 1", user["id"])
-    if not cert:
-        return {"ok": True, "has_certificate": False}
-    return {"ok": True, "has_certificate": True, "code": cert["verification_code"]}
-
-# ==================== BATTLE ====================
+        # ==================== BATTLE ====================
 @app.post("/api/battle/create")
 async def api_battle_create(request: Request):
     user, body = await require_user(request)
@@ -1288,17 +1276,26 @@ async def cmd_broadcast(message: types.Message):
         await message.answer(f"✅ {sent}\n❌ {failed}")
     except Exception as e: logger.error(f"cmd_broadcast error: {e}")
 
+# ==================== RECEIPT HANDLER ====================
 @dp.message(F.photo)
 async def handle_receipt(message: types.Message):
     try:
         async with db_pool.acquire() as conn:
             p = await conn.fetchrow("""SELECT payment_id, product, amount FROM payments
                 WHERE user_id=$1 AND status='pending' ORDER BY created_at DESC LIMIT 1""", message.from_user.id)
-            if not p: return
+            if not p:
+                await message.answer(t("uz", "no_pending_payment"))
+                return
             await conn.execute("UPDATE payments SET receipt_file_id=$1 WHERE payment_id=$2", message.photo[-1].file_id, p["payment_id"])
-        await message.answer("✅ Chek qabul qilindi.")
+        await message.answer(t("uz", "receipt_received"))
         if ADMIN_USER_ID:
-            try: await bot.send_message(ADMIN_USER_ID, f"💳 Chek!\nUser: <code>{message.from_user.id}</code>\n{p['product']} — {p['amount']:,} so‘m")
+            try:
+                await bot.send_message(ADMIN_USER_ID,
+                    f"💳 <b>YANGI CHEK</b>\n\n"
+                    f"👤 User: <code>{message.from_user.id}</code>\n"
+                    f"📦 Product: <b>{p['product']}</b>\n"
+                    f"💰 Amount: <b>{p['amount']:,} so‘m</b>\n\n"
+                    f"/admin → 💳 Payments")
             except: pass
     except Exception as e: logger.error(f"handle_receipt error: {e}")
 
