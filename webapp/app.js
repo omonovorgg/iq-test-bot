@@ -11,15 +11,31 @@ if (tg) {
   } catch {}
 }
 
-// initData ni olish (kechikish bilan)
-let initData = tg?.initData || "";
-setTimeout(() => {
-  if (!initData && tg?.initData) {
+// initData ni olish — kechikish bilan, har 100ms tekshirish
+let initData = "";
+function getInitData() {
+  if (tg?.initData && tg.initData.length > 0) {
     initData = tg.initData;
-    console.log("[initData] delayed loaded, len =", initData.length);
+    return initData;
   }
-}, 500);
+  return initData;
+}
+getInitData();
 
+// 5 sekund davomida tekshirish
+let initAttempts = 0;
+const initInterval = setInterval(() => {
+  initAttempts++;
+  const v = getInitData();
+  if (v && v.length > 0) {
+    console.log("[initData] loaded:", v.length, "belgi, attempt:", initAttempts);
+    clearInterval(initInterval);
+  }
+  if (initAttempts > 50) {
+    clearInterval(initInterval);
+    console.warn("[initData] 5 sekunddan keyin ham bo'sh!");
+  }
+}, 100);
 
 function haptic(type = "light") {
   try { tg?.HapticFeedback?.impactOccurred(type); } catch {}
@@ -27,12 +43,14 @@ function haptic(type = "light") {
 
 async function api(path, body = null, method = "POST") {
   try {
-    const currentInitData = tg?.initData || initData || "";
-    const payload = body ? { ...body, initData: currentInitData } : null;
+    const currentInitData = getInitData() || tg?.initData || "";
+    const payload = body
+      ? { ...body, initData: currentInitData }
+      : { initData: currentInitData };
     const res = await fetch(path, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: payload ? JSON.stringify(payload) : null,
+      body: JSON.stringify(payload),
     });
     return await res.json();
   } catch (e) {
