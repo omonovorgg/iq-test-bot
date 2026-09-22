@@ -686,44 +686,72 @@ def generate_iq_certificate_png(name: str, score: int, code: str, date: str) -> 
         draw.line([(0, y), (W, y)], fill=(r, g, b))
     draw.rectangle([30, 30, W-30, H-30], outline="#d4af37", width=6)
     draw.rectangle([50, 50, W-50, H-50], outline="#d4af37", width=2)
-    try:
-        f_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", 110)
-        f_name = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf", 80)
-        f_score = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 200)
-        f_label = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 38)
-        f_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
-    except:
-        f_title = f_name = f_score = f_label = f_small = ImageFont.load_default()
+
+    # === FONT FALLBACK ===
+    import glob
+    def load_font(size, bold=False, italic=False):
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf" if italic else
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf" if italic else
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf" if bold else
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        ]
+        # Font topish
+        for path in candidates:
+            try:
+                return ImageFont.truetype(path, size)
+            except:
+                continue
+        # Glob orqali izlash
+        for pattern in ["/usr/share/fonts/**/*.ttf", "/usr/local/share/fonts/**/*.ttf"]:
+            for path in glob.glob(pattern, recursive=True):
+                try:
+                    return ImageFont.truetype(path, size)
+                except:
+                    continue
+        return ImageFont.load_default()
+
+    f_title = load_font(110, bold=True)
+    f_name = load_font(90, italic=True)
+    f_score = load_font(220, bold=True)
+    f_label = load_font(42, bold=True)
+    f_small = load_font(30)
 
     def center(text, font, y, fill="#d4af37"):
         bbox = draw.textbbox((0, 0), text, font=font)
         w = bbox[2] - bbox[0]
         draw.text(((W - w) / 2, y), text, font=font, fill=fill)
 
-    center("SERTIFIKAT", f_title, 120, "#d4af37")
-    center("AQLLIY SALOHIYAT TO‘G‘RISIDA", f_label, 260, "#c9a227")
-    draw.line([(300, 420), (W-300, 420)], fill="#d4af37", width=2)
-    center(name, f_name, 320, "#ffffff")
-    draw.line([(300, 440), (W-300, 440)], fill="#d4af37", width=2)
-    center("IQ-STYLE SCORE", f_label, 490, "#c9a227")
-    center(str(score), f_score, 540, "#ffffff")
+    center("SERTIFIKAT", f_title, 130, "#d4af37")
+    center("AQLLIY SALOHIYAT TO‘G‘RISIDA", f_label, 280, "#c9a227")
+    draw.line([(300, 430), (W-300, 430)], fill="#d4af37", width=2)
+    center(name, f_name, 330, "#ffffff")
+    draw.line([(300, 460), (W-300, 460)], fill="#d4af37", width=2)
+    center("IQ-STYLE SCORE", f_label, 520, "#c9a227")
+    center(str(score), f_score, 570, "#ffffff")
     if score >= 130: level = "JUDA YUQORI"
     elif score >= 115: level = "YUQORI DARAJA"
     elif score >= 100: level = "O‘RTA DARAJA"
     else: level = "RIVOJLANTIRISH KERAK"
-    center(level, f_label, 800, "#d4af37")
-    draw.text((150, H-150), f"Sana: {date}", font=f_small, fill="#c9a227")
-    draw.text((150, H-100), f"Kod: {code}", font=f_small, fill="#c9a227")
-    draw.text((W-450, H-100), "IQ TEST BOT", font=f_small, fill="#c9a227")
-    seal_x, seal_y = W - 220, 220
+    center(level, f_label, 850, "#d4af37")
+    draw.text((150, H-160), f"Sana: {date}", font=f_small, fill="#c9a227")
+    draw.text((150, H-110), f"Kod: {code}", font=f_small, fill="#c9a227")
+    draw.text((W-500, H-110), "IQ TEST BOT", font=f_small, fill="#c9a227")
+    seal_x, seal_y = W - 220, 240
     draw.ellipse([seal_x-100, seal_y-100, seal_x+100, seal_y+100], outline="#d4af37", width=6)
     draw.ellipse([seal_x-85, seal_y-85, seal_x+85, seal_y+85], outline="#d4af37", width=2)
-    bbox = draw.textbbox((0, 0), "VERIFIED", font=f_small)
-    draw.text((seal_x - (bbox[2]-bbox[0])/2, seal_y - 15), "VERIFIED", font=f_small, fill="#d4af37")
+    bbox = draw.textbbox((0, 0), "VERIFIED", font=f_label)
+    draw.text((seal_x - (bbox[2]-bbox[0])/2, seal_y - 20), "VERIFIED", font=f_label, fill="#d4af37")
+
     buf = io.BytesIO()
     img.save(buf, format="PNG", quality=95)
     return buf.getvalue()
-
 
 # ==================== FASTAPI ====================
 @asynccontextmanager
