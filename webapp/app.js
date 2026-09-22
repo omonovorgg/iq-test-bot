@@ -1,7 +1,6 @@
 /* ============================================================
    IQ TEST BOT — app.js (FINAL v1.0)
    ============================================================ */
-
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
@@ -11,7 +10,16 @@ if (tg) {
     tg.setBackgroundColor?.("#0a0e1a");
   } catch {}
 }
-const initData = tg?.initData || "";
+
+// initData ni olish (kechikish bilan)
+let initData = tg?.initData || "";
+setTimeout(() => {
+  if (!initData && tg?.initData) {
+    initData = tg.initData;
+    console.log("[initData] delayed loaded, len =", initData.length);
+  }
+}, 500);
+
 
 function haptic(type = "light") {
   try { tg?.HapticFeedback?.impactOccurred(type); } catch {}
@@ -19,10 +27,12 @@ function haptic(type = "light") {
 
 async function api(path, body = null, method = "POST") {
   try {
+    const currentInitData = tg?.initData || initData || "";
+    const payload = body ? { ...body, initData: currentInitData } : null;
     const res = await fetch(path, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : null,
+      body: payload ? JSON.stringify(payload) : null,
     });
     return await res.json();
   } catch (e) {
