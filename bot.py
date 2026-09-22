@@ -558,7 +558,8 @@ async def menu_cert(message: types.Message):
         lang = user["language"] if user else "uz"
         async with db_pool.acquire() as conn:
             cert = await conn.fetchrow("""
-                SELECT c.*, u.full_name, u.first_name
+                SELECT c.verification_code, c.score, c.created_at, c.full_name,
+                       u.full_name AS u_full_name, u.first_name
                 FROM certificates c
                 JOIN users u ON u.user_id = c.user_id
                 WHERE c.user_id=$1 AND c.type='iq'
@@ -567,16 +568,18 @@ async def menu_cert(message: types.Message):
         if not cert:
             await message.answer(t(lang, "no_cert"))
             return
-        name = cert["full_name"] or cert["first_name"] or "User"
+        name = cert["full_name"] or cert["u_full_name"] or cert["first_name"] or "User"
         png = generate_iq_certificate_png(
-            name=name, score=cert["score"],
+            name=name,
+            score=cert["score"],
             code=cert["verification_code"],
             date=cert["created_at"].strftime("%d.%m.%Y")
         )
-        await message.answer_document(BufferedInputFile(png, filename=f"{cert['verification_code']}.png"))
+        await message.answer_document(
+            BufferedInputFile(png, filename=f"{cert['verification_code']}.png")
+        )
     except Exception as e:
         logger.error(f"menu_cert error: {e}")
-
 
 @dp.message(F.text.in_([TEXTS["uz"]["menu_rank"], TEXTS["ru"]["menu_rank"], TEXTS["en"]["menu_rank"]]))
 async def menu_rank(message: types.Message):
