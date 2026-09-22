@@ -1029,6 +1029,7 @@ const App = {
 
   // ============ BATTLE ============
   openBattle() {
+    console.log("[Battle] initData:", initData ? initData.substring(0, 50) : "EMPTY");
     this.go("battle-home");
 },
 
