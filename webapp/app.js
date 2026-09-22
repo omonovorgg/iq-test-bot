@@ -1029,9 +1029,8 @@ const App = {
 
   // ============ BATTLE ============
   openBattle() {
-    if (!initData) { alert("Battle faqat Telegram orqali."); return; }
     this.go("battle-home");
-  },
+},
 
   async createBattle() {
     haptic("medium");
