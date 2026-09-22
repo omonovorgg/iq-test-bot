@@ -1,5 +1,5 @@
 /* ============================================================
-   IQ TEST BOT — app.js (FINAL)
+   IQ TEST BOT — app.js (FINAL v1.0)
    ============================================================ */
 
 const tg = window.Telegram?.WebApp;
@@ -57,6 +57,7 @@ const State = {
     current: 0,
     answers: [],
     startedAt: null,
+    pollInterval: null,
   },
   payment: {
     id: null,
@@ -64,11 +65,10 @@ const State = {
     amount: 0,
     cards: [],
     pollInterval: null,
+    attemptId: null,
+    battleId: null,
   },
-  live: {
-    interval: null,
-    lastTotal: 0,
-  },
+  live: { interval: null },
   profile: {
     full_name: "",
     gender: null,
@@ -77,14 +77,14 @@ const State = {
   },
 };
 
-// ==================== LOCAL STORAGE ====================
-const LS_KEY = "iqtestbot_state_v3";
+const LS_KEY = "iqtestbot_state_v4";
 
 function saveLocal() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       test: State.test,
       battle: State.battle,
+      profile: State.profile,
     }));
   } catch {}
 }
@@ -100,11 +100,9 @@ function clearLocal() {
   try { localStorage.removeItem(LS_KEY); } catch {}
 }
 
-// ==================== 18 TA IQ SAVOLI (MENSA DARAJASIDA) ====================
+// ==================== 18 IQ QUESTIONS ====================
 const QUESTIONS = [
-  // ============ EASY (Q1-Q6) ============
-  {
-    id: 1, difficulty: "easy", weight: 1, category: "Raqamlar",
+  { id: 1, difficulty: "easy", weight: 1,
     matrix: [
       { type: "dot", count: 1 }, { type: "dot", count: 2 }, { type: "dot", count: 3 },
       { type: "dot", count: 2 }, { type: "dot", count: 3 }, { type: "dot", count: 4 },
@@ -113,26 +111,18 @@ const QUESTIONS = [
     options: [
       { type: "dot", count: 3 }, { type: "dot", count: 4 },
       { type: "dot", count: 5 }, { type: "dot", count: 6 },
-    ],
-    correct: 2,
-  },
-  {
-    id: 2, difficulty: "easy", weight: 1, category: "Pattern",
+    ], correct: 2 },
+  { id: 2, difficulty: "easy", weight: 1,
     matrix: [
       { type: "shape", shape: "circle", fill: "empty" }, { type: "shape", shape: "square", fill: "empty" }, { type: "shape", shape: "triangle", fill: "empty" },
       { type: "shape", shape: "square", fill: "empty" }, { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" },
       { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" }, { type: "question" },
     ],
     options: [
-      { type: "shape", shape: "square", fill: "empty" },
-      { type: "shape", shape: "circle", fill: "empty" },
-      { type: "shape", shape: "triangle", fill: "empty" },
-      { type: "shape", shape: "diamond", fill: "empty" },
-    ],
-    correct: 0,
-  },
-  {
-    id: 3, difficulty: "easy", weight: 1, category: "Fazoviy fikr",
+      { type: "shape", shape: "square", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" },
+      { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "diamond", fill: "empty" },
+    ], correct: 0 },
+  { id: 3, difficulty: "easy", weight: 1,
     matrix: [
       { type: "rotate", angle: 0 }, { type: "rotate", angle: 90 }, { type: "rotate", angle: 180 },
       { type: "rotate", angle: 90 }, { type: "rotate", angle: 180 }, { type: "rotate", angle: 270 },
@@ -141,11 +131,8 @@ const QUESTIONS = [
     options: [
       { type: "rotate", angle: 0 }, { type: "rotate", angle: 90 },
       { type: "rotate", angle: 270 }, { type: "rotate", angle: 360 },
-    ],
-    correct: 3,
-  },
-  {
-    id: 4, difficulty: "easy", weight: 1, category: "Pattern",
+    ], correct: 3 },
+  { id: 4, difficulty: "easy", weight: 1,
     matrix: [
       { type: "size", size: 12 }, { type: "size", size: 20 }, { type: "size", size: 28 },
       { type: "size", size: 20 }, { type: "size", size: 28 }, { type: "size", size: 36 },
@@ -154,11 +141,8 @@ const QUESTIONS = [
     options: [
       { type: "size", size: 28 }, { type: "size", size: 36 },
       { type: "size", size: 44 }, { type: "size", size: 52 },
-    ],
-    correct: 2,
-  },
-  {
-    id: 5, difficulty: "easy", weight: 1, category: "Mantiq",
+    ], correct: 2 },
+  { id: 5, difficulty: "easy", weight: 1,
     matrix: [
       { type: "grid", pos: 0 }, { type: "grid", pos: 1 }, { type: "grid", pos: 2 },
       { type: "grid", pos: 3 }, { type: "grid", pos: 4 }, { type: "grid", pos: 5 },
@@ -167,27 +151,18 @@ const QUESTIONS = [
     options: [
       { type: "grid", pos: 4 }, { type: "grid", pos: 6 },
       { type: "grid", pos: 7 }, { type: "grid", pos: 8 },
-    ],
-    correct: 3,
-  },
-  {
-    id: 6, difficulty: "easy", weight: 1, category: "Pattern",
+    ], correct: 3 },
+  { id: 6, difficulty: "easy", weight: 1,
     matrix: [
       { type: "shape", shape: "circle", fill: "full" }, { type: "shape", shape: "square", fill: "full" }, { type: "shape", shape: "triangle", fill: "full" },
       { type: "shape", shape: "square", fill: "full" }, { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "circle", fill: "full" },
       { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "circle", fill: "full" }, { type: "question" },
     ],
     options: [
-      { type: "shape", shape: "circle", fill: "full" },
-      { type: "shape", shape: "square", fill: "full" },
-      { type: "shape", shape: "triangle", fill: "full" },
-      { type: "shape", shape: "diamond", fill: "full" },
-    ],
-    correct: 1,
-  },
-  // ============ MEDIUM (Q7-Q12) ============
-  {
-    id: 7, difficulty: "medium", weight: 2, category: "Pattern",
+      { type: "shape", shape: "circle", fill: "full" }, { type: "shape", shape: "square", fill: "full" },
+      { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "diamond", fill: "full" },
+    ], correct: 1 },
+  { id: 7, difficulty: "medium", weight: 2,
     matrix: [
       { type: "combo", shapes: ["circle"], fill: "full" },
       { type: "combo", shapes: ["circle", "square"], fill: "full" },
@@ -204,26 +179,18 @@ const QUESTIONS = [
       { type: "combo", shapes: ["triangle", "circle", "square"], fill: "half" },
       { type: "combo", shapes: ["circle", "square"], fill: "half" },
       { type: "combo", shapes: ["triangle", "square"], fill: "half" },
-    ],
-    correct: 1,
-  },
-  {
-    id: 8, difficulty: "medium", weight: 2, category: "Fazoviy fikr",
+    ], correct: 1 },
+  { id: 8, difficulty: "medium", weight: 2,
     matrix: [
       { type: "shape", shape: "circle", fill: "full" }, { type: "shape", shape: "circle", fill: "half" }, { type: "shape", shape: "circle", fill: "empty" },
       { type: "shape", shape: "square", fill: "full" }, { type: "shape", shape: "square", fill: "half" }, { type: "shape", shape: "square", fill: "empty" },
       { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "triangle", fill: "half" }, { type: "question" },
     ],
     options: [
-      { type: "shape", shape: "triangle", fill: "full" },
-      { type: "shape", shape: "triangle", fill: "half" },
-      { type: "shape", shape: "triangle", fill: "empty" },
-      { type: "shape", shape: "circle", fill: "empty" },
-    ],
-    correct: 2,
-  },
-  {
-    id: 9, difficulty: "medium", weight: 2, category: "Raqamlar",
+      { type: "shape", shape: "triangle", fill: "full" }, { type: "shape", shape: "triangle", fill: "half" },
+      { type: "shape", shape: "triangle", fill: "empty" }, { type: "shape", shape: "circle", fill: "empty" },
+    ], correct: 2 },
+  { id: 9, difficulty: "medium", weight: 2,
     matrix: [
       { type: "num", val: 2 }, { type: "num", val: 4 }, { type: "num", val: 6 },
       { type: "num", val: 3 }, { type: "num", val: 6 }, { type: "num", val: 9 },
@@ -232,11 +199,8 @@ const QUESTIONS = [
     options: [
       { type: "num", val: 10 }, { type: "num", val: 12 },
       { type: "num", val: 14 }, { type: "num", val: 16 },
-    ],
-    correct: 1,
-  },
-  {
-    id: 10, difficulty: "medium", weight: 2, category: "Mantiq",
+    ], correct: 1 },
+  { id: 10, difficulty: "medium", weight: 2,
     matrix: [
       { type: "rotate", angle: 45 }, { type: "rotate", angle: 90 }, { type: "rotate", angle: 135 },
       { type: "rotate", angle: 90 }, { type: "rotate", angle: 135 }, { type: "rotate", angle: 180 },
@@ -245,11 +209,8 @@ const QUESTIONS = [
     options: [
       { type: "rotate", angle: 180 }, { type: "rotate", angle: 225 },
       { type: "rotate", angle: 270 }, { type: "rotate", angle: 315 },
-    ],
-    correct: 1,
-  },
-  {
-    id: 11, difficulty: "medium", weight: 2, category: "Pattern",
+    ], correct: 1 },
+  { id: 11, difficulty: "medium", weight: 2,
     matrix: [
       { type: "dot", count: 1 }, { type: "dot", count: 4 }, { type: "dot", count: 9 },
       { type: "dot", count: 4 }, { type: "dot", count: 9 }, { type: "dot", count: 16 },
@@ -258,11 +219,8 @@ const QUESTIONS = [
     options: [
       { type: "dot", count: 16 }, { type: "dot", count: 25 },
       { type: "dot", count: 36 }, { type: "dot", count: 49 },
-    ],
-    correct: 1,
-  },
-  {
-    id: 12, difficulty: "medium", weight: 2, category: "Fazoviy fikr",
+    ], correct: 1 },
+  { id: 12, difficulty: "medium", weight: 2,
     matrix: [
       { type: "grid", pos: 0 }, { type: "grid", pos: 2 }, { type: "grid", pos: 4 },
       { type: "grid", pos: 2 }, { type: "grid", pos: 4 }, { type: "grid", pos: 6 },
@@ -271,12 +229,8 @@ const QUESTIONS = [
     options: [
       { type: "grid", pos: 6 }, { type: "grid", pos: 7 },
       { type: "grid", pos: 8 }, { type: "grid", pos: 5 },
-    ],
-    correct: 2,
-  },
-  // ============ HARD (Q13-Q18) ============
-  {
-    id: 13, difficulty: "hard", weight: 3, category: "Raqamlar",
+    ], correct: 2 },
+  { id: 13, difficulty: "hard", weight: 3,
     matrix: [
       { type: "num", val: 1 }, { type: "num", val: 1 }, { type: "num", val: 2 },
       { type: "num", val: 3 }, { type: "num", val: 5 }, { type: "num", val: 8 },
@@ -285,11 +239,8 @@ const QUESTIONS = [
     options: [
       { type: "num", val: 30 }, { type: "num", val: 34 },
       { type: "num", val: 38 }, { type: "num", val: 42 },
-    ],
-    correct: 1,
-  },
-  {
-    id: 14, difficulty: "hard", weight: 3, category: "Pattern",
+    ], correct: 1 },
+  { id: 14, difficulty: "hard", weight: 3,
     matrix: [
       { type: "combo", shapes: ["circle"], fill: "full" },
       { type: "combo", shapes: ["circle", "square"], fill: "half" },
@@ -306,11 +257,8 @@ const QUESTIONS = [
       { type: "combo", shapes: ["triangle"], fill: "full" },
       { type: "combo", shapes: ["circle", "square"], fill: "half" },
       { type: "combo", shapes: ["triangle", "square"], fill: "empty" },
-    ],
-    correct: 0,
-  },
-  {
-    id: 15, difficulty: "hard", weight: 3, category: "Fazoviy fikr",
+    ], correct: 0 },
+  { id: 15, difficulty: "hard", weight: 3,
     matrix: [
       { type: "rotate", angle: 0 }, { type: "rotate", angle: 45 }, { type: "rotate", angle: 90 },
       { type: "rotate", angle: 45 }, { type: "rotate", angle: 90 }, { type: "rotate", angle: 135 },
@@ -319,11 +267,8 @@ const QUESTIONS = [
     options: [
       { type: "rotate", angle: 135 }, { type: "rotate", angle: 180 },
       { type: "rotate", angle: 225 }, { type: "rotate", angle: 270 },
-    ],
-    correct: 1,
-  },
-  {
-    id: 16, difficulty: "hard", weight: 3, category: "Raqamlar",
+    ], correct: 1 },
+  { id: 16, difficulty: "hard", weight: 3,
     matrix: [
       { type: "num", val: 3 }, { type: "num", val: 9 }, { type: "num", val: 27 },
       { type: "num", val: 2 }, { type: "num", val: 4 }, { type: "num", val: 8 },
@@ -332,11 +277,8 @@ const QUESTIONS = [
     options: [
       { type: "num", val: 100 }, { type: "num", val: 125 },
       { type: "num", val: 150 }, { type: "num", val: 625 },
-    ],
-    correct: 1,
-  },
-  {
-    id: 17, difficulty: "hard", weight: 3, category: "Mantiq",
+    ], correct: 1 },
+  { id: 17, difficulty: "hard", weight: 3,
     matrix: [
       { type: "grid", pos: 0 }, { type: "grid", pos: 1 }, { type: "grid", pos: 3 },
       { type: "grid", pos: 1 }, { type: "grid", pos: 3 }, { type: "grid", pos: 5 },
@@ -345,11 +287,8 @@ const QUESTIONS = [
     options: [
       { type: "grid", pos: 5 }, { type: "grid", pos: 6 },
       { type: "grid", pos: 7 }, { type: "grid", pos: 8 },
-    ],
-    correct: 2,
-  },
-  {
-    id: 18, difficulty: "hard", weight: 3, category: "Pattern",
+    ], correct: 2 },
+  { id: 18, difficulty: "hard", weight: 3,
     matrix: [
       { type: "combo", shapes: ["circle", "square"], fill: "full" },
       { type: "combo", shapes: ["square", "triangle"], fill: "half" },
@@ -366,12 +305,10 @@ const QUESTIONS = [
       { type: "combo", shapes: ["square", "triangle"], fill: "half" },
       { type: "combo", shapes: ["triangle", "circle"], fill: "empty" },
       { type: "combo", shapes: ["circle", "triangle"], fill: "half" },
-    ],
-    correct: 1,
-  },
+    ], correct: 1 },
 ];
 
-// ==================== EQ (6) ====================
+// ==================== EQ 6 ====================
 const EQ_QUESTIONS = [
   { id: 1, text: "Ishingiz juda ko‘payib ketdi va boshliq yana yangi topshiriq berdi. Siz nima qilasiz?", options: ["Darhol ro‘yxat tuzaman va muhimini ajrataman", "Asabiylashaman, lekin baribir boshlayman", "Boshliqqa vaqt yetmasligini aytaman", "Kechqurun qolib ishlayman"], scores: [4, 2, 3, 1] },
   { id: 2, text: "Do‘stingiz yig‘layapti va nima bo‘lganini aytmayapti. Siz:", options: ["Yoniga o‘tiraman va jim kutaman", "Darhol savol bera boshlayman", "Hazil qilib kayfiyatini ko‘taraman", "Uydan ketsam bo‘ladi deb o‘ylayman"], scores: [4, 1, 2, 1] },
@@ -381,7 +318,7 @@ const EQ_QUESTIONS = [
   { id: 6, text: "Suhbatdoshning ko‘zlari boshqa tomonga qarayapti. Bu nimani bildiradi?", options: ["U zerikkan yoki shoshilyapti", "U yolg‘on gapiryapti", "U sizni yoqtirmaydi", "Hech narsa, shunchaki shunday"], scores: [4, 2, 1, 2] },
 ];
 
-// ==================== PQ (6) ====================
+// ==================== PQ 6 ====================
 const PQ_QUESTIONS = [
   { id: 1, text: "Muhim loyiha bor, lekin siz uni doim keyinga surasiz. Sabab:", options: ["Qiyin bo‘lgani uchun", "Vaqt ko‘p deb o‘ylayman", "Nima qilishni bilmayman", "Kayfiyat yo‘q"], scores: [2, 1, 2, 1] },
   { id: 2, text: "Imtihonga 7 kun qoldi. Siz:", options: ["Har kuni oz-oz tayyorlanaman", "Oxirgi 2 kunda qattiq tayyorlanaman", "Oxirgi kechada tayyorlanaman", "Tayyorlanmayman, nima bo‘lsa bo‘lsin"], scores: [4, 2, 1, 0] },
@@ -395,7 +332,6 @@ const PQ_QUESTIONS = [
 function renderCell(cell) {
   if (!cell) return "";
   if (cell.type === "question") return "";
-
   if (cell.type === "dot") {
     let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;width:44px;height:44px;align-items:center;justify-items:center;">';
     for (let i = 0; i < Math.min(cell.count, 16); i++) {
@@ -404,11 +340,9 @@ function renderCell(cell) {
     html += "</div>";
     return html;
   }
-
   if (cell.type === "num") {
     return `<span style="font-size:22px;font-weight:800;color:#a78bfa;">${cell.val}</span>`;
   }
-
   if (cell.type === "shape") {
     const colors = { full: "#a78bfa", half: "rgba(167,139,250,.5)", empty: "transparent" };
     const fill = colors[cell.fill] || "transparent";
@@ -417,11 +351,9 @@ function renderCell(cell) {
     if (cell.shape === "triangle") return `<svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,7 37,37 7,37" fill="${fill}" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/></svg>`;
     if (cell.shape === "diamond") return `<svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,6 38,22 22,38 6,22" fill="${fill}" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/></svg>`;
   }
-
   if (cell.type === "rotate") {
     return `<svg width="44" height="44" viewBox="0 0 44 44"><g transform="rotate(${cell.angle} 22 22)"><path d="M12 22 L32 22 M27 17 L32 22 L27 27" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
   }
-
   if (cell.type === "combo") {
     const colors = { full: "#a78bfa", half: "rgba(167,139,250,.5)", empty: "transparent" };
     const fill = colors[cell.fill] || "transparent";
@@ -432,12 +364,10 @@ function renderCell(cell) {
     svg += "</svg>";
     return svg;
   }
-
   if (cell.type === "size") {
     const s = Math.min(cell.size, 36);
     return `<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="${s/2}" fill="none" stroke="#a78bfa" stroke-width="2"/></svg>`;
   }
-
   if (cell.type === "grid") {
     const pos = cell.pos;
     const row = Math.floor(pos / 3);
@@ -447,7 +377,6 @@ function renderCell(cell) {
       <circle cx="${10 + col * 12}" cy="${10 + row * 12}" r="5" fill="#a78bfa"/>
     </svg>`;
   }
-
   return "";
 }
 
@@ -491,20 +420,23 @@ const App = {
     await this.refreshLive();
     this.startLiveLoop();
 
+    const local = loadLocal();
+    if (local && local.profile) {
+      State.profile = local.profile;
+    }
+
     if (initData) {
       const me = await api("/api/me", { initData });
       if (me.ok) {
         State.user = me.user;
         State.completed = me.completed || {};
-        this.applyUnlocks();
-        // Profile to'ldirilganmi?
         if (me.user.full_name) {
           State.profile.full_name = me.user.full_name;
           State.profile.gender = me.user.gender;
           State.profile.age = me.user.age;
           State.profile.country = me.user.country;
         }
-        // Active battle bormi?
+        this.applyUnlocks();
         if (me.active_battles && me.active_battles.length > 0) {
           State.battle.id = me.active_battles[0].id;
           State.battle.code = me.active_battles[0].battle_code;
@@ -517,7 +449,6 @@ const App = {
       }
     }
 
-    const local = loadLocal();
     if (local && local.test && local.test.sessionId && local.test.current > 0 && local.test.current < 18 && local.test.type === "iq") {
       setTimeout(() => {
         if (confirm("Test davom etmoqda. Davom ettirishni xohlaysizmi?")) {
@@ -545,9 +476,7 @@ const App = {
 
   startLiveLoop() {
     if (State.live.interval) clearInterval(State.live.interval);
-    State.live.interval = setInterval(() => {
-      this.refreshLive();
-    }, 5000);
+    State.live.interval = setInterval(() => this.refreshLive(), 5000);
   },
 
   animateNumber(id, target) {
@@ -559,10 +488,7 @@ const App = {
     const step = diff > 0 ? Math.max(1, Math.floor(diff / 10)) : Math.min(-1, Math.ceil(diff / 10));
     const timer = setInterval(() => {
       cur += step;
-      if ((step > 0 && cur >= target) || (step < 0 && cur <= target)) {
-        cur = target;
-        clearInterval(timer);
-      }
+      if ((step > 0 && cur >= target) || (step < 0 && cur <= target)) { cur = target; clearInterval(timer); }
       el.textContent = cur.toLocaleString();
     }, 40);
   },
@@ -577,63 +503,47 @@ const App = {
   },
 
   applyUnlocks() {
-    const c = State.completed;
+    const c = State.completed || {};
+    console.log("[applyUnlocks]", c);
     if (c.iq) {
       const el = document.getElementById("card-eq");
       if (el) {
-        el.classList.remove("locked");
-        el.classList.add("unlocked");
-        const s = el.querySelector(".card-state");
-        if (s) s.textContent = "🔓";
+        el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
       }
     }
     if (c.eq) {
       const el = document.getElementById("card-pq");
       if (el) {
-        el.classList.remove("locked");
-        el.classList.add("unlocked");
-        const s = el.querySelector(".card-state");
-        if (s) s.textContent = "🔓";
+        el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
+        const h = el.querySelector(".card-hint"); if (h) h.textContent = "";
       }
     }
     if (c.iq && c.eq && c.pq) {
       const el = document.getElementById("card-profile");
       if (el) {
-        el.classList.remove("locked");
-        el.classList.add("unlocked");
-        const s = el.querySelector(".card-state");
-        if (s) s.textContent = "🔓";
+        el.classList.remove("locked"); el.classList.add("unlocked");
+        const s = el.querySelector(".card-state"); if (s) s.textContent = "🔓";
       }
     }
   },
 
-  // ==================== PROFILE SAVE ====================
   async saveProfile() {
-    const fullName = document.getElementById("profile-fullname")?.value.trim();
+    const fullName = document.getElementById("profile-fullname")?.value.trim() || State.profile.full_name;
     const gender = State.profile.gender;
-    const age = parseInt(document.getElementById("profile-age")?.value) || null;
+    const age = parseInt(document.getElementById("profile-age")?.value) || State.profile.age;
     const country = State.profile.country;
-
     if (!fullName || fullName.length < 3) { alert("Ism-familiyani to‘liq kiriting."); return; }
     if (!gender) { alert("Jinsni tanlang."); return; }
     if (!age || age < 8 || age > 100) { alert("Yoshni to‘g‘ri kiriting (8-100)."); return; }
     if (!country) { alert("Davlatni tanlang."); return; }
-
-    State.profile.full_name = fullName;
-    State.profile.age = age;
-
+    State.profile.full_name = fullName; State.profile.age = age;
+    saveLocal();
     if (initData) {
-      const res = await api("/api/profile/save", {
-        initData,
-        full_name: fullName,
-        gender: gender,
-        age: age,
-        country: country,
-      });
-      if (!res.ok) {
-        alert("Saqlashda xatolik.");
-        return;
-      }
+      const res = await api("/api/profile/save", { initData, full_name: fullName, gender, age, country });
+      if (!res.ok) { alert("Saqlashda xatolik."); return; }
     }
     haptic("medium");
     this.go("iq-intro");
@@ -653,10 +563,7 @@ const App = {
     haptic("light");
   },
 
-  // ==================== IQ FLOW ====================
   async startIQ() {
-    haptic("medium");
-    // Profil to'liq bo'lsa, to'g'ridan-to'g'ri IQ introsiga
     if (!State.profile.full_name || !State.profile.gender || !State.profile.age || !State.profile.country) {
       this.go("profile-name");
       return;
@@ -667,10 +574,7 @@ const App = {
   async startIQTest() {
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "iq" });
-      if (res.ok) {
-        State.test.sessionId = res.session_id;
-        State.test.attemptId = res.attempt_id;
-      }
+      if (res.ok) { State.test.sessionId = res.session_id; State.test.attemptId = res.attempt_id; }
     }
     State.test.type = "iq";
     State.test.current = 0;
@@ -700,8 +604,7 @@ const App = {
     if (nextBtn) nextBtn.disabled = true;
     renderOptions(document.getElementById("sample-options"), sample.options, (idx) => {
       if (nextBtn) nextBtn.disabled = false;
-      const opts = document.querySelectorAll("#sample-options .option");
-      opts.forEach((o, i) => {
+      document.querySelectorAll("#sample-options .option").forEach((o, i) => {
         if (i === sample.correct) o.classList.add("correct");
         else if (i === idx) o.classList.add("wrong");
       });
@@ -731,33 +634,25 @@ const App = {
     const q = QUESTIONS[State.test.current];
     if (!q) return;
     document.getElementById("test-progress-text").textContent = `Q${State.test.current + 1} / 18`;
-    const pct = (State.test.current / 18) * 100;
-    document.getElementById("progress-fill").style.width = pct + "%";
-
+    document.getElementById("progress-fill").style.width = ((State.test.current / 18) * 100) + "%";
     const diff = document.getElementById("difficulty-bar");
-    let diffHtml = "";
+    let dh = "";
     for (let i = 0; i < 18; i++) {
-      let cls = "easy";
-      if (i >= 12) cls = "hard";
-      else if (i >= 6) cls = "medium";
-      if (i <= State.test.current) diffHtml += `<span class="${cls}"></span>`;
-      else diffHtml += `<span></span>`;
+      let cls = i >= 12 ? "hard" : (i >= 6 ? "medium" : "easy");
+      dh += (i <= State.test.current) ? `<span class="${cls}"></span>` : `<span></span>`;
     }
-    if (diff) diff.innerHTML = diffHtml;
-
+    if (diff) diff.innerHTML = dh;
     renderMatrix(document.getElementById("test-matrix"), q.matrix);
     const nextBtn = document.getElementById("test-next");
     if (nextBtn) {
       nextBtn.disabled = true;
       nextBtn.textContent = State.test.current === 17 ? "YAKUNLASH →" : "KEYINGISI →";
     }
-
     renderOptions(document.getElementById("test-options"), q.options, (idx) => {
       State.test.answers[State.test.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
       saveLocal();
     });
-
     if (State.test.answers[State.test.current] !== null && State.test.answers[State.test.current] !== undefined) {
       const prev = State.test.answers[State.test.current];
       const optEl = document.querySelectorAll("#test-options .option")[prev];
@@ -777,19 +672,8 @@ const App = {
     this.renderQuestion();
   },
 
-  continueAfterQ6() {
-    State.test.current = 6;
-    saveLocal();
-    this.go("test");
-    this.renderQuestion();
-  },
-
-  continueAfterQ12() {
-    State.test.current = 12;
-    saveLocal();
-    this.go("test");
-    this.renderQuestion();
-  },
+  continueAfterQ6() { State.test.current = 6; saveLocal(); this.go("test"); this.renderQuestion(); },
+  continueAfterQ12() { State.test.current = 12; saveLocal(); this.go("test"); this.renderQuestion(); },
 
   async finish() {
     clearInterval(State.test.timerInterval);
@@ -805,29 +689,25 @@ const App = {
         duration: State.test.duration,
       });
       if (res.ok) {
-        score = res.score;
-        correct = res.correct;
-        level = res.level;
+        score = res.score; correct = res.correct; level = res.level;
         resultVisible = res.result_visible;
         paymentRequired = res.payment_required;
         attemptId = res.attempt_id;
         State.completed.iq = score;
       }
     } else {
-      let weighted = 0, maxW = 0;
-      QUESTIONS.forEach((q, i) => {
-        maxW += q.weight;
-        if (State.test.answers[i] === q.correct) weighted += q.weight;
-      });
+      let w = 0, mw = 0;
+      QUESTIONS.forEach((q, i) => { mw += q.weight; if (State.test.answers[i] === q.correct) w += q.weight; });
       correct = State.test.answers.filter((a, i) => a === QUESTIONS[i].correct).length;
-      score = Math.round(70 + (weighted / maxW) * 60);
+      score = Math.round(70 + (w / mw) * 60);
       level = score >= 115 ? "YUQORI DARAJA" : score >= 100 ? "O‘RTA DARAJA" : "RIVOJLANTIRISH";
+      State.completed.iq = score;
     }
-
     State.test.resultData = { score, correct, level, attemptId };
 
     if (paymentRequired) {
-      // To'lov oynasi
+      const iqPrice = parseInt(State.settings.iq_price || "10000");
+      document.getElementById("payreq-price").textContent = iqPrice.toLocaleString() + " so‘m";
       this.go("payment-required");
     } else {
       this.renderResult(score, correct, level);
@@ -844,7 +724,6 @@ const App = {
     const m = String(Math.floor(State.test.duration / 60)).padStart(2, "0");
     const s = String(State.test.duration % 60).padStart(2, "0");
     document.getElementById("res-time").textContent = `${m}:${s}`;
-
     const dirs = [
       { label: "Mantiq", val: Math.min(100, 50 + correct * 3) },
       { label: "Pattern", val: Math.min(100, 55 + correct * 2.5) },
@@ -852,22 +731,42 @@ const App = {
       { label: "Fazoviy fikr", val: Math.min(100, 40 + correct * 3.5) },
     ];
     document.querySelectorAll(".dir").forEach((el, i) => {
-      const d = dirs[i];
-      el.dataset.label = d.label;
-      const fill = el.querySelector(".dir-fill");
-      const span = el.querySelector("span");
-      setTimeout(() => { if (fill) fill.style.width = d.val + "%"; }, 100 + i * 150);
-      if (span) span.textContent = Math.round(d.val) + "%";
+      const d = dirs[i]; el.dataset.label = d.label;
+      const f = el.querySelector(".dir-fill"); const sp = el.querySelector("span");
+      setTimeout(() => { if (f) f.style.width = d.val + "%"; }, 100 + i * 150);
+      if (sp) sp.textContent = Math.round(d.val) + "%";
     });
     const strongest = dirs.reduce((a, b) => a.val > b.val ? a : b);
-    const stEl = document.getElementById("res-strongest");
-    if (stEl) stEl.textContent = strongest.label;
+    document.getElementById("res-strongest").textContent = strongest.label;
   },
 
+  // ============ CERTIFICATE — BRAUZERDA ============
   async getCertificate() {
-    if (!initData) { alert("Sertifikat Telegram orqali yuboriladi."); return; }
+    if (!initData) { alert("Sertifikat uchun Telegram kerak."); return; }
     haptic("medium");
-    alert("Sertifikat Telegram bot orqali yuboriladi.\n\n/start → 📜 Sertifikatim");
+    try {
+      const res = await fetch("/api/certificate/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData }),
+      });
+      if (!res.ok) {
+        alert("Sertifikat topilmadi. Avval IQ testni yakunlang.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "IQ-TEST-BOT-Sertifikat.png";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Sertifikat yuklashda xatolik.");
+    }
   },
 
   shareResult() {
@@ -877,7 +776,8 @@ const App = {
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
     } else {
-      alert(text + "\n" + url);
+      navigator.clipboard?.writeText(text + " " + url);
+      alert("Nusxa olindi!");
     }
   },
 
@@ -887,18 +787,31 @@ const App = {
     this.go("iq-intro");
   },
 
-  // ==================== PAYMENT ====================
-  async createPayment(product, extra = {}) {
+  // ============ PAYMENT ============
+  async startIQPayment() {
+    await this.createPayment("iq", State.test.resultData?.attemptId);
+  },
+
+  async startBattlePayment() {
+    await this.createPayment("battle", null, State.battle.id);
+  },
+
+  async createPayment(product, attemptId = null, battleId = null) {
     if (!initData) { alert("To‘lov faqat Telegram orqali."); return; }
     haptic("medium");
-    const res = await api("/api/payment/create", { initData, product, ...extra });
+    const res = await api("/api/payment/create", {
+      initData, product,
+      attempt_id: attemptId,
+      battle_id: battleId,
+    });
     if (res.ok) {
       if (res.free) {
-        // Bepul — darhol davom et
-        alert("✅ Bepul!");
         if (product === "iq") {
-          this.renderResult(State.test.resultData.score, State.test.resultData.correct, State.test.resultData.level);
+          const rd = State.test.resultData;
+          this.renderResult(rd.score, rd.correct, rd.level);
           this.go("result");
+        } else if (product === "battle") {
+          this.checkBattle();
         }
         return;
       }
@@ -906,6 +819,8 @@ const App = {
       State.payment.product = product;
       State.payment.amount = res.amount;
       State.payment.cards = res.cards;
+      State.payment.attemptId = attemptId;
+      State.payment.battleId = battleId;
       document.getElementById("pay-amount").textContent = res.amount.toLocaleString() + " so‘m";
       const cardsEl = document.getElementById("pay-cards");
       if (cardsEl) {
@@ -930,33 +845,30 @@ const App = {
         State.payment.pollInterval = null;
         alert("✅ To‘lov tasdiqlandi!");
         if (State.payment.product === "iq") {
-          this.renderResult(State.test.resultData.score, State.test.resultData.correct, State.test.resultData.level);
+          const rd = State.test.resultData;
+          this.renderResult(rd.score, rd.correct, rd.level);
           this.go("result");
+        } else if (State.payment.product === "battle") {
+          this.checkBattle();
         }
       }
     }, 5000);
   },
 
   async sendReceipt() {
-    alert("Chekni Telegram botga yuboring:\n\n/start → to‘lov bo‘limi → chek rasmini yuboring");
+    alert("Chek rasmini Telegram botga yuboring:\n\nBot → chek rasmini yuboring.");
   },
 
-  // ==================== EQ ====================
+  // ============ EQ ============
   async startEQ() {
     if (State.completed.eq) {
-      // Retry
-      const retryPrice = parseInt(State.settings.eq_retry_price || "0");
-      if (retryPrice > 0) {
-        if (!confirm(`EQ qayta ishlash ${retryPrice} so‘m. To‘lashni xohlaysizmi?`)) return;
-      }
+      const rp = parseInt(State.settings.eq_retry_price || "0");
+      if (rp > 0 && !confirm(`EQ qayta ishlash ${rp} so‘m. To‘lashni xohlaysizmi?`)) return;
     }
     haptic("medium");
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "eq" });
-      if (res.ok) {
-        State.test.sessionId = res.session_id;
-        State.test.attemptId = res.attempt_id;
-      }
+      if (res.ok) { State.test.sessionId = res.session_id; State.test.attemptId = res.attempt_id; }
     }
     State.test.type = "eq";
     State.test.current = 0;
@@ -965,33 +877,23 @@ const App = {
     this.go("eq-intro");
   },
 
-  goEQTest() {
-    this.go("eq-test");
-    this.renderEQQuestion();
-  },
+  goEQTest() { this.go("eq-test"); this.renderEQQuestion(); },
 
   renderEQQuestion() {
     const q = EQ_QUESTIONS[State.test.current];
     if (!q) return;
     document.getElementById("eq-progress-text").textContent = `Q${State.test.current + 1} / ${EQ_QUESTIONS.length}`;
-    const pct = (State.test.current / EQ_QUESTIONS.length) * 100;
-    const pf = document.getElementById("eq-progress-fill");
-    if (pf) pf.style.width = pct + "%";
-    const qt = document.getElementById("eq-question-text");
-    if (qt) qt.textContent = q.text;
+    document.getElementById("eq-progress-fill").style.width = ((State.test.current / EQ_QUESTIONS.length) * 100) + "%";
+    document.getElementById("eq-question-text").textContent = q.text;
     const nextBtn = document.getElementById("eq-next");
-    if (nextBtn) {
-      nextBtn.disabled = true;
-      nextBtn.textContent = State.test.current === EQ_QUESTIONS.length - 1 ? "YAKUNLASH →" : "KEYINGISI →";
-    }
+    if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = State.test.current === EQ_QUESTIONS.length - 1 ? "YAKUNLASH →" : "KEYINGISI →"; }
     renderTextOptions(document.getElementById("eq-options"), q.options, (idx) => {
       State.test.answers[State.test.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
     });
     if (State.test.answers[State.test.current] !== null && State.test.answers[State.test.current] !== undefined) {
       const prev = State.test.answers[State.test.current];
-      const el = document.querySelectorAll("#eq-options .option")[prev];
-      if (el) el.classList.add("selected");
+      document.querySelectorAll("#eq-options .option")[prev]?.classList.add("selected");
       if (nextBtn) nextBtn.disabled = false;
     }
   },
@@ -1006,25 +908,20 @@ const App = {
   async finishEQ() {
     this.go("iq-loading");
     await new Promise(r => setTimeout(r, 2500));
-
     let score = 0;
     EQ_QUESTIONS.forEach((q, i) => {
-      const ans = State.test.answers[i];
-      if (ans !== null && ans !== undefined) score += q.scores[ans];
+      const a = State.test.answers[i];
+      if (a !== null && a !== undefined) score += q.scores[a];
     });
-    const maxScore = EQ_QUESTIONS.length * 4;
-    const percent = Math.round((score / maxScore) * 100);
+    const maxS = EQ_QUESTIONS.length * 4;
+    const percent = Math.round((score / maxS) * 100);
     State.completed.eq = percent;
-
     if (initData && State.test.sessionId) {
       await api("/api/test/submit", {
-        initData,
-        session_id: State.test.sessionId,
-        answers: State.test.answers,
+        initData, session_id: State.test.sessionId, answers: State.test.answers,
         duration: Math.floor((Date.now() - State.test.startedAt) / 1000),
       });
     }
-
     document.getElementById("eq-res-score").textContent = percent + "%";
     document.getElementById("eq-res-level").textContent =
       percent >= 80 ? "JUDA YUQORI" : percent >= 60 ? "YUQORI" : percent >= 40 ? "O‘RTA" : "RIVOJLANTIRISH";
@@ -1032,21 +929,16 @@ const App = {
     this.applyUnlocks();
   },
 
-  // ==================== PQ ====================
+  // ============ PQ ============
   async startPQ() {
     if (State.completed.pq) {
-      const retryPrice = parseInt(State.settings.pq_retry_price || "0");
-      if (retryPrice > 0) {
-        if (!confirm(`PQ qayta ishlash ${retryPrice} so‘m. To‘lashni xohlaysizmi?`)) return;
-      }
+      const rp = parseInt(State.settings.pq_retry_price || "0");
+      if (rp > 0 && !confirm(`PQ qayta ishlash ${rp} so‘m. To‘lashni xohlaysizmi?`)) return;
     }
     haptic("medium");
     if (initData) {
       const res = await api("/api/session/start", { initData, test_type: "pq" });
-      if (res.ok) {
-        State.test.sessionId = res.session_id;
-        State.test.attemptId = res.attempt_id;
-      }
+      if (res.ok) { State.test.sessionId = res.session_id; State.test.attemptId = res.attempt_id; }
     }
     State.test.type = "pq";
     State.test.current = 0;
@@ -1055,33 +947,23 @@ const App = {
     this.go("pq-intro");
   },
 
-  goPQTest() {
-    this.go("pq-test");
-    this.renderPQQuestion();
-  },
+  goPQTest() { this.go("pq-test"); this.renderPQQuestion(); },
 
   renderPQQuestion() {
     const q = PQ_QUESTIONS[State.test.current];
     if (!q) return;
     document.getElementById("pq-progress-text").textContent = `Q${State.test.current + 1} / ${PQ_QUESTIONS.length}`;
-    const pct = (State.test.current / PQ_QUESTIONS.length) * 100;
-    const pf = document.getElementById("pq-progress-fill");
-    if (pf) pf.style.width = pct + "%";
-    const qt = document.getElementById("pq-question-text");
-    if (qt) qt.textContent = q.text;
+    document.getElementById("pq-progress-fill").style.width = ((State.test.current / PQ_QUESTIONS.length) * 100) + "%";
+    document.getElementById("pq-question-text").textContent = q.text;
     const nextBtn = document.getElementById("pq-next");
-    if (nextBtn) {
-      nextBtn.disabled = true;
-      nextBtn.textContent = State.test.current === PQ_QUESTIONS.length - 1 ? "YAKUNLASH →" : "KEYINGISI →";
-    }
+    if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = State.test.current === PQ_QUESTIONS.length - 1 ? "YAKUNLASH →" : "KEYINGISI →"; }
     renderTextOptions(document.getElementById("pq-options"), q.options, (idx) => {
       State.test.answers[State.test.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
     });
     if (State.test.answers[State.test.current] !== null && State.test.answers[State.test.current] !== undefined) {
       const prev = State.test.answers[State.test.current];
-      const el = document.querySelectorAll("#pq-options .option")[prev];
-      if (el) el.classList.add("selected");
+      document.querySelectorAll("#pq-options .option")[prev]?.classList.add("selected");
       if (nextBtn) nextBtn.disabled = false;
     }
   },
@@ -1096,25 +978,20 @@ const App = {
   async finishPQ() {
     this.go("iq-loading");
     await new Promise(r => setTimeout(r, 2500));
-
     let score = 0;
     PQ_QUESTIONS.forEach((q, i) => {
-      const ans = State.test.answers[i];
-      if (ans !== null && ans !== undefined) score += q.scores[ans];
+      const a = State.test.answers[i];
+      if (a !== null && a !== undefined) score += q.scores[a];
     });
-    const maxScore = PQ_QUESTIONS.length * 4;
-    const percent = Math.round((score / maxScore) * 100);
+    const maxS = PQ_QUESTIONS.length * 4;
+    const percent = Math.round((score / maxS) * 100);
     State.completed.pq = percent;
-
     if (initData && State.test.sessionId) {
       await api("/api/test/submit", {
-        initData,
-        session_id: State.test.sessionId,
-        answers: State.test.answers,
+        initData, session_id: State.test.sessionId, answers: State.test.answers,
         duration: Math.floor((Date.now() - State.test.startedAt) / 1000),
       });
     }
-
     document.getElementById("pq-res-score").textContent = percent + "%";
     document.getElementById("pq-res-level").textContent =
       percent >= 80 ? "JUDA YAXSHI" : percent >= 60 ? "YAXSHI" : percent >= 40 ? "O‘RTA" : "RIVOJLANTIRISH KERAK";
@@ -1122,43 +999,32 @@ const App = {
     this.applyUnlocks();
   },
 
-  // ==================== PROFILE ====================
+  // ============ PROFILE ============
   openProfile() {
     if (!(State.completed.iq && State.completed.eq && State.completed.pq)) {
       alert("Avval IQ, EQ va PQ testlarini tugatishingiz kerak.");
       return;
     }
-    const iq = State.completed.iq;
-    const eq = State.completed.eq;
-    const pq = State.completed.pq;
-
+    const iq = State.completed.iq, eq = State.completed.eq, pq = State.completed.pq;
     document.getElementById("prof-iq").textContent = iq;
     document.getElementById("prof-eq").textContent = eq + "%";
     document.getElementById("prof-pq").textContent = pq + "%";
-
-    const strengths = [];
-    const weaknesses = [];
-    if (iq >= 115) strengths.push("Kuchli mantiqiy fikrlash");
-    else weaknesses.push("Mantiqiy fikrlashni rivojlantirish");
-    if (eq >= 70) strengths.push("Yaxshi hissiy intellekt");
-    else weaknesses.push("Emotsiyalarni boshqarish");
-    if (pq >= 70) strengths.push("Ishni o‘z vaqtida bajarish");
-    else weaknesses.push("Prokrastinatsiyani kamaytirish");
-
+    const strengths = [], weaknesses = [];
+    if (iq >= 115) strengths.push("Kuchli mantiqiy fikrlash"); else weaknesses.push("Mantiqiy fikrlashni rivojlantirish");
+    if (eq >= 70) strengths.push("Yaxshi hissiy intellekt"); else weaknesses.push("Emotsiyalarni boshqarish");
+    if (pq >= 70) strengths.push("Ishni o‘z vaqtida bajarish"); else weaknesses.push("Prokrastinatsiyani kamaytirish");
     document.getElementById("prof-strengths").innerHTML = strengths.map(s => `<li>✅ ${s}</li>`).join("") || "<li>—</li>";
     document.getElementById("prof-weaknesses").innerHTML = weaknesses.map(s => `<li>⚠️ ${s}</li>`).join("") || "<li>—</li>";
-
     const overall = Math.round(((iq - 70) / 60 * 100) * 0.5 + eq * 0.25 + pq * 0.25);
     document.getElementById("prof-overall").textContent = overall;
     document.getElementById("prof-summary").textContent =
       overall >= 75 ? "Siz analitik va hissiy jihatdan kuchli insonsiz." :
       overall >= 55 ? "Sizning profilingiz o‘rtacha, rivojlanish uchun joy bor." :
       "Sizga bir nechta yo‘nalishda rivojlanish kerak.";
-
     this.go("profile");
   },
 
-  // ==================== BATTLE ====================
+  // ============ BATTLE ============
   openBattle() {
     if (!initData) { alert("Battle faqat Telegram orqali."); return; }
     this.go("battle-home");
@@ -1172,8 +1038,7 @@ const App = {
       State.battle.code = res.code;
       State.battle.role = "creator";
       document.getElementById("battle-code-display").textContent = res.code;
-      const priceEl = document.getElementById("battle-price-display");
-      if (priceEl) priceEl.textContent = res.price.toLocaleString() + " so‘m";
+      document.getElementById("battle-price-display").textContent = res.price.toLocaleString() + " so‘m";
       this.go("battle-wait");
       this.startBattlePoll();
     } else if (res.error === "ACTIVE_BATTLE_EXISTS") {
@@ -1217,47 +1082,32 @@ const App = {
   async checkBattle() {
     if (!State.battle.id) return;
     const res = await api(`/api/battle/${State.battle.id}`, { initData });
-    if (res.ok) {
-      State.battle.players = res.players || [];
-      const statusEl = document.getElementById("battle-wait-status");
-      const myPlayer = res.players.find(p => p.is_me);
-      const oppPlayer = res.players.find(p => !p.is_me);
-
-      if (statusEl) {
-        if (res.battle.status === "waiting_for_player") {
-          statusEl.innerHTML = "⏳ Do‘stingiz kodni kiritishini kuting...";
-        } else if (res.battle.status === "waiting_for_payment") {
-          statusEl.innerHTML = "💳 To‘lovni amalga oshiring";
-        } else if (res.battle.status === "ready") {
-          statusEl.innerHTML = "🎉 Ikkalangiz tayyorsiz! Testni boshlashingiz mumkin.";
-        } else if (res.battle.status === "in_progress") {
-          statusEl.innerHTML = "🧠 Test davom etmoqda";
-        } else if (res.battle.status === "completed" || res.battle.status === "draw") {
-          this.openBattleResult(res);
-        }
-      }
-
-      // Playerlarni ko'rsatish
-      const playersEl = document.getElementById("battle-players-list");
-      if (playersEl) {
-        playersEl.innerHTML = res.players.map(p => `
-          <div class="battle-player-row ${p.is_me ? 'me' : ''}">
-            <span class="bp-name">${p.is_me ? "👤 SIZ" : "👤 " + p.name}</span>
-            <span class="bp-progress">${p.current_question}/18</span>
-            <span class="bp-status">${p.test_status === 'completed' ? '✅' : p.test_status === 'in_progress' ? '⏳' : '—'}</span>
-          </div>
-        `).join("");
-      }
-
-      // Agar ikkalasi ham payment approved va test boshlansa
-      if (res.battle.status === "ready" && myPlayer && myPlayer.test_status === "not_started") {
-        const startBtn = document.getElementById("battle-start-btn");
-        if (startBtn) startBtn.style.display = "block";
-      }
-      if (myPlayer && myPlayer.test_status === "in_progress") {
-        const continueBtn = document.getElementById("battle-continue-btn");
-        if (continueBtn) continueBtn.style.display = "block";
-      }
+    if (!res.ok) return;
+    State.battle.players = res.players || [];
+    const statusEl = document.getElementById("battle-wait-status");
+    const myPlayer = res.players.find(p => p.is_me);
+    if (statusEl) {
+      if (res.battle.status === "waiting_for_player") statusEl.innerHTML = "⏳ Do‘stingiz kodni kiritishini kuting...";
+      else if (res.battle.status === "waiting_for_payment") statusEl.innerHTML = "💳 To‘lovni amalga oshiring";
+      else if (res.battle.status === "ready") statusEl.innerHTML = "🎉 Ikkalangiz tayyorsiz! Testni boshlashingiz mumkin.";
+      else if (res.battle.status === "in_progress") statusEl.innerHTML = "🧠 Test davom etmoqda";
+      else if (res.battle.status === "completed" || res.battle.status === "draw") { this.openBattleResult(res); return; }
+    }
+    const playersEl = document.getElementById("battle-players-list");
+    if (playersEl) {
+      playersEl.innerHTML = res.players.map(p => `
+        <div class="battle-player-row ${p.is_me ? 'me' : ''}">
+          <span class="bp-name">${p.is_me ? "👤 SIZ" : "👤 " + p.name}</span>
+          <span class="bp-progress">${p.current_question}/18</span>
+          <span class="bp-status">${p.test_status === 'completed' ? '✅' : p.test_status === 'in_progress' ? '⏳' : '—'}</span>
+        </div>
+      `).join("");
+    }
+    if (res.battle.status === "ready" && myPlayer && myPlayer.test_status === "not_started") {
+      const sb = document.getElementById("battle-start-btn"); if (sb) sb.style.display = "block";
+    }
+    if (myPlayer && myPlayer.test_status === "in_progress") {
+      const cb = document.getElementById("battle-continue-btn"); if (cb) cb.style.display = "block";
     }
   },
 
@@ -1275,18 +1125,31 @@ const App = {
     }
   },
 
+  async continueBattle() {
+    if (!State.battle.id) return;
+    const res = await api(`/api/battle/${State.battle.id}`, { initData });
+    if (res.ok) {
+      const mp = res.players.find(p => p.is_me);
+      if (mp && mp.test_status === "in_progress") {
+        State.battle.current = mp.current_question || 0;
+        State.battle.answers = new Array(18).fill(null);
+        State.battle.startedAt = Date.now();
+        this.go("battle-test");
+        this.renderBattleQuestion();
+      } else if (mp && mp.test_status === "not_started") {
+        this.startBattleTest();
+      }
+    }
+  },
+
   renderBattleQuestion() {
     const q = QUESTIONS[State.battle.current];
     if (!q) return;
     document.getElementById("battle-progress-text").textContent = `Q${State.battle.current + 1} / 18`;
-    const pf = document.getElementById("battle-progress-fill");
-    if (pf) pf.style.width = ((State.battle.current / 18) * 100) + "%";
+    document.getElementById("battle-progress-fill").style.width = ((State.battle.current / 18) * 100) + "%";
     renderMatrix(document.getElementById("battle-matrix"), q.matrix);
     const nextBtn = document.getElementById("battle-next");
-    if (nextBtn) {
-      nextBtn.disabled = true;
-      nextBtn.textContent = State.battle.current === 17 ? "YAKUNLASH →" : "KEYINGISI →";
-    }
+    if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = State.battle.current === 17 ? "YAKUNLASH →" : "KEYINGISI →"; }
     renderOptions(document.getElementById("battle-options"), q.options, (idx) => {
       State.battle.answers[State.battle.current] = idx;
       if (nextBtn) nextBtn.disabled = false;
@@ -1294,8 +1157,7 @@ const App = {
     });
     if (State.battle.answers[State.battle.current] !== null && State.battle.answers[State.battle.current] !== undefined) {
       const prev = State.battle.answers[State.battle.current];
-      const el = document.querySelectorAll("#battle-options .option")[prev];
-      if (el) el.classList.add("selected");
+      document.querySelectorAll("#battle-options .option")[prev]?.classList.add("selected");
       if (nextBtn) nextBtn.disabled = false;
     }
   },
@@ -1322,21 +1184,31 @@ const App = {
   async finishBattle() {
     this.go("iq-loading");
     await new Promise(r => setTimeout(r, 3000));
-
     const res = await api(`/api/battle/${State.battle.id}/finish`, {
       initData,
       answers: State.battle.answers,
       duration: Math.floor((Date.now() - State.battle.startedAt) / 1000),
     });
-
     if (res.ok) {
-      this.openBattleResult({
-        battle: { id: State.battle.id, status: res.final_status, winner_id: res.winner_id },
-        players: [
-          { user_id: State.user.user_id, is_me: true, score: res.score, name: "SIZ" },
-          { user_id: 0, is_me: false, score: res.opponent_score, name: "DO‘STINGIZ" },
-        ],
-      });
+      if (State.battle.pollInterval) { clearInterval(State.battle.pollInterval); State.battle.pollInterval = null; }
+      this.go("battle-result");
+      document.getElementById("battle-my-score").textContent = res.score;
+      if (res.opponent_score !== null && res.opponent_score !== undefined) {
+        document.getElementById("battle-opp-score").textContent = res.opponent_score;
+        if (res.score > res.opponent_score) {
+          document.getElementById("battle-winner").textContent = "🏆 SIZ G‘OLIB";
+          document.getElementById("battle-winner").className = "battle-winner win";
+        } else if (res.score < res.opponent_score) {
+          document.getElementById("battle-winner").textContent = "😔 DO‘STINGIZ G‘OLIB";
+          document.getElementById("battle-winner").className = "battle-winner lose";
+        } else {
+          document.getElementById("battle-winner").textContent = "🤝 DURANG";
+          document.getElementById("battle-winner").className = "battle-winner draw";
+        }
+      } else {
+        document.getElementById("battle-opp-score").textContent = "⏳";
+        document.getElementById("battle-winner").textContent = "Kutilmoqda";
+      }
     } else {
       alert("Yakunlashda xatolik.");
       this.go("battle-home");
@@ -1344,30 +1216,20 @@ const App = {
   },
 
   openBattleResult(data) {
-    if (State.battle.pollInterval) {
-      clearInterval(State.battle.pollInterval);
-      State.battle.pollInterval = null;
-    }
-    const myPlayer = data.players.find(p => p.is_me);
-    const oppPlayer = data.players.find(p => !p.is_me);
-
-    document.getElementById("battle-my-score").textContent = myPlayer?.score ?? "—";
-    document.getElementById("battle-opp-score").textContent = oppPlayer?.score ?? "—";
-
-    const winnerEl = document.getElementById("battle-winner");
+    if (State.battle.pollInterval) { clearInterval(State.battle.pollInterval); State.battle.pollInterval = null; }
+    const mp = data.players.find(p => p.is_me);
+    const op = data.players.find(p => !p.is_me);
+    document.getElementById("battle-my-score").textContent = mp?.score ?? "—";
+    document.getElementById("battle-opp-score").textContent = op?.score ?? "—";
+    const wEl = document.getElementById("battle-winner");
     if (data.battle.status === "draw") {
-      winnerEl.textContent = "🤝 DURANG";
-      winnerEl.className = "battle-winner draw";
+      wEl.textContent = "🤝 DURANG"; wEl.className = "battle-winner draw";
     } else if (data.battle.winner_id === State.user?.user_id) {
-      winnerEl.textContent = "🏆 SIZ G‘OLIB";
-      winnerEl.className = "battle-winner win";
+      wEl.textContent = "🏆 SIZ G‘OLIB"; wEl.className = "battle-winner win";
     } else {
-      winnerEl.textContent = "😔 DO‘STINGIZ G‘OLIB";
-      winnerEl.className = "battle-winner lose";
+      wEl.textContent = "😔 DO‘STINGIZ G‘OLIB"; wEl.className = "battle-winner lose";
     }
-
     this.go("battle-result");
-    this.refreshLive();
   },
 
   async openBattleDetail() {
@@ -1376,68 +1238,33 @@ const App = {
     this.go("battle-wait");
     this.startBattlePoll();
   },
-
-  async continueBattle() {
-    if (!State.battle.id) return;
-    const res = await api(`/api/battle/${State.battle.id}`, { initData });
-    if (res.ok) {
-      State.battle.players = res.players;
-      const myPlayer = res.players.find(p => p.is_me);
-      if (myPlayer && myPlayer.test_status === "in_progress") {
-        State.battle.current = myPlayer.current_question || 0;
-        State.battle.answers = myPlayer.answers || new Array(18).fill(null);
-        State.battle.startedAt = Date.now();
-        this.go("battle-test");
-        this.renderBattleQuestion();
-      } else if (myPlayer && myPlayer.test_status === "not_started") {
-        this.startBattleTest();
-      }
-    }
-  },
 };
 
 // ==================== EVENT BINDINGS ====================
 document.addEventListener("DOMContentLoaded", () => {
   App.init();
 
-  // IQ card
-  document.querySelector('[data-test="iq"]')?.addEventListener("click", () => {
-    haptic("medium");
-    App.startIQ();
-  });
-
-  // EQ card
+  document.querySelector('[data-test="iq"]')?.addEventListener("click", () => { haptic("medium"); App.startIQ(); });
   document.getElementById("card-eq")?.addEventListener("click", () => {
     const el = document.getElementById("card-eq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.startEQ();
   });
-
-  // PQ card
   document.getElementById("card-pq")?.addEventListener("click", () => {
     const el = document.getElementById("card-pq");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.startPQ();
   });
-
-  // Profile card
   document.getElementById("card-profile")?.addEventListener("click", () => {
     const el = document.getElementById("card-profile");
     if (el?.classList.contains("locked")) { haptic("rigid"); return; }
     App.openProfile();
   });
+  document.getElementById("battle-card")?.addEventListener("click", () => App.openBattle());
 
-  // Battle card
-  document.getElementById("battle-card")?.addEventListener("click", () => {
-    App.openBattle();
-  });
-
-  // Gender tanlash
   document.querySelectorAll("#gender-selector [data-gender]").forEach(el => {
     el.addEventListener("click", () => App.selectGender(el.dataset.gender));
   });
-
-  // Country tanlash
   document.querySelectorAll("#country-selector [data-country]").forEach(el => {
     el.addEventListener("click", () => App.selectCountry(el.dataset.country));
   });
