@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
