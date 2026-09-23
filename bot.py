@@ -138,11 +138,14 @@ async def init_pool() -> asyncpg.Pool:
         dsn = "postgresql://" + dsn[len("postgres://"):]
     # asyncpg DSN ichida ?sslmode=... ni qabul qilmaydi; ajratib olamiz
     ssl_ctx = None
+    # Neon va boshqa provayderlar ?sslmode=...&channel_binding=... qo'shadi.
+    # asyncpg bularni DSN ichida qabul qilmaydi — hammasini olib tashlaymiz.
     if "sslmode=" in dsn:
         if "sslmode=require" in dsn or "sslmode=verify-full" in dsn:
             ssl_ctx = True
-        dsn = re.sub(r"[?&]sslmode=[^&]+", "", dsn)
-        dsn = re.sub(r"\?$", "", dsn)
+    # Hamma query parametrlarni olib tashlash
+    if "?" in dsn:
+        dsn = dsn.split("?", 1)[0]
     try:
         _pool = await asyncpg.create_pool(
             dsn=dsn,
