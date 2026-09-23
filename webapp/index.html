@@ -1,384 +1,331 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>IQ TEST BOT</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e1a" />
+<title>IQ TEST BOT</title>
+<link rel="stylesheet" href="/static/style.css" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div id="toast-container" class="toast-container"></div>
 
-    <div id="app" class="app-container">
-        <!-- TOP HEADER / STATS BAR -->
-        <header class="app-header">
-            <div class="brand-badge">
-                <span class="pulse-dot"></span>
-                <span class="brand-title">IQ TEST BOT</span>
-            </div>
-            <div class="live-counter" id="live-counter-box">
-                <span class="live-icon">🔥</span>
-                <span id="live-count-text">...</span>
-                <span class="live-label">onlayn</span>
-            </div>
-        </header>
+<!-- ================= APP ROOT ================= -->
+<div id="app">
 
-        <!-- MAIN VIEWS CONTAINER -->
-        <main class="content-area">
+  <!-- ============ LOADING OVERLAY ============ -->
+  <div id="global-loading" class="global-loading hidden">
+    <div class="loader-ring"></div>
+  </div>
 
-            <!-- HOME VIEW -->
-            <section id="view-home" class="view active">
-                <div class="hero-section">
-                    <div class="brain-wrapper">
-                        <div class="halo-glow"></div>
-                        <div class="brain-visual">🧠</div>
-                        <div class="sparkles">✨</div>
-                    </div>
-                    <h1 class="hero-title">AQLLIY SALOHIYAT TESTI</h1>
-                    <p class="hero-subtitle">18 ta mantiqiy puzzle orqali aniq IQ darajangizni aniqlang va sertifikat oling</p>
-                </div>
+  <!-- ============ TOAST ============ -->
+  <div id="toast-root" class="toast-root"></div>
 
-                <div class="cards-grid">
-                    <!-- IQ TEST CARD -->
-                    <div class="test-card iq-card" id="card-iq" onclick="app.startIQFlow()">
-                        <div class="card-glow"></div>
-                        <div class="card-icon">🧠</div>
-                        <div class="card-content">
-                            <h3>IQ Test</h3>
-                            <p>18 ta mantiqiy vizual puzzle</p>
-                            <span class="badge badge-unlocked" id="badge-iq">Ochiq</span>
-                        </div>
-                        <div class="card-arrow">➔</div>
-                    </div>
+  <!-- ============ MODAL ============ -->
+  <div id="modal-root" class="modal-root hidden">
+    <div class="modal-backdrop" data-close-modal="1"></div>
+    <div class="modal-panel">
+      <h3 id="modal-title" class="modal-title"></h3>
+      <p id="modal-body" class="modal-body"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-ghost" data-close-modal="1">Bekor</button>
+        <button id="modal-ok" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
 
-                    <!-- EQ TEST CARD -->
-                    <div class="test-card locked" id="card-eq" onclick="app.startEQFlow()">
-                        <div class="card-icon">🎭</div>
-                        <div class="card-content">
-                            <h3>EQ Test</h3>
-                            <p>Emotsional intellekt va hissiyotlar</p>
-                            <span class="badge badge-locked" id="badge-eq">🔒 IQ talab qilinadi</span>
-                        </div>
-                        <div class="card-arrow">➔</div>
-                    </div>
+  <!-- ============ HEADER ============ -->
+  <header class="app-header">
+    <button id="btn-back" class="icon-btn hidden" aria-label="Orqaga">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span class="brand-name">IQ TEST BOT</span>
+    </div>
+    <div id="header-right" class="header-right"></div>
+  </header>
 
-                    <!-- PQ TEST CARD -->
-                    <div class="test-card locked" id="card-pq" onclick="app.startPQFlow()">
-                        <div class="card-icon">⏳</div>
-                        <div class="card-content">
-                            <h3>PQ Test</h3>
-                            <p>Xulq-atvor va psixologik chidamlilik</p>
-                            <span class="badge badge-locked" id="badge-pq">🔒 EQ talab qilinadi</span>
-                        </div>
-                        <div class="card-arrow">➔</div>
-                    </div>
+  <!-- ============ SCREENS ============ -->
 
-                    <!-- PERSONAL PROFILE CARD -->
-                    <div class="test-card locked" id="card-personal" onclick="app.openPersonalProfile()">
-                        <div class="card-icon">⭐</div>
-                        <div class="card-content">
-                            <h3>Shaxsiy Profil</h3>
-                            <p>To'liq psixologik va intellektual tahlil</p>
-                            <span class="badge badge-locked" id="badge-personal">🔒 Barcha testlar kerak</span>
-                        </div>
-                        <div class="card-arrow">➔</div>
-                    </div>
-
-                    <!-- BATTLE CARD -->
-                    <div class="test-card battle-card" id="card-battle" onclick="app.openBattleMenu()">
-                        <div class="card-glow-battle"></div>
-                        <div class="card-icon">⚔️</div>
-                        <div class="card-content">
-                            <h3>IQ Battle Duel</h3>
-                            <p>Do'stingiz bilan real vaqtda intellektual olishuv</p>
-                            <span class="badge badge-premium">PREMIUM BATTLE</span>
-                        </div>
-                        <div class="card-arrow">➔</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- PROFILE SETUP VIEW -->
-            <section id="view-profile-setup" class="view">
-                <div class="section-header">
-                    <h2>Shaxsiy Ma'lumotlar</h2>
-                    <p>Sertifikat va natijalar aniqligi uchun ma'lumotlarni to'ldiring</p>
-                </div>
-                <form id="profile-form" onsubmit="app.handleProfileSubmit(event)">
-                    <div class="form-group">
-                        <label for="input-fullname">Ism va Familiya</label>
-                        <input type="text" id="input-fullname" placeholder="Jasur Rahimov" required maxlength="100">
-                    </div>
-                    <div class="form-group">
-                        <label for="select-gender">Jinsingiz</label>
-                        <select id="select-gender" required>
-                            <option value="">Tanlang...</option>
-                            <option value="male">O'g'il</option>
-                            <option value="female">Qiz</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="input-age">Yosh</label>
-                        <input type="number" id="input-age" min="7" max="100" placeholder="20" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="select-country">Davlat</label>
-                        <select id="select-country" required>
-                            <option value="O'zbekiston">O'zbekiston</option>
-                            <option value="Rossiya">Rossiya</option>
-                            <option value="Qozog'iston">Qozog'iston</option>
-                            <option value="Qirg'iziston">Qirg'iziston</option>
-                            <option value="Turkiya">Turkiya</option>
-                            <option value="Boshqa">Boshqa</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-block" id="btn-save-profile">
-                        Davom etish ➔
-                    </button>
-                </form>
-            </section>
-
-            <!-- SAMPLE QUESTION VIEW -->
-            <section id="view-sample" class="view">
-                <div class="section-header">
-                    <h2>Na'muna Savol</h2>
-                    <p>Mantiqiy matrikslarni ishlash tamoyilini tushunib oling</p>
-                </div>
-                <div class="puzzle-card">
-                    <div class="puzzle-matrix-sample">
-                        <svg viewBox="0 0 300 300" class="svg-matrix">
-                            <rect x="5" y="5" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <circle cx="47" cy="47" r="20" fill="#a78bfa"/>
-                            
-                            <rect x="107" y="5" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <circle cx="149" cy="47" r="28" fill="#a78bfa"/>
-                            
-                            <rect x="209" y="5" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <circle cx="251" cy="47" r="36" fill="#a78bfa"/>
-
-                            <rect x="5" y="107" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <rect x="22" y="124" width="50" height="50" fill="#60a5fa"/>
-
-                            <rect x="107" y="107" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <rect x="17" y="117" width="65" height="65" fill="#60a5fa"/>
-
-                            <rect x="209" y="107" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <rect x="12" y="112" width="75" height="75" fill="#60a5fa"/>
-
-                            <rect x="5" y="209" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <polygon points="47,219 22,280 72,280" fill="#f43f5e"/>
-
-                            <rect x="107" y="209" width="85" height="85" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-                            <polygon points="149,214 117,285 181,285" fill="#f43f5e"/>
-
-                            <rect x="209" y="209" width="85" height="85" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="3" stroke-dasharray="4"/>
-                            <text x="251" y="260" font-size="40" fill="#38bdf8" text-anchor="middle" font-weight="bold">?</text>
-                        </svg>
-                    </div>
-                    <div class="sample-explanation">
-                        <p><strong>Mantiq:</strong> Har bir qatorda shakllar o'lchami chapdan o'ngga qarab kattalashib bormoqda. Demak, so'roq belgisida eng katta uchburchak bo'lishi kerak.</p>
-                    </div>
-                    <button class="btn btn-success btn-block" onclick="app.startActualTest('iq')">
-                        Tushundim, Testni Boshlash 🚀
-                    </button>
-                </div>
-            </section>
-
-            <!-- ACTIVE TEST RUNNER VIEW -->
-            <section id="view-test" class="view">
-                <div class="test-progress-bar-container">
-                    <div class="test-progress-fill" id="test-progress-fill"></div>
-                </div>
-                <div class="test-header">
-                    <span class="question-number" id="q-num-text">Savol 1 / 18</span>
-                    <span class="difficulty-tag" id="q-diff-tag">EASY</span>
-                </div>
-
-                <div class="puzzle-container" id="puzzle-svg-render">
-                    <!-- SVG render dynamically -->
-                </div>
-
-                <div class="options-grid" id="options-container">
-                    <!-- Options dynamically generated -->
-                </div>
-            </section>
-
-            <!-- CELEBRATION MODAL OVERLAY -->
-            <div id="modal-celebration" class="modal-overlay">
-                <div class="modal-card">
-                    <div class="celebration-icon">🎉</div>
-                    <h3 id="celeb-title">Ajoyib natija!</h3>
-                    <p id="celeb-desc">Siz 6-bosqichni muvaffaqiyatli yakunladingiz. Mantiqiy fikrlashingiz yuqori darajada!</p>
-                    <button class="btn btn-primary btn-block" onclick="app.closeCelebration()">Davom etish ➔</button>
-                </div>
-            </div>
-
-            <!-- TEST LOADING VIEW -->
-            <section id="view-loading" class="view">
-                <div class="loading-wrapper">
-                    <div class="spinner-ring"></div>
-                    <h2 id="loading-status-title">Natijangiz hisoblanmoqda...</h2>
-                    <div class="loading-checklist">
-                        <div class="check-item done" id="chk-1">✓ Javoblar qabul qilindi</div>
-                        <div class="check-item active" id="chk-2">⏳ Matriks va vaznlar tahlil qilinmoqda</div>
-                        <div class="check-item" id="chk-3">⚙️ IQ ball va daraja algoritmi bajarilmoqda</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- PAYMENT VIEW -->
-            <section id="view-payment" class="view">
-                <div class="section-header">
-                    <h2>Test Natijasini Olish</h2>
-                    <p>Rasmiy sertifikat va batafsil hisobotni faollashtiring</p>
-                </div>
-                <div class="payment-card-box">
-                    <div class="price-tag" id="pay-price-amount">0 UZS</div>
-                    <p class="pay-instruction">To'lovni amalga oshiring va kvitansiya rasm/skrinshotini yuklang:</p>
-
-                    <div class="card-details" id="card-details-box">
-                        <div class="bank-name" id="pay-bank-name">Kapitalbank</div>
-                        <div class="card-number-row">
-                            <span id="pay-card-number">8600 0000 0000 0000</span>
-                            <button class="btn-copy" onclick="app.copyCardNumber()">Nusxalash</button>
-                        </div>
-                        <div class="card-holder" id="pay-card-holder">IQ TEST ADMIN</div>
-                    </div>
-
-                    <div class="upload-zone">
-                        <label for="receipt-file-input" class="file-label">
-                            <span class="upload-icon">📸</span>
-                            <span id="upload-label-text">Kvitansiya rasmini tanlang</span>
-                        </label>
-                        <input type="file" id="receipt-file-input" accept="image/*" onchange="app.handleReceiptSelected(event)">
-                    </div>
-
-                    <button class="btn btn-primary btn-block" id="btn-submit-payment" onclick="app.submitPaymentReceipt()" disabled>
-                        To'lovni Tasdiqlashga Yuborish 📤
-                    </button>
-                </div>
-            </section>
-
-            <!-- RESULT VIEW -->
-            <section id="view-result" class="view">
-                <div class="result-card">
-                    <div class="result-badge-top">TEST YAKUNLANDI</div>
-                    <div class="score-circle">
-                        <span class="score-value" id="res-score-val">120</span>
-                        <span class="score-label">IQ SCORE</span>
-                    </div>
-                    <h2 class="result-level" id="res-level-text">YUQORI INTELLEKT</h2>
-                    <p class="result-desc" id="res-desc-text">Sizning mantiqiy va fazoviy fikrlash ko'rsatkichingiz aholining yuqori 10% qismiga kiradi.</p>
-
-                    <div class="action-buttons">
-                        <button class="btn btn-primary btn-block" onclick="app.fetchCertificate()">
-                            📜 Sertifikatni Yuklab Olish
-                        </button>
-                        <button class="btn btn-outline btn-block" onclick="app.showView('view-home')">
-                            🏠 Bosh Sahifa
-                        </button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- BATTLE MENU VIEW -->
-            <section id="view-battle-menu" class="view">
-                <div class="section-header">
-                    <h2>IQ Battle Duel</h2>
-                    <p>Do'stingiz bilan bir xil 18 ta puzzle orqali kuch sinashishingiz mumkin</p>
-                </div>
-
-                <div class="battle-actions">
-                    <div class="battle-option-card">
-                        <h3>Yangi Duel Yaratish</h3>
-                        <p>Kod oling va do'stingizga yuboring</p>
-                        <button class="btn btn-primary btn-block" onclick="app.createBattle()">
-                            Duel Yaratish (7,500 UZS)
-                        </button>
-                    </div>
-
-                    <div class="battle-option-card">
-                        <h3>Duelga Qo'shilish</h3>
-                        <p>Do'stingiz yuborgan 4 xonali kodni kiriting</p>
-                        <div class="join-code-input-row">
-                            <input type="text" id="battle-code-input" placeholder="X7A9" maxlength="4">
-                            <button class="btn btn-success" onclick="app.joinBattle()">Qo'shilish</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- BATTLE ROOM VIEW -->
-            <section id="view-battle-room" class="view">
-                <div class="section-header">
-                    <h2>Duel Xonasi</h2>
-                    <p>Duel kodi: <strong id="room-battle-code">....</strong></p>
-                </div>
-                <div class="battle-status-card">
-                    <div class="players-versus">
-                        <div class="player-box">
-                            <span class="p-avatar">👤</span>
-                            <span class="p-name" id="p1-name">Siz</span>
-                            <span class="p-status" id="p1-status">Kutilmoqda...</span>
-                        </div>
-                        <div class="vs-badge">VS</div>
-                        <div class="player-box">
-                            <span class="p-avatar">👤</span>
-                            <span class="p-name" id="p2-name">Raqib</span>
-                            <span class="p-status" id="p2-status">Kutilmoqda...</span>
-                        </div>
-                    </div>
-                    <div class="battle-instructions" id="battle-instructions-text">
-                        Ikkala ishtirokchi to'lovni tasdiqlagach battle boshlanadi.
-                    </div>
-                    <button class="btn btn-primary btn-block" id="btn-start-battle-test" onclick="app.startBattleTest()" style="display:none;">
-                        Battle Testni Boshlash 🚀
-                    </button>
-                </div>
-            </section>
-
-            <!-- RANKING VIEW -->
-            <section id="view-ranking" class="view">
-                <div class="section-header">
-                    <h2>Top Reyting</h2>
-                    <p>Eng yuqori IQ natijasiga erishgan qatnashchilar</p>
-                </div>
-                <div class="ranking-list" id="ranking-list-container">
-                    <!-- Dynamically generated -->
-                </div>
-            </section>
-
-            <!-- PERSONAL PROFILE VIEW -->
-            <section id="view-personal-profile" class="view">
-                <div class="section-header">
-                    <h2>Umumiy Psixologik Profil</h2>
-                    <p>IQ, EQ va PQ testlari bo'yicha to'liq tahlil</p>
-                </div>
-                <div class="profile-analytics-card" id="profile-analytics-content">
-                    <!-- Analytics dynamically rendered -->
-                </div>
-            </section>
-
-        </main>
-
-        <!-- BOTTOM NAVIGATION -->
-        <nav class="bottom-nav">
-            <button class="nav-item active" onclick="app.showView('view-home')">
-                <span class="nav-icon">🏠</span>
-                <span class="nav-text">Asosiy</span>
-            </button>
-            <button class="nav-item" onclick="app.openRankingView()">
-                <span class="nav-icon">🏆</span>
-                <span class="nav-text">Reyting</span>
-            </button>
-            <button class="nav-item" onclick="app.openBattleMenu()">
-                <span class="nav-icon">⚔️</span>
-                <span class="nav-text">Battle</span>
-            </button>
-        </nav>
+  <!-- HOME -->
+  <section id="screen-home" class="screen active">
+    <div class="hero">
+      <div class="brain-wrap">
+        <div class="brain-halo"></div>
+        <svg class="brain-svg" viewBox="0 0 200 200" aria-hidden="true">
+          <defs>
+            <radialGradient id="brainGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.9"/>
+              <stop offset="60%" stop-color="#60a5fa" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <circle cx="100" cy="100" r="90" fill="url(#brainGlow)"/>
+          <path d="M70,70 Q60,90 75,105 Q60,120 80,135 Q95,145 105,130 Q115,145 130,135 Q150,120 135,105 Q150,90 140,70 Q125,55 105,65 Q95,55 70,70 Z"
+                fill="none" stroke="#e8eaf6" stroke-width="2" opacity="0.85"/>
+          <path d="M100,65 L100,130" stroke="#e8eaf6" stroke-width="1.2" opacity="0.6"/>
+          <path d="M85,80 Q95,90 85,100" stroke="#e8eaf6" stroke-width="1" fill="none" opacity="0.6"/>
+          <path d="M115,80 Q105,90 115,100" stroke="#e8eaf6" stroke-width="1" fill="none" opacity="0.6"/>
+        </svg>
+        <div class="sparkle s1"></div>
+        <div class="sparkle s2"></div>
+        <div class="sparkle s3"></div>
+      </div>
+      <h1 class="hero-title">18 TA MANTIQIY PUZZLE</h1>
+      <p class="hero-sub">IQ darajangizni sinab ko'ring</p>
     </div>
 
-    <script src="/static/app.js"></script>
+    <div class="cards-grid">
+      <button id="card-iq" class="card card-iq" data-target="iq">
+        <div class="card-icon">🧠</div>
+        <div class="card-body">
+          <div class="card-title">IQ Test</div>
+          <div class="card-desc">Mantiqiy fikrlashni sinash</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </button>
+
+      <button id="card-eq" class="card card-eq locked" data-target="eq">
+        <div class="card-icon">🎭</div>
+        <div class="card-body">
+          <div class="card-title">EQ Test</div>
+          <div class="card-desc">Emotsional intellekt</div>
+          <div class="card-lock">🔒 IQ dan keyin ochiladi</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </button>
+
+      <button id="card-pq" class="card card-pq locked" data-target="pq">
+        <div class="card-icon">⏳</div>
+        <div class="card-body">
+          <div class="card-title">PQ Test</div>
+          <div class="card-desc">Samaradorlik va odatlar</div>
+          <div class="card-lock">🔒 EQ dan keyin ochiladi</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </button>
+
+      <button id="card-personal" class="card card-personal locked" data-target="personal">
+        <div class="card-icon">⭐</div>
+        <div class="card-body">
+          <div class="card-title">Siz qanday insonsiz</div>
+          <div class="card-desc">To'liq shaxsiy profil</div>
+          <div class="card-lock">🔒 IQ + EQ + PQ dan keyin</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </button>
+
+      <button id="card-battle" class="card card-battle" data-target="battle">
+        <div class="card-icon">⚔️</div>
+        <div class="card-body">
+          <div class="card-title">Battle</div>
+          <div class="card-desc">Do'stingiz bilan duel</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </button>
+    </div>
+
+    <div class="live-counter" id="live-counter">
+      <div class="live-row">
+        <span class="live-label">Botga qo'shilganlar</span>
+        <span class="live-value" id="live-total">—</span>
+      </div>
+      <div class="live-row">
+        <span class="live-label">Hozir onlayn</span>
+        <span class="live-value live-online" id="live-online">—</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROFILE (before test) -->
+  <section id="screen-profile" class="screen">
+    <h2 class="screen-title">Ma'lumotlaringizni kiriting</h2>
+    <p class="screen-sub">Sertifikat uchun ism-familiya kerak</p>
+
+    <form id="profile-form" class="form" onsubmit="return false;">
+      <label class="field">
+        <span>Ism / Familiya</span>
+        <input id="prof-fullname" type="text" placeholder="Aziz Rahimov" maxlength="120" autocomplete="name" />
+      </label>
+      <label class="field">
+        <span>Jins</span>
+        <select id="prof-gender">
+          <option value="">Tanlang</option>
+          <option value="male">O'g'il</option>
+          <option value="female">Qiz</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Yosh</span>
+        <input id="prof-age" type="number" min="5" max="120" placeholder="18" />
+      </label>
+      <label class="field">
+        <span>Davlat</span>
+        <select id="prof-country">
+          <option value="">Tanlang</option>
+          <option value="Uzbekistan">O'zbekiston</option>
+          <option value="Russia">Rossiya</option>
+          <option value="Kazakhstan">Qozog'iston</option>
+          <option value="Kyrgyzstan">Qirg'iziston</option>
+          <option value="Turkey">Turkiya</option>
+          <option value="Other">Boshqa</option>
+        </select>
+      </label>
+      <div id="prof-error" class="field-error hidden"></div>
+      <button id="prof-submit" class="btn btn-primary btn-lg">Davom etish</button>
+    </form>
+  </section>
+
+  <!-- SAMPLE -->
+  <section id="screen-sample" class="screen">
+    <h2 class="screen-title">Namuna savol</h2>
+    <p class="screen-sub">Bu qanday ishlashini ko'rsatuvchi misol</p>
+    <div class="matrix-wrap" id="sample-matrix"></div>
+    <div class="options-grid" id="sample-options"></div>
+    <button id="sample-start" class="btn btn-primary btn-lg">Testni boshlash</button>
+  </section>
+
+  <!-- TEST -->
+  <section id="screen-test" class="screen">
+    <div class="test-top">
+      <div class="progress-bar"><div class="progress-fill" id="test-progress"></div></div>
+      <div class="test-meta">
+        <span id="test-counter">1 / 18</span>
+        <span id="test-diff" class="badge badge-easy">EASY</span>
+      </div>
+    </div>
+
+    <h2 id="test-question" class="screen-title test-q"></h2>
+    <div class="matrix-wrap" id="test-matrix"></div>
+    <div class="options-grid" id="test-options"></div>
+
+    <div id="test-celebration" class="celebration hidden">
+      <div class="celebration-emoji">🎉</div>
+      <div class="celebration-text">Ajoyib! Davom etamiz</div>
+    </div>
+  </section>
+
+  <!-- LOADING RESULT -->
+  <section id="screen-loading" class="screen">
+    <div class="loading-wrap">
+      <div class="loader-ring big"></div>
+      <h2 class="loading-title">Natija tayyorlanmoqda…</h2>
+      <ul class="checklist" id="loading-checklist">
+        <li data-step="1">Javoblar tekshirilmoqda</li>
+        <li data-step="2">Ball hisoblanmoqda</li>
+        <li data-step="3">Daraja aniqlanmoqda</li>
+        <li data-step="4">Natija saqlanmoqda</li>
+      </ul>
+      <div class="progress-bar big"><div class="progress-fill" id="loading-progress"></div></div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="screen-result" class="screen">
+    <div class="result-card">
+      <div class="result-badge" id="result-badge">🧠</div>
+      <h2 class="result-title" id="result-title">IQ Natijangiz</h2>
+      <div class="result-score" id="result-score">—</div>
+      <div class="result-level" id="result-level">—</div>
+
+      <div class="result-stats" id="result-stats"></div>
+
+      <div id="result-actions" class="result-actions">
+        <button id="result-cert" class="btn btn-primary">📜 Sertifikatni olish</button>
+        <button id="result-home" class="btn btn-ghost">🏠 Bosh sahifa</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAYMENT -->
+  <section id="screen-payment" class="screen">
+    <h2 class="screen-title">To'lov</h2>
+    <p class="screen-sub" id="payment-sub">Natijani ko'rish uchun to'lovni amalga oshiring</p>
+
+    <div class="pay-card">
+      <div class="pay-amount" id="pay-amount">— so'm</div>
+      <div class="pay-info">
+        <div class="pay-row"><span>Karta raqami</span><b id="pay-number">—</b></div>
+        <div class="pay-row"><span>Egasi</span><b id="pay-holder">—</b></div>
+        <div class="pay-row"><span>Bank</span><b id="pay-bank">—</b></div>
+      </div>
+      <button id="pay-copy" class="btn btn-primary btn-lg">📋 Kartani nusxalash</button>
+      <button id="pay-receipt" class="btn btn-ghost">🧾 Chekni yubordim</button>
+      <button id="pay-check" class="btn btn-ghost">🔄 Holatni tekshirish</button>
+    </div>
+
+    <div id="pay-status" class="pay-status"></div>
+  </section>
+
+  <!-- CERTIFICATE -->
+  <section id="screen-certificate" class="screen">
+    <h2 class="screen-title">Sertifikat</h2>
+    <div class="cert-wrap">
+      <div class="cert-preview" id="cert-preview">
+        <div class="cert-inner">
+          <div class="cert-brand">IQ TEST BOT</div>
+          <div class="cert-title">SERTIFIKAT</div>
+          <div class="cert-sub">AQLLIY SALOHIYAT TO'G'RISIDA</div>
+          <div class="cert-name" id="cert-name">—</div>
+          <div class="cert-score" id="cert-score">—</div>
+          <div class="cert-level" id="cert-level">—</div>
+          <div class="cert-code" id="cert-code">—</div>
+        </div>
+      </div>
+      <p class="cert-hint">To'liq PNG sertifikat Telegram botda:</p>
+      <button id="cert-open-bot" class="btn btn-primary btn-lg">📜 Botda ochish</button>
+    </div>
+  </section>
+
+  <!-- RANKING -->
+  <section id="screen-ranking" class="screen">
+    <h2 class="screen-title">Reyting</h2>
+    <div class="tabs" id="rank-tabs">
+      <button class="tab active" data-type="iq">IQ</button>
+      <button class="tab" data-type="eq">EQ</button>
+      <button class="tab" data-type="pq">PQ</button>
+    </div>
+    <div id="rank-list" class="rank-list"></div>
+    <div id="rank-me" class="rank-me"></div>
+  </section>
+
+  <!-- REFERRAL -->
+  <section id="screen-referral" class="screen">
+    <h2 class="screen-title">Pul ishlash</h2>
+    <p class="screen-sub">Do'stlaringizni taklif qiling</p>
+    <div class="ref-card">
+      <div class="ref-count" id="ref-count">0</div>
+      <div class="ref-label">Taklif qilinganlar</div>
+      <div class="ref-link" id="ref-link">—</div>
+      <button id="ref-copy" class="btn btn-primary">📋 Havolani nusxalash</button>
+    </div>
+  </section>
+
+  <!-- BATTLE -->
+  <section id="screen-battle" class="screen">
+    <h2 class="screen-title">⚔️ Battle</h2>
+    <div id="battle-content"></div>
+  </section>
+
+  <!-- PERSONAL -->
+  <section id="screen-personal" class="screen">
+    <h2 class="screen-title">⭐ Siz qanday insonsiz</h2>
+    <div id="personal-content" class="personal-content"></div>
+  </section>
+
+  <!-- EMPTY STATE -->
+  <section id="screen-error" class="screen">
+    <div class="empty">
+      <div class="empty-emoji">⚠️</div>
+      <h2 class="empty-title" id="error-title">Xatolik</h2>
+      <p class="empty-sub" id="error-sub">Qaytadan urinib ko'ring</p>
+      <button id="error-retry" class="btn btn-primary">Qaytadan</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="/static/app.js"></script>
 </body>
 </html>
