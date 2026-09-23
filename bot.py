@@ -1537,14 +1537,8 @@ async def menu_language(
 # ============================================================
 
 @asynccontextmanager
-async def lifespan(
-    app: FastAPI,
-):
+async def lifespan(app: FastAPI):
     global db_pool
-
-    logger.info(
-        "Starting database pool..."
-    )
 
     db_pool = await asyncpg.create_pool(
         DATABASE_URL,
@@ -1553,44 +1547,63 @@ async def lifespan(
         command_timeout=30,
     )
 
-    await init_db(
-        db_pool
-    )
+    await init_db(db_pool)
 
     # ------------------------------
-# TELEGRAM WEBHOOK
-# ------------------------------
-if PUBLIC_BASE_URL:
-    webhook_url = (
-        PUBLIC_BASE_URL.rstrip("/")
-        + "/telegram/webhook"
-    )
+    # TELEGRAM WEBHOOK
+    # ------------------------------
+    if PUBLIC_BASE_URL:
+        webhook_url = (
+            PUBLIC_BASE_URL.rstrip("/")
+            + "/telegram/webhook"
+        )
+
+        try:
+            await bot.set_webhook(
+                url=webhook_url,
+                secret_token=WEBHOOK_SECRET,
+                drop_pending_updates=True,
+            )
+
+            info = await bot.get_webhook_info()
+
+            logger.info(
+                "Telegram webhook configured: %s | pending=%s",
+                info.url,
+                info.pending_update_count,
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "Webhook setup failed: %s",
+                exc,
+            )
+
+    else:
+        logger.error(
+            "PUBLIC_BASE_URL is missing. "
+            "Telegram webhook cannot be configured."
+        )
+
+    yield
+
+    logger.info("Shutting down...")
 
     try:
-        await bot.set_webhook(
-            url=webhook_url,
-            secret_token=WEBHOOK_SECRET,
-            drop_pending_updates=True,
-        )
+        await bot.delete_webhook()
+    except Exception:
+        pass
 
-        info = await bot.get_webhook_info()
+    try:
+        await bot.session.close()
+    except Exception:
+        pass
 
-        logger.info(
-            "Telegram webhook configured: %s | pending=%s",
-            info.url,
-            info.pending_update_count,
-        )
+    if db_pool:
+        await db_pool.close()
 
-    except Exception as exc:
-        logger.exception(
-            "Webhook setup failed: %s",
-            exc,
-        )
-else:
-    logger.error(
-        "PUBLIC_BASE_URL is missing. "
-        "Telegram webhook cannot be configured."
-    )
+    logger.info("Shutdown completed")
+    
     yield
 
     logger.info(
