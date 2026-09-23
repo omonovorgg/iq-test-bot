@@ -1558,39 +1558,39 @@ async def lifespan(
     )
 
     # ------------------------------
-    # TELEGRAM WEBHOOK
-    # ------------------------------
+# TELEGRAM WEBHOOK
+# ------------------------------
+if PUBLIC_BASE_URL:
+    webhook_url = (
+        PUBLIC_BASE_URL.rstrip("/")
+        + "/telegram/webhook"
+    )
 
-    if (
-        PUBLIC_BASE_URL
-        and WEBHOOK_SECRET
-    ):
-        try:
-            await bot.set_webhook(
-                url=(
-                    PUBLIC_BASE_URL.rstrip("/")
-                    + "/telegram/webhook"
-                ),
-                secret_token=WEBHOOK_SECRET,
-                drop_pending_updates=True,
-            )
-
-            logger.info(
-                "Telegram webhook configured"
-            )
-
-        except Exception as exc:
-            logger.exception(
-                "Webhook setup failed: %s",
-                exc,
-            )
-
-    else:
-        logger.warning(
-            "Webhook was not configured: "
-            "PUBLIC_BASE_URL or WEBHOOK_SECRET missing"
+    try:
+        await bot.set_webhook(
+            url=webhook_url,
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=True,
         )
 
+        info = await bot.get_webhook_info()
+
+        logger.info(
+            "Telegram webhook configured: %s | pending=%s",
+            info.url,
+            info.pending_update_count,
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "Webhook setup failed: %s",
+            exc,
+        )
+else:
+    logger.error(
+        "PUBLIC_BASE_URL is missing. "
+        "Telegram webhook cannot be configured."
+    )
     yield
 
     logger.info(
