@@ -54,6 +54,11 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
 
+if not WEBHOOK_SECRET:
+    WEBHOOK_SECRET = hashlib.sha256(
+        BOT_TOKEN.encode("utf-8")
+    ).hexdigest()
+
 BOT_USERNAME = os.getenv(
     "BOT_USERNAME",
     "kinotestbot",
