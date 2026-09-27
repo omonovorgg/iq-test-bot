@@ -48,7 +48,7 @@
       const res = await fetch(path, { ...options, method, headers, signal: controller.signal });
       const text = await res.text();
       let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { ok: false, error: text || "Server javobi notoâgâri" }; }
+      try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { ok: false, error: text || "Server javobi noto‘g‘ri" }; }
       if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
       return data;
     } catch (err) {
@@ -204,7 +204,7 @@
     $("#questionLabel").textContent = `Q${state.index + 1}/${state.questions.length}`;
     $("#difficulty").textContent = state.mode === "BATTLE" ? "BATTLE" : state.testType === "IQ" ? difficulty(state.index) : state.testType;
     $("#progressBar").style.width = `${((state.index) / Math.max(1, state.questions.length)) * 100}%`;
-    $("#questionText").textContent = state.testType === "IQ" ? "Qaysi variant matritsani toâldiradi?" : q.text || "Savol";
+    $("#questionText").textContent = state.testType === "IQ" ? "Qaysi variant matritsani to‘ldiradi?" : q.text || "Savol";
 
     const matrix = $("#matrix");
     matrix.innerHTML = "";
@@ -214,7 +214,7 @@
     const options = $("#options");
     options.innerHTML = "";
     (q.options || []).forEach((option, i) => options.appendChild(renderOption(option, i)));
-    $("#nextQuestion").textContent = state.index === state.questions.length - 1 ? "Natijani koârish" : "Davom etish";
+    $("#nextQuestion").textContent = state.index === state.questions.length - 1 ? "Natijani ko‘rish" : "Davom etish";
     $("#celebration")?.classList.toggle("hidden", !(state.testType === "IQ" && (state.index === 6 || state.index === 12)));
   }
 
@@ -231,13 +231,19 @@
     window.__timer = setInterval(tick, 500);
   }
 
-  async function startTest(type) {
+  async function startTest(type, profileConfirmed = false) {
     if (state.busy) return;
-    const profile = state.user || {};
-    if (!profile.full_name || !profile.gender || !profile.age || !profile.country) {
+
+    // Profile must be confirmed before every test. Existing values are prefilled.
+    // profileConfirmed=true is used only after /api/profile/save succeeds, so
+    // saving the profile does not reopen the profile screen in a loop.
+    if (!profileConfirmed) {
       state.pendingType = type;
+      $("#fullName").value = state.user?.full_name || "";
+      $("#gender").value = state.user?.gender || "";
+      $("#age").value = state.user?.age || "";
+      $("#country").value = state.user?.country || "";
       show("profileScreen");
-      toast("Avval profilingizni toâldiring");
       return;
     }
     if (type === "EQ" && !state.user.hasIQ) { toast("Avval IQ testni yakunlang"); return; }
@@ -316,8 +322,8 @@
     $("#resultBadge").textContent = `${state.testType} RESULT`;
     $("#resultUnit").textContent = state.testType === "IQ" ? "IQ" : "%";
     $("#resultScore").textContent = d.score;
-    $("#resultLevel").textContent = d.level || (state.testType === "IQ" ? "â" : "Natija");
-    $("#resultCorrect").textContent = `${d.correct_count ?? 0}/${state.questions.length} toâgâri`;
+    $("#resultLevel").textContent = d.level || (state.testType === "IQ" ? "—" : "Natija");
+    $("#resultCorrect").textContent = `${d.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
     show("resultScreen");
   }
 
@@ -328,12 +334,12 @@
   async function renderPayment(d) {
     state.paymentId = d.payment_id || state.paymentId;
     state.paymentAttemptId = d.attempt_id || state.paymentAttemptId;
-    $("#paymentAmount").textContent = `${Number(d.amount || 0).toLocaleString("uz-UZ")} soâm`;
+    $("#paymentAmount").textContent = `${Number(d.amount || 0).toLocaleString("uz-UZ")} so‘m`;
     const card = d.card || (state.paymentId ? await getPaymentCard(state.paymentId) : null);
     $("#cardNumber").textContent = card?.card_number || "Faol karta topilmadi";
     $("#cardHolder").textContent = card?.holder || "";
     $("#cardBank").textContent = card?.bank || "";
-    $("#paymentStatus").textContent = d.status === "approved" ? "Toâlov tasdiqlangan." : card ? "Kartaga toâlov qiling va receipt yuklang." : "Admin karta qoâshishini kuting.";
+    $("#paymentStatus").textContent = d.status === "approved" ? "To‘lov tasdiqlangan." : card ? "Kartaga to‘lov qiling va receipt yuklang." : "Admin karta qo‘shishini kuting.";
     $("#receiptInput").value = "";
     $("#receiptFile").value = "";
   }
@@ -362,7 +368,7 @@
       if (file) fd.append("receipt", file, file.name);
       else fd.append("receipt_file_id", legacy);
       const d = await api(`/api/payment/${state.paymentId}/receipt`, { method:"POST", body:fd });
-      $("#paymentStatus").textContent = "Receipt yuborildi. Admin tasdigâi kutilmoqda.";
+      $("#paymentStatus").textContent = "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
       toast("Receipt yuborildi");
       if (state.battleId) startBattlePolling();
       else if (d.status === "approved" && state.paymentAttemptId) await showResult(state.paymentAttemptId);
@@ -374,7 +380,7 @@
     state.user = d.user;
     state.prices = d.prices || {};
     state.questions = d.questions || [];
-    $("#userName").textContent = d.user.first_name || "Doâst";
+    $("#userName").textContent = d.user.first_name || "Do‘st";
     $("#fullName").value = d.user.full_name || "";
     $("#gender").value = d.user.gender || "";
     $("#age").value = d.user.age || "";
@@ -433,18 +439,18 @@
       age, country: $("#country").value
     };
     if (!body.full_name || !body.gender || !body.country || !Number.isInteger(age) || age < 10 || age > 120) {
-      toast("Profil maâlumotlarini toâliq kiriting"); return;
+      toast("Profil ma’lumotlarini to‘liq kiriting"); return;
     }
     try {
       state.busy = true;
       await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
       state.user = { ...state.user, ...body };
-      $("#userName").textContent = state.user.first_name || "Doâst";
+      $("#userName").textContent = state.user.first_name || "Do‘st";
       renderPersonalProfile();
       toast("Profil saqlandi");
       const pending = state.pendingType;
       delete state.pendingType;
-      if (pending) setTimeout(() => startTest(pending), 250);
+      if (pending) setTimeout(() => startTest(pending, true), 250);
       else show("homeScreen");
     } catch (e) { toast(e.message); }
     finally { state.busy = false; }
@@ -464,8 +470,8 @@
         <div><small>EQ</small><b>Yakunlangan</b></div>
         <div><small>PQ</small><b>Yakunlangan</b></div>
       </div>
-      <div class="insight"><b>Kuchli tomonlar</b><p>Muammolarni tahlil qilish, hissiy vaziyatni anglash va vazifalarni rejalashtirish boâyicha test javoblaringiz mavjud.</p></div>
-      <div class="insight"><b>Rivojlanish nuqtalari</b><p>Natijalarni muntazam qayta koârib chiqish va real hayotdagi qarorlar bilan solishtirish foydali.</p></div>`;
+      <div class="insight"><b>Kuchli tomonlar</b><p>Muammolarni tahlil qilish, hissiy vaziyatni anglash va vazifalarni rejalashtirish bo‘yicha test javoblaringiz mavjud.</p></div>
+      <div class="insight"><b>Rivojlanish nuqtalari</b><p>Natijalarni muntazam qayta ko‘rib chiqish va real hayotdagi qarorlar bilan solishtirish foydali.</p></div>`;
   }
 
   async function loadRanking() {
@@ -474,7 +480,7 @@
       const box = $("#rankingList");
       box.innerHTML = d.ranking?.length ? d.ranking.map((r) =>
         `<div class="rank-row"><span class="rank-pos">#${r.position}</span><span><b>${escapeHtml(r.name)}</b><small>${escapeHtml(r.level || "")}</small></span><strong>${r.score}</strong></div>`
-      ).join("") : `<div class="form-card glass empty-state"><b>Hali natijalar yoâq.</b></div>`;
+      ).join("") : `<div class="form-card glass empty-state"><b>Hali natijalar yo‘q.</b></div>`;
       show("rankingScreen");
     } catch (e) { toast(e.message); }
   }
@@ -490,7 +496,7 @@
         <p>${escapeHtml(c.level || "")}</p>
         <div class="cert-code">${escapeHtml(c.verification_code)}</div>
         <p>IQ TEST BOT</p>
-        <button id="certDownload" class="primary">PNG ochish</button>` : `<div class="empty-state"><b>Sertifikat yoâq</b><span>IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.</span></div>`;
+        <button id="certDownload" class="primary">PNG ochish</button>` : `<div class="empty-state"><b>Sertifikat yo‘q</b><span>IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.</span></div>`;
       $("#certDownload")?.addEventListener("click", async () => {
         try {
           const blob = await apiBlob(`/api/certificate/${encodeURIComponent(c.certificate_id)}/png`);
@@ -512,7 +518,7 @@
       const d = await api("/api/battle/create", { method:"POST", body:"{}" });
       state.battleId = d.battle_id;
       state.paymentAttemptId = null;
-      setBattleInfo(`<div class="cert-code battle-code">${escapeHtml(d.code)}</div><p>Doâstingizga 4 belgili kodni yuboring. Ikkalangiz ham toâlovni tasdiqlatgach battle ochiladi.</p><button id="battlePay" class="primary">Toâlovni boshlash Â· ${Number(d.price).toLocaleString("uz-UZ")} soâm</button><div id="battleStatus" class="inline-status">Opponent kutilmoqdaâ¦</div>`);
+      setBattleInfo(`<div class="cert-code battle-code">${escapeHtml(d.code)}</div><p>Do‘stingizga 4 belgili kodni yuboring. Ikkalangiz ham to‘lovni tasdiqlatgach battle ochiladi.</p><button id="battlePay" class="primary">To‘lovni boshlash · ${Number(d.price).toLocaleString("uz-UZ")} so‘m</button><div id="battleStatus" class="inline-status">Opponent kutilmoqda…</div>`);
       $("#battlePay").onclick = () => startBattlePayment();
       startBattlePolling();
     } catch (e) { toast(e.message); }
@@ -528,7 +534,7 @@
       const d = await api("/api/battle/join", { method:"POST", body:JSON.stringify({ code }) });
       state.battleId = d.battle_id;
       state.paymentAttemptId = null;
-      setBattleInfo(`<div class="cert-code battle-code">${escapeHtml(code)}</div><p>Battle topildi. Endi oâz toâlovingizni yuboring.</p><button id="battlePay" class="primary">Toâlovni boshlash Â· ${Number(d.price).toLocaleString("uz-UZ")} soâm</button><div id="battleStatus" class="inline-status">Toâlov kutilmoqdaâ¦</div>`);
+      setBattleInfo(`<div class="cert-code battle-code">${escapeHtml(code)}</div><p>Battle topildi. Endi o‘z to‘lovingizni yuboring.</p><button id="battlePay" class="primary">To‘lovni boshlash · ${Number(d.price).toLocaleString("uz-UZ")} so‘m</button><div id="battleStatus" class="inline-status">To‘lov kutilmoqda…</div>`);
       $("#battlePay").onclick = () => startBattlePayment();
       startBattlePolling();
     } catch (e) { toast(e.message); }
@@ -558,7 +564,7 @@
     try {
       const d = await api(`/api/battle/${state.battleId}/start`);
       const status = $("#battleStatus");
-      if (status) status.textContent = d.ready ? "Battle tayyor. Test boshlanmoqdaâ¦" : `Holat: ${d.status || "kutilmoqda"}`;
+      if (status) status.textContent = d.ready ? "Battle tayyor. Test boshlanmoqda…" : `Holat: ${d.status || "kutilmoqda"}`;
       if (d.ready) {
         clearInterval(state.battlePolling);
         state.questions = d.questions || [];
@@ -571,7 +577,7 @@
         show("testScreen");
         renderQuestion();
         startTimer();
-        if (showToastOnReady) toast("Battle toâlovi tasdiqlandi.");
+        if (showToastOnReady) toast("Battle to‘lovi tasdiqlandi.");
         return true;
       }
     } catch (_) {}
@@ -588,7 +594,7 @@
           $("#resultBadge").textContent = "BATTLE RESULT";
           $("#resultUnit").textContent = "IQ";
           $("#resultScore").textContent = d.my_score;
-          $("#resultLevel").textContent = d.outcome === "win" ? "GâALABA" : d.outcome === "loss" ? "MAGâLUBIYAT" : "DURANG";
+          $("#resultLevel").textContent = d.outcome === "win" ? "G‘ALABA" : d.outcome === "loss" ? "MAG‘LUBIYAT" : "DURANG";
           $("#resultCorrect").textContent = `Opponent: ${d.opponent_score}`;
           show("resultScreen");
           return;
@@ -612,7 +618,7 @@
   $("#saveProfile")?.addEventListener("click", saveProfile);
   $("#copyCard")?.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast("Karta nusxalandi"); }
-    catch (_) { toast("Nusxalash imkoni boâlmadi"); }
+    catch (_) { toast("Nusxalash imkoni bo‘lmadi"); }
   });
   $("#sendReceipt")?.addEventListener("click", sendReceipt);
   $("#sharePayment")?.addEventListener("click", () => {
