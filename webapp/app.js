@@ -48,7 +48,7 @@
       const res = await fetch(path, { ...options, method, headers, signal: controller.signal });
       const text = await res.text();
       let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { ok: false, error: text || "Server javobi noto‘g‘ri" }; }
+      try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { ok: false, error: text || "Server javobi notoâgâri" }; }
       if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
       return data;
     } catch (err) {
@@ -114,8 +114,14 @@
     }
     if (cell.type === "dot") {
       const n = Math.min(24, Math.max(1, Number(cell.count) || 1));
-      const positions = [[10,10],[22,10],[34,10],[10,22],[22,22],[34,22],[10,34],[22,34],[34,34]];
-      positions.slice(0, n).forEach(([cx, cy]) => add("circle", { cx, cy, r:"3", fill:"#a78bfa" }));
+      const positions = [];
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+          if (positions.length >= 24) break;
+          positions.push([8 + col * 7, 8 + row * 7]);
+        }
+      }
+      positions.slice(0, n).forEach(([cx, cy]) => add("circle", { cx, cy, r:"2.2", fill:"#a78bfa" }));
       return svg;
     }
     if (cell.type === "grid") {
@@ -179,7 +185,7 @@
     } else {
       const svg = svgFor(option);
       if (svg) button.appendChild(svg);
-          }
+    }
 
     button.addEventListener("click", () => {
       state.selected = index;
@@ -193,1375 +199,461 @@
   function renderQuestion() {
     const q = state.questions[state.index];
     if (!q) return;
-
     state.selected = null;
     $("#nextQuestion").disabled = true;
-
-    $("#questionLabel").textContent =
-      `Q${state.index + 1}/${state.questions.length}`;
-
-    $("#difficulty").textContent =
-      state.mode === "BATTLE"
-        ? "BATTLE"
-        : state.testType === "IQ"
-          ? difficulty(state.index)
-          : state.testType;
-
-    $("#progressBar").style.width =
-      `${((state.index) / Math.max(1, state.questions.length)) * 100}%`;
-
-    $("#questionText").textContent =
-      state.testType === "IQ"
-        ? "Qaysi variant matritsani to‘ldiradi?"
-        : q.text || "Savol";
+    $("#questionLabel").textContent = `Q${state.index + 1}/${state.questions.length}`;
+    $("#difficulty").textContent = state.mode === "BATTLE" ? "BATTLE" : state.testType === "IQ" ? difficulty(state.index) : state.testType;
+    $("#progressBar").style.width = `${((state.index) / Math.max(1, state.questions.length)) * 100}%`;
+    $("#questionText").textContent = state.testType === "IQ" ? "Qaysi variant matritsani toâldiradi?" : q.text || "Savol";
 
     const matrix = $("#matrix");
     matrix.innerHTML = "";
     matrix.classList.toggle("hidden", state.testType !== "IQ");
-
-    if (state.testType === "IQ") {
-      (q.matrix || []).forEach((cell) => {
-        matrix.appendChild(renderCell(cell));
-      });
-    }
+    if (state.testType === "IQ") (q.matrix || []).forEach((cell) => matrix.appendChild(renderCell(cell)));
 
     const options = $("#options");
     options.innerHTML = "";
-
-    (q.options || []).forEach((option, i) => {
-      options.appendChild(renderOption(option, i));
-    });
-
-    $("#nextQuestion").textContent =
-      state.index === state.questions.length - 1
-        ? "Natijani ko‘rish"
-        : "Davom etish";
-
-    $("#celebration")?.classList.toggle(
-      "hidden",
-      !(state.testType === "IQ" &&
-        (state.index === 6 || state.index === 12))
-    );
+    (q.options || []).forEach((option, i) => options.appendChild(renderOption(option, i)));
+    $("#nextQuestion").textContent = state.index === state.questions.length - 1 ? "Natijani koârish" : "Davom etish";
+    $("#celebration")?.classList.toggle("hidden", !(state.testType === "IQ" && (state.index === 6 || state.index === 12)));
   }
 
   function startTimer() {
     clearInterval(window.__timer);
-
     const started = state.startedAt || Date.now();
     const end = started + 30 * 60 * 1000;
-
     const tick = () => {
-      const sec = Math.max(
-        0,
-        Math.floor((end - Date.now()) / 1000)
-      );
-
-      $("#timer").textContent =
-        `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
-
-      if (sec <= 0) {
-        clearInterval(window.__timer);
-        finishTest();
-      }
+      const sec = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      $("#timer").textContent = `${String(Math.floor(sec/60)).padStart(2,"0")}:${String(sec%60).padStart(2,"0")}`;
+      if (sec <= 0) { clearInterval(window.__timer); finishTest(); }
     };
-
     tick();
     window.__timer = setInterval(tick, 500);
   }
 
   async function startTest(type) {
     if (state.busy) return;
-
     const profile = state.user || {};
-
-    if (
-      !profile.full_name ||
-      !profile.gender ||
-      !profile.age ||
-      !profile.country
-    ) {
+    if (!profile.full_name || !profile.gender || !profile.age || !profile.country) {
       state.pendingType = type;
       show("profileScreen");
-      toast("Avval profilingizni to‘ldiring");
+      toast("Avval profilingizni toâldiring");
       return;
     }
-
-    if (type === "EQ" && !state.user.hasIQ) {
-      toast("Avval IQ testni yakunlang");
-      return;
-    }
-
-    if (type === "PQ" && !state.user.hasEQ) {
-      toast("Avval EQ testni yakunlang");
-      return;
-    }
-
+    if (type === "EQ" && !state.user.hasIQ) { toast("Avval IQ testni yakunlang"); return; }
+    if (type === "PQ" && !state.user.hasEQ) { toast("Avval EQ testni yakunlang"); return; }
     try {
       state.busy = true;
-
-      const d = await api("/api/test/start", {
-        method: "POST",
-        body: JSON.stringify({
-          test_type: type
-        })
-      });
-
+      const d = await api("/api/test/start", { method:"POST", body:JSON.stringify({ test_type:type }) });
       state.mode = "NORMAL";
       state.testType = type;
       state.questions = d.questions || [];
       state.sessionId = d.session_id;
-
-      state.answers = d.resumed
-        ? (d.answers || {})
-        : {};
-
-      state.index = d.resumed
-        ? Math.min(
-            Object.keys(state.answers).length,
-            Math.max(0, state.questions.length - 1)
-          )
-        : 0;
-
-      state.startedAt =
-        d.resumed && d.started_at
-          ? Date.parse(d.started_at)
-          : Date.now();
-
+      state.answers = d.resumed ? (d.answers || {}) : {};
+      state.index = d.resumed ? Math.min(Object.keys(state.answers).length, Math.max(0, state.questions.length - 1)) : 0;
+      state.startedAt = d.resumed && d.started_at ? Date.parse(d.started_at) : Date.now();
       saveProgress();
-
       show("testScreen");
       renderQuestion();
       startTimer();
-
-    } catch (e) {
-      toast(e.message);
-    } finally {
-      state.busy = false;
-    }
+    } catch (e) { toast(e.message); }
+    finally { state.busy = false; }
   }
 
   async function finishTest() {
     if (state.busy || !state.questions.length) return;
-
     clearInterval(window.__timer);
-
-    if (state.selected !== null) {
-      state.answers[String(state.index + 1)] =
-        state.selected;
-    }
-
+    if (state.selected !== null) state.answers[String(state.index + 1)] = state.selected;
     saveProgress();
     show("loadingResult");
-
     try {
       state.busy = true;
-
       if (state.mode === "BATTLE") {
-        const d = await api(
-          `/api/battle/${state.battleId}/submit`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              answers: state.answers
-            })
-          }
-        );
-
+        const d = await api(`/api/battle/${state.battleId}/submit`, {
+          method:"POST", body:JSON.stringify({ answers:state.answers })
+        });
         state.busy = false;
-
-        if (
-          d.already_finished ||
-          d.status === "finished" ||
-          d.status === "waiting_opponent"
-        ) {
+        if (d.already_finished || d.status === "finished" || d.status === "waiting_opponent") {
           await waitBattleResult();
         }
-
         return;
       }
-
-      const d = await api(
-        `/api/test/${state.sessionId}/submit`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            answers: state.answers,
-            duration: Math.floor(
-              (Date.now() - state.startedAt) / 1000
-            )
-          })
-        }
-      );
-
+      const d = await api(`/api/test/${state.sessionId}/submit`, {
+        method:"POST",
+        body:JSON.stringify({ answers:state.answers, duration:Math.floor((Date.now()-state.startedAt)/1000) })
+      });
       clearProgress();
-
       state.attemptId = d.attempt_id;
       state.paymentAttemptId = d.attempt_id;
-
       if (d.payment_required) {
-        await renderPayment({
-          ...d,
-          payment_id: d.payment_id
-        });
-
+        await renderPayment({ ...d, payment_id:d.payment_id });
         show("paymentScreen");
       } else {
         await showResult(d.attempt_id);
       }
-
     } catch (e) {
       show("testScreen");
       toast(e.message);
-
-    } finally {
-      state.busy = false;
-    }
+    } finally { state.busy = false; }
   }
 
   async function showResult(attemptId) {
     const d = await api(`/api/result/${attemptId}`);
-
     if (!d.visible) {
       state.attemptId = attemptId;
-
       const p = await api("/api/payment/mine");
-
-      const mine = p.payments.find(
-        (x) => Number(x.attempt_id) === Number(attemptId)
-      );
-
+      const mine = p.payments.find((x) => Number(x.attempt_id) === Number(attemptId));
       if (mine) {
         state.paymentId = mine.id;
         state.paymentAttemptId = attemptId;
-
         const card = await getPaymentCard(mine.id);
-
-        await renderPayment({
-          amount: mine.amount,
-          payment_id: mine.id,
-          card,
-          status: mine.status
-        });
-
+        await renderPayment({ amount:mine.amount, payment_id:mine.id, card, status:mine.status });
         show("paymentScreen");
-      } else {
-        toast("Natija hali yopiq");
-      }
-
+      } else toast("Natija hali yopiq");
       return;
     }
-
-    state.testType =
-      d.test_type ||
-      state.testType ||
-      "IQ";
-
-    $("#resultBadge").textContent =
-      `${state.testType} RESULT`;
-
-    $("#resultUnit").textContent =
-      state.testType === "IQ"
-        ? "IQ"
-        : "%";
-
-    $("#resultScore").textContent =
-      d.score;
-
-    $("#resultLevel").textContent =
-      d.level ||
-      (
-        state.testType === "IQ"
-          ? "—"
-          : "Natija"
-      );
-
-    $("#resultCorrect").textContent =
-      `${d.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
-
+    state.testType = d.test_type || state.testType || "IQ";
+    $("#resultBadge").textContent = `${state.testType} RESULT`;
+    $("#resultUnit").textContent = state.testType === "IQ" ? "IQ" : "%";
+    $("#resultScore").textContent = d.score;
+    $("#resultLevel").textContent = d.level || (state.testType === "IQ" ? "â" : "Natija");
+    $("#resultCorrect").textContent = `${d.correct_count ?? 0}/${state.questions.length} toâgâri`;
     show("resultScreen");
   }
 
   async function getPaymentCard(paymentId) {
-    try {
-      const d = await api(
-        `/api/payment/${paymentId}/card`
-      );
-
-      return d.card;
-    } catch (_) {
-      return null;
-    }
+    try { const d = await api(`/api/payment/${paymentId}/card`); return d.card; } catch (_) { return null; }
   }
 
   async function renderPayment(d) {
-    state.paymentId =
-      d.payment_id ||
-      state.paymentId;
-
-    state.paymentAttemptId =
-      d.attempt_id ||
-      state.paymentAttemptId;
-
-    $("#paymentAmount").textContent =
-      `${Number(d.amount || 0).toLocaleString("uz-UZ")} so‘m`;
-
-    const card =
-      d.card ||
-      (
-        state.paymentId
-          ? await getPaymentCard(state.paymentId)
-          : null
-      );
-
-    $("#cardNumber").textContent =
-      card?.card_number ||
-      "Faol karta topilmadi";
-
-    $("#cardHolder").textContent =
-      card?.holder ||
-      "";
-
-    $("#cardBank").textContent =
-      card?.bank ||
-      "";
-
-    $("#paymentStatus").textContent =
-      d.status === "approved"
-        ? "To‘lov tasdiqlangan."
-        : card
-          ? "Kartaga to‘lov qiling va receipt yuklang."
-          : "Admin karta qo‘shishini kuting.";
-
+    state.paymentId = d.payment_id || state.paymentId;
+    state.paymentAttemptId = d.attempt_id || state.paymentAttemptId;
+    $("#paymentAmount").textContent = `${Number(d.amount || 0).toLocaleString("uz-UZ")} soâm`;
+    const card = d.card || (state.paymentId ? await getPaymentCard(state.paymentId) : null);
+    $("#cardNumber").textContent = card?.card_number || "Faol karta topilmadi";
+    $("#cardHolder").textContent = card?.holder || "";
+    $("#cardBank").textContent = card?.bank || "";
+    $("#paymentStatus").textContent = d.status === "approved" ? "Toâlov tasdiqlangan." : card ? "Kartaga toâlov qiling va receipt yuklang." : "Admin karta qoâshishini kuting.";
     $("#receiptInput").value = "";
     $("#receiptFile").value = "";
   }
-    async function refreshPayment() {
-    if (!state.paymentId) return;
 
+  async function refreshPayment() {
+    if (!state.paymentId) return;
     try {
       const p = await api("/api/payment/mine");
-
-      const mine = p.payments.find(
-        (x) => Number(x.id) === Number(state.paymentId)
-      );
-
+      const mine = p.payments.find((x) => Number(x.id) === Number(state.paymentId));
       if (!mine) return;
-
-      $("#paymentStatus").textContent =
-        `Status: ${mine.status}`;
-
+      $("#paymentStatus").textContent = `Status: ${mine.status}`;
       if (mine.status === "approved") {
-        if (state.battleId) {
-          await checkBattleReady(true);
-        } else if (state.paymentAttemptId) {
-          await showResult(state.paymentAttemptId);
-        }
+        if (state.battleId) await checkBattleReady(true);
+        else if (state.paymentAttemptId) await showResult(state.paymentAttemptId);
       }
     } catch (_) {}
   }
 
   async function sendReceipt() {
-    if (!state.paymentId) {
-      toast("Payment topilmadi");
-      return;
-    }
-
-    const file =
-      $("#receiptFile")?.files?.[0];
-
-    const legacy =
-      $("#receiptInput")?.value.trim();
-
-    if (!file && !legacy) {
-      toast("Receipt rasmini tanlang");
-      return;
-    }
-
+    if (!state.paymentId) { toast("Payment topilmadi"); return; }
+    const file = $("#receiptFile")?.files?.[0];
+    const legacy = $("#receiptInput")?.value.trim();
+    if (!file && !legacy) { toast("Receipt rasmini tanlang"); return; }
     try {
       const fd = new FormData();
-
-      if (file) {
-        fd.append(
-          "receipt",
-          file,
-          file.name
-        );
-      } else {
-        fd.append(
-          "receipt_file_id",
-          legacy
-        );
-      }
-
-      const d = await api(
-        `/api/payment/${state.paymentId}/receipt`,
-        {
-          method: "POST",
-          body: fd
-        }
-      );
-
-      $("#paymentStatus").textContent =
-        "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
-
+      if (file) fd.append("receipt", file, file.name);
+      else fd.append("receipt_file_id", legacy);
+      const d = await api(`/api/payment/${state.paymentId}/receipt`, { method:"POST", body:fd });
+      $("#paymentStatus").textContent = "Receipt yuborildi. Admin tasdigâi kutilmoqda.";
       toast("Receipt yuborildi");
-
-      if (state.battleId) {
-        startBattlePolling();
-      } else if (
-        d.status === "approved" &&
-        state.paymentAttemptId
-      ) {
-        await showResult(
-          state.paymentAttemptId
-        );
-      }
-
-    } catch (e) {
-      toast(e.message);
-    }
+      if (state.battleId) startBattlePolling();
+      else if (d.status === "approved" && state.paymentAttemptId) await showResult(state.paymentAttemptId);
+    } catch (e) { toast(e.message); }
   }
 
   async function loadHome() {
     const d = await api("/api/bootstrap");
-
     state.user = d.user;
     state.prices = d.prices || {};
     state.questions = d.questions || [];
-
-    $("#userName").textContent =
-      d.user.first_name || "Do‘st";
-
-    $("#fullName").value =
-      d.user.full_name || "";
-
-    $("#gender").value =
-      d.user.gender || "";
-
-    $("#age").value =
-      d.user.age || "";
-
-    $("#country").value =
-      d.user.country || "";
-
+    $("#userName").textContent = d.user.first_name || "Doâst";
+    $("#fullName").value = d.user.full_name || "";
+    $("#gender").value = d.user.gender || "";
+    $("#age").value = d.user.age || "";
+    $("#country").value = d.user.country || "";
     updateHomeLocks();
     renderPersonalProfile();
-
     show("homeScreen");
-
     updateLive();
-
     clearInterval(window.__liveTimer);
-
-    window.__liveTimer =
-      setInterval(updateLive, 5000);
-
+    window.__liveTimer = setInterval(updateLive, 5000);
     await restoreProgress();
   }
 
   function updateHomeLocks() {
-    $("#eqState").textContent =
-      state.user.hasIQ
-        ? "Ochilgan"
-        : "IQdan keyin ochiladi";
-
-    $("#pqState").textContent =
-      state.user.hasEQ
-        ? "Ochilgan"
-        : "EQdan keyin ochiladi";
-
-    $(".test-card[data-test=EQ]")
-      ?.classList.toggle(
-        "locked",
-        !state.user.hasIQ
-      );
-
-    $(".test-card[data-test=PQ]")
-      ?.classList.toggle(
-        "locked",
-        !state.user.hasEQ
-      );
+    $("#eqState").textContent = state.user.hasIQ ? "Ochilgan" : "IQdan keyin ochiladi";
+    $("#pqState").textContent = state.user.hasEQ ? "Ochilgan" : "EQdan keyin ochiladi";
+    $(".test-card[data-test=EQ]")?.classList.toggle("locked", !state.user.hasIQ);
+    $(".test-card[data-test=PQ]")?.classList.toggle("locked", !state.user.hasEQ);
   }
 
   async function restoreProgress() {
     let saved;
-
-    try {
-      saved = JSON.parse(
-        localStorage.getItem(
-          "iq_test_progress"
-        ) || "null"
-      );
-    } catch (_) {
-      saved = null;
-    }
-
+    try { saved = JSON.parse(localStorage.getItem("iq_test_progress") || "null"); } catch (_) { saved = null; }
     if (!saved?.sessionId) return;
-
     try {
-      const d = await api(
-        `/api/test/${saved.sessionId}/resume`
-      );
-
-      if (
-        d.status === "completed" ||
-        d.status === "expired"
-      ) {
-        clearProgress();
-        return;
-      }
-
+      const d = await api(`/api/test/${saved.sessionId}/resume`);
+      if (d.status === "completed" || d.status === "expired") { clearProgress(); return; }
       state.mode = "NORMAL";
-
-      state.sessionId =
-        saved.sessionId;
-
-      state.testType =
-        d.test_type;
-
-      state.questions =
-        d.questions || [];
-
-      state.answers =
-        saved.answers ||
-        d.answers ||
-        {};
-
-      state.index =
-        Math.max(
-          0,
-          Math.min(
-            Number(saved.index) || 0,
-            state.questions.length - 1
-          )
-        );
-
-      state.startedAt =
-        Number(saved.startedAt) ||
-        Date.now();
-
+      state.sessionId = saved.sessionId;
+      state.testType = d.test_type;
+      state.questions = d.questions || [];
+      state.answers = saved.answers || d.answers || {};
+      state.index = Math.max(0, Math.min(Number(saved.index) || 0, state.questions.length - 1));
+      state.startedAt = Number(saved.startedAt) || Date.now();
       show("testScreen");
-
       renderQuestion();
       startTimer();
-
-      toast(
-        "Testingiz saqlangan joyidan davom etdi."
-      );
-
-    } catch (_) {
-      clearProgress();
-    }
+      toast("Testingiz saqlangan joyidan davom etdi.");
+    } catch (_) { clearProgress(); }
   }
 
   async function updateLive() {
     try {
-      const d =
-        await api("/api/stats/live");
-
-      animateNumber(
-        $("#liveTotal"),
-        d.total
-      );
-
-      animateNumber(
-        $("#liveOnline"),
-        d.online
-      );
-
+      const d = await api("/api/stats/live");
+      animateNumber($("#liveTotal"), d.total);
+      animateNumber($("#liveOnline"), d.online);
     } catch (_) {}
   }
 
-  function animateNumber(el, n) {
-    if (!el) return;
-
-    el.textContent =
-      Number(n || 0)
-        .toLocaleString("uz-UZ");
-  }
+  function animateNumber(el, n) { if (el) el.textContent = Number(n || 0).toLocaleString("uz-UZ"); }
 
   async function saveProfile() {
-    const age =
-      Number($("#age").value);
-
+    const age = Number($("#age").value);
     const body = {
-      full_name:
-        $("#fullName").value.trim(),
-
-      gender:
-        $("#gender").value,
-
-      age,
-
-      country:
-        $("#country").value
+      full_name: $("#fullName").value.trim(), gender: $("#gender").value,
+      age, country: $("#country").value
     };
-
-    if (
-      !body.full_name ||
-      !body.gender ||
-      !body.country ||
-      !Number.isInteger(age) ||
-      age < 10 ||
-      age > 120
-    ) {
-      toast(
-        "Profil ma’lumotlarini to‘liq kiriting"
-      );
-      return;
+    if (!body.full_name || !body.gender || !body.country || !Number.isInteger(age) || age < 10 || age > 120) {
+      toast("Profil maâlumotlarini toâliq kiriting"); return;
     }
-
     try {
       state.busy = true;
-
-      await api(
-        "/api/profile/save",
-        {
-          method: "POST",
-          body: JSON.stringify(body)
-        }
-      );
-
-      state.user = {
-        ...state.user,
-        ...body
-      };
-
-      $("#userName").textContent =
-        state.user.first_name ||
-        "Do‘st";
-
+      await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
+      state.user = { ...state.user, ...body };
+      $("#userName").textContent = state.user.first_name || "Doâst";
       renderPersonalProfile();
-
       toast("Profil saqlandi");
-
-      const pending =
-        state.pendingType;
-
+      const pending = state.pendingType;
       delete state.pendingType;
-
-      if (pending) {
-        setTimeout(
-          () => startTest(pending),
-          250
-        );
-      } else {
-        show("homeScreen");
-      }
-
-    } catch (e) {
-      toast(e.message);
-
-    } finally {
-      state.busy = false;
-    }
+      if (pending) setTimeout(() => startTest(pending), 250);
+      else show("homeScreen");
+    } catch (e) { toast(e.message); }
+    finally { state.busy = false; }
   }
 
   function renderPersonalProfile() {
-    const box =
-      $("#personalSummary");
-
+    const box = $("#personalSummary");
     if (!box || !state.user) return;
-
-    const ready =
-      state.user.hasIQ &&
-      state.user.hasEQ &&
-      state.user.hasPQ;
-
+    const ready = state.user.hasIQ && state.user.hasEQ && state.user.hasPQ;
     if (!ready) {
-      box.innerHTML = `
-        <div class="empty-state">
-          <b>Shaxsiy profil</b>
-          <span>
-            IQ + EQ + PQ testlarini
-            yakunlaganingizdan keyin
-            tahlil shu yerda ochiladi.
-          </span>
-        </div>
-      `;
+      box.innerHTML = `<div class="empty-state"><b>Shaxsiy profil</b><span>IQ + EQ + PQ testlarini yakunlaganingizdan keyin tahlil shu yerda ochiladi.</span></div>`;
       return;
     }
-
     box.innerHTML = `
       <div class="summary-grid">
-        <div>
-          <small>IQ</small>
-          <b>Yakunlangan</b>
-        </div>
-
-        <div>
-          <small>EQ</small>
-          <b>Yakunlangan</b>
-        </div>
-
-        <div>
-          <small>PQ</small>
-          <b>Yakunlangan</b>
-        </div>
+        <div><small>IQ</small><b>Yakunlangan</b></div>
+        <div><small>EQ</small><b>Yakunlangan</b></div>
+        <div><small>PQ</small><b>Yakunlangan</b></div>
       </div>
-
-      <div class="insight">
-        <b>Kuchli tomonlar</b>
-        <p>
-          Muammolarni tahlil qilish,
-          hissiy vaziyatni anglash va
-          vazifalarni rejalashtirish
-          bo‘yicha test javoblaringiz mavjud.
-        </p>
-      </div>
-
-      <div class="insight">
-        <b>Rivojlanish nuqtalari</b>
-        <p>
-          Natijalarni muntazam qayta ko‘rib
-          chiqish va real hayotdagi qarorlar
-          bilan solishtirish foydali.
-        </p>
-      </div>
-    `;
+      <div class="insight"><b>Kuchli tomonlar</b><p>Muammolarni tahlil qilish, hissiy vaziyatni anglash va vazifalarni rejalashtirish boâyicha test javoblaringiz mavjud.</p></div>
+      <div class="insight"><b>Rivojlanish nuqtalari</b><p>Natijalarni muntazam qayta koârib chiqish va real hayotdagi qarorlar bilan solishtirish foydali.</p></div>`;
   }
 
   async function loadRanking() {
     try {
-      const d =
-        await api("/api/ranking");
-
-      const box =
-        $("#rankingList");
-
-      box.innerHTML =
-        d.ranking?.length
-          ? d.ranking.map((r) => `
-              <div class="rank-row">
-                <span class="rank-pos">
-                  #${r.position}
-                </span>
-
-                <span>
-                  <b>
-                    ${escapeHtml(r.name)}
-                  </b>
-
-                  <small>
-                    ${escapeHtml(r.level || "")}
-                  </small>
-                </span>
-
-                <strong>
-                  ${r.score}
-                </strong>
-              </div>
-            `).join("")
-          : `
-            <div class="form-card glass empty-state">
-              <b>Hali natijalar yo‘q.</b>
-            </div>
-          `;
-
+      const d = await api("/api/ranking");
+      const box = $("#rankingList");
+      box.innerHTML = d.ranking?.length ? d.ranking.map((r) =>
+        `<div class="rank-row"><span class="rank-pos">#${r.position}</span><span><b>${escapeHtml(r.name)}</b><small>${escapeHtml(r.level || "")}</small></span><strong>${r.score}</strong></div>`
+      ).join("") : `<div class="form-card glass empty-state"><b>Hali natijalar yoâq.</b></div>`;
       show("rankingScreen");
-
-    } catch (e) {
-      toast(e.message);
-    }
+    } catch (e) { toast(e.message); }
   }
 
   async function loadCertificate() {
     try {
-      const d =
-        await api("/api/certificate/mine");
-
-      const c =
-        d.certificate;
-
-      $("#certificateBox").innerHTML =
-        c
-          ? `
-            <span class="pill">
-              VERIFIED
-            </span>
-
-            <h2>
-              ${escapeHtml(c.full_name)}
-            </h2>
-
-            <div class="score-ring">
-              <strong>${c.score}</strong>
-              <small>IQ</small>
-            </div>
-
-            <p>
-              ${escapeHtml(c.level || "")}
-            </p>
-
-            <div class="cert-code">
-              ${escapeHtml(c.verification_code)}
-            </div>
-
-            <p>IQ TEST BOT</p>
-
-            <button
-              id="certDownload"
-              class="primary">
-              PNG ochish
-            </button>
-          `
-          : `
-            <div class="empty-state">
-              <b>Sertifikat yo‘q</b>
-              <span>
-                IQ testini yakunlang va
-                natija ochilgach sertifikat
-                yaratiladi.
-              </span>
-            </div>
-          `;
-
-      $("#certDownload")?.addEventListener(
-        "click",
-        async () => {
-          try {
-            const blob =
-              await apiBlob(
-                `/api/certificate/${encodeURIComponent(
-                  c.certificate_id
-                )}/png`
-              );
-
-            const url =
-              URL.createObjectURL(blob);
-
-            window.open(
-              url,
-              "_blank"
-            );
-
-            setTimeout(
-              () => URL.revokeObjectURL(url),
-              30000
-            );
-
-          } catch (e) {
-            toast(e.message);
-          }
-        }
-      );
-
+      const d = await api("/api/certificate/mine");
+      const c = d.certificate;
+      $("#certificateBox").innerHTML = c ? `
+        <span class="pill">VERIFIED</span>
+        <h2>${escapeHtml(c.full_name)}</h2>
+        <div class="score-ring"><strong>${c.score}</strong><small>IQ</small></div>
+        <p>${escapeHtml(c.level || "")}</p>
+        <div class="cert-code">${escapeHtml(c.verification_code)}</div>
+        <p>IQ TEST BOT</p>
+        <button id="certDownload" class="primary">PNG ochish</button>` : `<div class="empty-state"><b>Sertifikat yoâq</b><span>IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.</span></div>`;
+      $("#certDownload")?.addEventListener("click", async () => {
+        try {
+          const blob = await apiBlob(`/api/certificate/${encodeURIComponent(c.certificate_id)}/png`);
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+          setTimeout(() => URL.revokeObjectURL(url), 30000);
+        } catch (e) { toast(e.message); }
+      });
       show("certificateScreen");
-
-    } catch (e) {
-      toast(e.message);
-    }
+    } catch (e) { toast(e.message); }
   }
 
-  function setBattleInfo(html) {
-    $("#battleInfo").innerHTML =
-      html;
-  }
-    async function createBattle() {
+  function setBattleInfo(html) { $("#battleInfo").innerHTML = html; }
+
+  async function createBattle() {
     if (state.busy) return;
-
     try {
       state.busy = true;
-
-      const d = await api(
-        "/api/battle/create",
-        {
-          method: "POST",
-          body: "{}"
-        }
-      );
-
-      state.battleId =
-        d.battle_id;
-
+      const d = await api("/api/battle/create", { method:"POST", body:"{}" });
+      state.battleId = d.battle_id;
       state.paymentAttemptId = null;
-
-      setBattleInfo(`
-        <div class="cert-code battle-code">
-          ${escapeHtml(d.code)}
-        </div>
-
-        <p>
-          Do‘stingizga 4 belgili kodni yuboring.
-          Ikkalangiz ham to‘lovni tasdiqlatgach
-          battle ochiladi.
-        </p>
-
-        <button
-          id="battlePay"
-          class="primary">
-          To‘lovni boshlash ·
-          ${Number(d.price).toLocaleString("uz-UZ")}
-          so‘m
-        </button>
-
-        <div
-          id="battleStatus"
-          class="inline-status">
-          Opponent kutilmoqda…
-        </div>
-      `);
-
-      $("#battlePay").onclick =
-        () => startBattlePayment();
-
+      setBattleInfo(`<div class="cert-code battle-code">${escapeHtml(d.code)}</div><p>Doâstingizga 4 belgili kodni yuboring. Ikkalangiz ham toâlovni tasdiqlatgach battle ochiladi.</p><button id="battlePay" class="primary">Toâlovni boshlash Â· ${Number(d.price).toLocaleString("uz-UZ")} soâm</button><div id="battleStatus" class="inline-status">Opponent kutilmoqdaâ¦</div>`);
+      $("#battlePay").onclick = () => startBattlePayment();
       startBattlePolling();
-
-    } catch (e) {
-      toast(e.message);
-
-    } finally {
-      state.busy = false;
-    }
+    } catch (e) { toast(e.message); }
+    finally { state.busy = false; }
   }
 
   async function joinBattle() {
     if (state.busy) return;
-
-    const code =
-      $("#battleCode").value
-        .trim()
-        .toUpperCase();
-
-    if (code.length !== 4) {
-      toast("4 belgili kod kiriting");
-      return;
-    }
-
+    const code = $("#battleCode").value.trim().toUpperCase();
+    if (code.length !== 4) { toast("4 belgili kod kiriting"); return; }
     try {
       state.busy = true;
-
-      const d = await api(
-        "/api/battle/join",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            code
-          })
-        }
-      );
-
-      state.battleId =
-        d.battle_id;
-
+      const d = await api("/api/battle/join", { method:"POST", body:JSON.stringify({ code }) });
+      state.battleId = d.battle_id;
       state.paymentAttemptId = null;
-
-      setBattleInfo(`
-        <div class="cert-code battle-code">
-          ${escapeHtml(code)}
-        </div>
-
-        <p>
-          Battle topildi.
-          Endi o‘z to‘lovingizni yuboring.
-        </p>
-
-        <button
-          id="battlePay"
-          class="primary">
-          To‘lovni boshlash ·
-          ${Number(d.price).toLocaleString("uz-UZ")}
-          so‘m
-        </button>
-
-        <div
-          id="battleStatus"
-          class="inline-status">
-          To‘lov kutilmoqda…
-        </div>
-      `);
-
-      $("#battlePay").onclick =
-        () => startBattlePayment();
-
+      setBattleInfo(`<div class="cert-code battle-code">${escapeHtml(code)}</div><p>Battle topildi. Endi oâz toâlovingizni yuboring.</p><button id="battlePay" class="primary">Toâlovni boshlash Â· ${Number(d.price).toLocaleString("uz-UZ")} soâm</button><div id="battleStatus" class="inline-status">Toâlov kutilmoqdaâ¦</div>`);
+      $("#battlePay").onclick = () => startBattlePayment();
       startBattlePolling();
-
-    } catch (e) {
-      toast(e.message);
-
-    } finally {
-      state.busy = false;
-    }
+    } catch (e) { toast(e.message); }
+    finally { state.busy = false; }
   }
 
   async function startBattlePayment() {
     if (!state.battleId) return;
-
     state.paymentAttemptId = null;
-
     try {
-      const d = await api(
-        `/api/battle/${state.battleId}/payment`,
-        {
-          method: "POST",
-          body: "{}"
-        }
-      );
-
-      await renderPayment({
-        ...d,
-        payment_id: d.payment_id
-      });
-
-      state.paymentId =
-        d.payment_id;
-
+      const d = await api(`/api/battle/${state.battleId}/payment`, { method:"POST", body:"{}" });
+      await renderPayment({ ...d, payment_id:d.payment_id });
+      state.paymentId = d.payment_id;
       show("paymentScreen");
-
       startBattlePolling();
-
-    } catch (e) {
-      toast(e.message);
-    }
+    } catch (e) { toast(e.message); }
   }
 
   function startBattlePolling() {
-    clearInterval(
-      state.battlePolling
-    );
-
-    state.battlePolling =
-      setInterval(
-        () => checkBattleReady(false),
-        3000
-      );
-
+    clearInterval(state.battlePolling);
+    state.battlePolling = setInterval(() => checkBattleReady(false), 3000);
     checkBattleReady(false);
   }
 
-  async function checkBattleReady(
-    showToastOnReady
-  ) {
+  async function checkBattleReady(showToastOnReady) {
     if (!state.battleId) return false;
-
     try {
-      const d = await api(
-        `/api/battle/${state.battleId}/start`
-      );
-
-      const status =
-        $("#battleStatus");
-
-      if (status) {
-        status.textContent =
-          d.ready
-            ? "Battle tayyor. Test boshlanmoqda…"
-            : `Holat: ${
-                d.status || "kutilmoqda"
-              }`;
-      }
-
+      const d = await api(`/api/battle/${state.battleId}/start`);
+      const status = $("#battleStatus");
+      if (status) status.textContent = d.ready ? "Battle tayyor. Test boshlanmoqdaâ¦" : `Holat: ${d.status || "kutilmoqda"}`;
       if (d.ready) {
-        clearInterval(
-          state.battlePolling
-        );
-
-        state.questions =
-          d.questions || [];
-
-        state.mode =
-          "BATTLE";
-
-        state.testType =
-          "IQ";
-
+        clearInterval(state.battlePolling);
+        state.questions = d.questions || [];
+        state.mode = "BATTLE";
+        state.testType = "IQ";
         state.index = 0;
         state.answers = {};
         state.selected = null;
-        state.startedAt =
-          Date.now();
-
+        state.startedAt = Date.now();
         show("testScreen");
-
         renderQuestion();
         startTimer();
-
-        if (showToastOnReady) {
-          toast(
-            "Battle to‘lovi tasdiqlandi."
-          );
-        }
-
+        if (showToastOnReady) toast("Battle toâlovi tasdiqlandi.");
         return true;
       }
-
     } catch (_) {}
-
     return false;
   }
 
   async function waitBattleResult() {
     show("loadingResult");
-
-    clearInterval(
-      window.__timer
-    );
-
+    clearInterval(window.__timer);
     for (let i = 0; i < 40; i++) {
       try {
-        const d = await api(
-          `/api/battle/${state.battleId}/result`
-        );
-
+        const d = await api(`/api/battle/${state.battleId}/result`);
         if (d.ready) {
-          $("#resultBadge").textContent =
-            "BATTLE RESULT";
-
-          $("#resultUnit").textContent =
-            "IQ";
-
-          $("#resultScore").textContent =
-            d.my_score;
-
-          $("#resultLevel").textContent =
-            d.outcome === "win"
-              ? "G‘ALABA"
-              : d.outcome === "loss"
-                ? "MAG‘LUBIYAT"
-                : "DURANG";
-
-          $("#resultCorrect").textContent =
-            `Opponent: ${d.opponent_score}`;
-
+          $("#resultBadge").textContent = "BATTLE RESULT";
+          $("#resultUnit").textContent = "IQ";
+          $("#resultScore").textContent = d.my_score;
+          $("#resultLevel").textContent = d.outcome === "win" ? "GâALABA" : d.outcome === "loss" ? "MAGâLUBIYAT" : "DURANG";
+          $("#resultCorrect").textContent = `Opponent: ${d.opponent_score}`;
           show("resultScreen");
           return;
         }
-
       } catch (_) {}
-
-      await new Promise(
-        (resolve) =>
-          setTimeout(resolve, 2500)
-      );
+      await new Promise((resolve) => setTimeout(resolve, 2500));
     }
-
     show("battleScreen");
-
-    toast(
-      "Opponent natijasini kutish davom etmoqda."
-    );
+    toast("Opponent natijasini kutish davom etmoqda.");
   }
 
-  $("#nextQuestion")
-    ?.addEventListener(
-      "click",
-      () => {
-        if (
-          state.selected === null ||
-          state.busy
-        ) {
-          return;
-        }
+  $("#nextQuestion")?.addEventListener("click", () => {
+    if (state.selected === null || state.busy) return;
+    state.answers[String(state.index + 1)] = state.selected;
+    saveProgress();
+    if (state.index < state.questions.length - 1) {
+      state.index += 1;
+      renderQuestion();
+    } else finishTest();
+  });
+  $("#saveProfile")?.addEventListener("click", saveProfile);
+  $("#copyCard")?.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast("Karta nusxalandi"); }
+    catch (_) { toast("Nusxalash imkoni boâlmadi"); }
+  });
+  $("#sendReceipt")?.addEventListener("click", sendReceipt);
+  $("#sharePayment")?.addEventListener("click", () => {
+    const url = `https://t.me/${encodeURIComponent("iqtest_ubot")}`;
+    if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, "_blank");
+  });
+  $("#certificateBtn")?.addEventListener("click", loadCertificate);
+  $("#createBattle")?.addEventListener("click", createBattle);
+  $("#joinBattle")?.addEventListener("click", joinBattle);
+  $("#profileTopBtn")?.addEventListener("click", () => show("profileScreen"));
+  $("#battleCard")?.addEventListener("click", () => show("battleScreen"));
+  $("#profileCard")?.addEventListener("click", () => {
+    renderPersonalProfile();
+    show("profileScreen");
+    $("#personalSummary")?.scrollIntoView({ behavior:"smooth", block:"center" });
+  });
+  $("#testBack")?.addEventListener("click", () => {
+    clearInterval(window.__timer);
+    if (state.mode === "NORMAL") saveProgress();
+    show("homeScreen");
+  });
+  $("[data-back]") && $$('[data-back]').forEach((b) => b.addEventListener("click", () => show("homeScreen")));
+  $$(".test-card[data-test]").forEach((b) => b.addEventListener("click", () => startTest(b.dataset.test)));
+  $$('[data-nav]').forEach((b) => b.addEventListener("click", () => {
+    const n = b.dataset.nav;
+    if (n === "home") show("homeScreen");
+    if (n === "ranking") loadRanking();
+    if (n === "certificate") loadCertificate();
+    if (n === "profile") { renderPersonalProfile(); show("profileScreen"); }
+  }));
 
-        state.answers[
-          String(state.index + 1)
-        ] = state.selected;
-
-        saveProgress();
-
-        if (
-          state.index <
-          state.questions.length - 1
-        ) {
-          state.index += 1;
-          renderQuestion();
-        } else {
-          finishTest();
-        }
-      }
-    );
-
-  $("#saveProfile")
-    ?.addEventListener(
-      "click",
-      saveProfile
-    );
-
-  $("#copyCard")
-    ?.addEventListener(
-      "click",
-      async () => {
-        try {
-          await navigator.clipboard.writeText(
-            $("#cardNumber").textContent
-          );
-
-          toast(
-            "Karta nusxalandi"
-          );
-
-        } catch (_) {
-          toast(
-            "Nusxalash imkoni bo‘lmadi"
-          );
-        }
-      }
-    );
-
-  $("#sendReceipt")
-    ?.addEventListener(
-      "click",
-      sendReceipt
-    );
-
-  $("#sharePayment")
-    ?.addEventListener(
-      "click",
-      () => {
-        const url =
-          `https://t.me/${encodeURIComponent(
-            "iqtest_ubot"
-          )}`;
-
-        if (tg?.openTelegramLink) {
-          tg.openTelegramLink(url);
-        } else {
-          window.open(
-            url,
-            "_blank"
-          );
-        }
-      }
-    );
-
-  $("#certificateBtn")
-    ?.addEventListener(
-      "click",
-      loadCertificate
-    );
-
-  $("#createBattle")
-    ?.addEventListener(
-      "click",
-      createBattle
-    );
-
-  $("#joinBattle")
-    ?.addEventListener(
-      "click",
-      joinBattle
-    );
-
-  $("#profileTopBtn")
-    ?.addEventListener(
-      "click",
-      () => show("profileScreen")
-    );
-
-  $("#battleCard")
-    ?.addEventListener(
-      "click",
-      () => show("battleScreen")
-    );
-
-  $("#profileCard")
-    ?.addEventListener(
-      "click",
-      () => {
-        renderPersonalProfile();
-
-        show("profileScreen");
-
-        $("#personalSummary")
-          ?.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
-      }
-    );
-
-  $("#testBack")
-    ?.addEventListener(
-      "click",
-      () => {
-        clearInterval(
-          window.__timer
-        );
-
-        if (
-          state.mode === "NORMAL"
-        ) {
-          saveProgress();
-        }
-
-        show("homeScreen");
-      }
-    );
-
-  $$("[data-back]")
-    .forEach(
-      (b) =>
-        b.addEventListener(
-          "click",
-          () => show("homeScreen")
-        )
-    );
-
-  $$(".test-card[data-test]")
-    .forEach(
-      (b) =>
-        b.addEventListener(
-          "click",
-          () =>
-            startTest(
-              b.dataset.test
-            )
-        )
-    );
-
-  $$("[data-nav]")
-    .forEach(
-      (b) =>
-        b.addEventListener(
-          "click",
-          () => {
-            const n =
-              b.dataset.nav;
-
-            if (n === "home") {
-              show("homeScreen");
-            }
-
-            if (n === "ranking") {
-              loadRanking();
-            }
-
-            if (n === "certificate") {
-              loadCertificate();
-            }
-
-            if (n === "profile") {
-              renderPersonalProfile();
-              show("profileScreen");
-            }
-          }
-        )
-    );
-
-  setInterval(
-    () => {
-      if (
-        state.paymentId &&
-        !$("#paymentScreen")
-          ?.classList.contains("hidden")
-      ) {
-        refreshPayment();
-      }
-    },
-    5000
-  );
+  setInterval(() => {
+    if (state.paymentId && !$("#paymentScreen")?.classList.contains("hidden")) refreshPayment();
+  }, 5000);
 
   (async () => {
     try {
       await loadHome();
     } catch (e) {
       show("homeScreen");
-
-      toast(
-        e.message ||
-        "Mini App yuklanmadi"
-      );
+      toast(e.message || "Mini App yuklanmadi");
     }
   })();
-
 })();
