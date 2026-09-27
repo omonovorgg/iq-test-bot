@@ -38,7 +38,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/")
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL", "").strip() or os.getenv("RENDER_EXTERNAL_URL", "").strip()).rstrip("/")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "iqtest_ubot").strip().lstrip("@")
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0") or 0)
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
@@ -1112,6 +1112,9 @@ async def admin_callback(callback: CallbackQuery):
             await callback.answer()
             return
         if action.startswith("approve:"):
+            # Stop Telegram's button spinner immediately; certificate/file delivery
+            # can take a little longer and must not block the callback response.
+            await callback.answer("Qabul qilindi…")
             try: pid=int(action.split(":",1)[1])
             except ValueError: await callback.answer("Payment ID noto‘g‘ri",show_alert=True); return
             p,status=await approve_payment_record(pid)
@@ -1123,6 +1126,7 @@ async def admin_callback(callback: CallbackQuery):
                 except Exception: logger.exception("Paid certificate delivery failed")
             text=f"✅ Payment #{pid} tasdiqlandi."
         elif action.startswith("reject:"):
+            await callback.answer("Qabul qilindi…")
             try: pid=int(action.split(":",1)[1])
             except ValueError: await callback.answer("Payment ID noto‘g‘ri",show_alert=True); return
             p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",pid)
@@ -1527,6 +1531,12 @@ async def expose_result(attempt_id, user_id):
 
 app = FastAPI(title="IQ TEST BOT")
 
+@app.get("/")
+async def root():
+    # Render may probe the service root with HEAD/GET. Keep it 200 so a
+    # configured root health-check cannot mark the service unhealthy.
+    return {"status":"ok","service":"iq-test-bot"}
+
 @app.get("/health")
 async def health():
     return {"status":"ok"}
@@ -1541,17 +1551,22 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR,"webapp")), nam
 
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
-    supplied=request.headers.get("X-Telegram-Bot-Api-Secret-Token","")
-    if not WEBHOOK_SECRET or not hmac.compare_digest(supplied,WEBHOOK_SECRET):
-        raise HTTPException(status_code=403,detail="Forbidden")
+    supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not WEBHOOK_SECRET or not hmac.compare_digest(supplied, WEBHOOK_SECRET):
+        logger.warning("Telegram webhook rejected: invalid secret")
+        raise HTTPException(status_code=403, detail="Forbidden")
     try:
-        payload=await request.json()
-        update=Update.model_validate(payload)
-        await dp.feed_update(bot,update)
-        return {"ok":True}
+        payload = await request.json()
+        update = Update.model_validate(payload)
+        logger.info("Telegram update received: update_id=%s", update.update_id)
+        await dp.feed_update(bot, update)
+        logger.info("Telegram update processed: update_id=%s", update.update_id)
+        return {"ok": True}
     except Exception:
         logger.exception("Webhook processing failed")
-        raise HTTPException(status_code=500,detail="Webhook processing error")
+        # Telegram retries non-2xx responses. Return 200 only after aiogram
+        # has actually received the update; real handler errors are logged.
+        raise HTTPException(status_code=500, detail="Webhook processing error")
 
 @app.get("/api/bootstrap")
 async def api_bootstrap(request: Request):
@@ -2114,12 +2129,24 @@ async def lifespan(application: FastAPI):
     logger.info("Starting application")
     db_pool=await asyncpg.create_pool(DATABASE_URL,min_size=1,max_size=10,command_timeout=30)
     await migrate()
-    webhook_url=PUBLIC_BASE_URL.rstrip("/")+"/telegram/webhook"
+    webhook_url = PUBLIC_BASE_URL.rstrip("/") + "/telegram/webhook"
     try:
-        await bot.set_webhook(url=webhook_url,secret_token=WEBHOOK_SECRET,drop_pending_updates=True)
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="🧠 IQ TEST BOT", web_app=WebAppInfo(url=WEBAPP_URL + "/app")))
-        info=await bot.get_webhook_info()
-        logger.info("Telegram webhook configured: %s pending=%s",info.url,info.pending_update_count)
+        await bot.set_webhook(
+            url=webhook_url,
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=False,
+            allowed_updates=dp.resolve_used_update_types(),
+        )
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="🧠 IQ TEST BOT", web_app=WebAppInfo(url=WEBAPP_URL + "/app"))
+        )
+        info = await bot.get_webhook_info()
+        logger.info(
+            "Telegram webhook configured: url=%s pending=%s last_error=%s",
+            info.url, info.pending_update_count, info.last_error_message,
+        )
+        if info.url != webhook_url:
+            raise RuntimeError(f"Telegram webhook URL mismatch: expected={webhook_url!r} actual={info.url!r}")
     except Exception:
         logger.exception("Webhook configuration failed")
         raise
@@ -2127,11 +2154,9 @@ async def lifespan(application: FastAPI):
         yield
     finally:
         logger.info("Shutting down")
-        try:
-            if PUBLIC_BASE_URL:
-                await bot.delete_webhook(drop_pending_updates=False)
-        except Exception:
-            logger.exception("Webhook shutdown failed")
+        # Keep the webhook registered during Render restarts. The next instance
+        # sets the same URL/secret again during startup. Deleting it here creates
+        # a needless window where Telegram has nowhere to deliver updates.
         try:
             await bot.session.close()
         except Exception:
