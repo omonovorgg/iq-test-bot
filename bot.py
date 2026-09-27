@@ -718,6 +718,23 @@ async def migrate():
         END $$;
     """)
 
+    # Legacy databases created before results.attempt_id was UNIQUE can still
+    # reach the runtime with no unique/exclusion constraint. The application
+    # intentionally uses ON CONFLICT(attempt_id), so make that invariant true
+    # before serving requests. Remove duplicate historical rows first;
+    # certificates reference result rows with ON DELETE SET NULL.
+    await db_execute("""
+        DELETE FROM results r
+        USING results newer
+        WHERE r.attempt_id = newer.attempt_id
+          AND r.attempt_id IS NOT NULL
+          AND r.id > newer.id
+    """)
+    await db_execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS results_attempt_id_unique_idx
+        ON results(attempt_id)
+    """)
+
     # Final schema verification/self-healing pass. This runs after all legacy
     # migrations so an old database can never reach an API handler with a
     # partially upgraded test_sessions table. CREATE TABLE IF NOT EXISTS does\n    # not modify an existing table, therefore every runtime column used by the\n    # test flow is explicitly ensured here as well.\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS questions JSONB")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS score INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS correct_count INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS is_retry BOOLEAN NOT NULL DEFAULT FALSE")\n\n    # Old sessions may have been created before expires_at/questions existed.\n    # Give them a deterministic expiry and regenerate their public question\n    # payload when it is missing, without touching submitted answers.\n    await db_execute("""\n        UPDATE test_sessions\n        SET expires_at = COALESCE(expires_at, started_at + INTERVAL '30 minutes')\n        WHERE expires_at IS NULL\n    """)\n\n    required_schema = {\n        "test_sessions": {\n            "session_id", "user_id", "test_type", "status", "answers",\n            "questions", "score", "correct_count", "started_at",\n            "completed_at", "expires_at", "price", "is_retry"\n        },\n        "test_attempts": {\n            "id", "user_id", "test_type", "session_id", "score",\n            "correct_count", "duration", "payment_status",\n            "result_visible", "level", "answers", "created_at"\n        },\n        "results": {\n            "id", "user_id", "attempt_id", "test_type", "score",\n            "level", "created_at"\n        },\n        "payments": {\n            "id", "user_id", "attempt_id", "battle_id", "payment_type",\n            "amount", "card_id", "receipt_file_id", "status",\n            "created_at", "updated_at"\n        },\n        "payment_cards": {\n            "id", "card_number", "holder", "bank", "active", "created_at"\n        },\n        "battles": {\n            "id", "code", "status", "created_by", "created_at",\n            "ready_at", "finalized_at"\n        },\n        "battle_players": {\n            "battle_id", "user_id", "role", "payment_id", "session_id",\n            "score", "correct_count", "finished_at"\n        },\n        "certificates": {\n            "id", "user_id", "result_id", "certificate_id",\n            "verification_code", "type", "full_name", "score", "level",\n            "created_at"\n        },\n    }\n    async with db_pool.acquire() as conn:\n        for table, expected in required_schema.items():\n            rows = await conn.fetch(\n                """\n                SELECT column_name\n                FROM information_schema.columns\n                WHERE table_schema='public' AND table_name=$1\n                """,\n                table,\n            )\n            actual = {r["column_name"] for r in rows}\n            missing = sorted(expected - actual)\n            if missing:\n                raise RuntimeError(\n                    f"Database schema incomplete for {table}: missing {', '.join(missing)}"\n                )\n\n        q_type = await conn.fetchval("""\n            SELECT data_type\n            FROM information_schema.columns\n            WHERE table_schema='public'\n              AND table_name='test_sessions'\n              AND column_name='questions'\n        """)\n        if q_type != "jsonb":\n            raise RuntimeError(\n                f"Database schema invalid: test_sessions.questions must be jsonb, got {q_type!r}"\n            )\n\n    logger.info("Database schema verification passed: all runtime tables/columns are present")\n\n    # Existing databases may have battle_players rows created by an older
@@ -1142,29 +1159,69 @@ async def admin_callback(callback: CallbackQuery):
             await callback.answer()
             return
         if action.startswith("approve:"):
-            # Stop Telegram's button spinner immediately; certificate/file delivery
-            # can take a little longer and must not block the callback response.
-            await callback.answer("Qabul qilindi…")
-            try: pid=int(action.split(":",1)[1])
-            except ValueError: await callback.answer("Payment ID noto‘g‘ri",show_alert=True); return
-            p,status=await approve_payment_record(pid)
-            if not p: await callback.answer("Payment topilmadi",show_alert=True); return
-            try: await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi.")
-            except Exception: logger.exception("Admin approval notification failed")
-            if status == "approved" and p["attempt_id"]:
-                try: await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
-                except Exception: logger.exception("Paid certificate delivery failed")
-            text=f"✅ Payment #{pid} tasdiqlandi."
+            try:
+                pid=int(action.split(":",1)[1])
+            except ValueError:
+                await callback.answer("Payment ID noto‘g‘ri",show_alert=True)
+                return
+            # Answer immediately so Telegram stops the spinner, then perform the
+            # database work. If the database fails, the admin message is edited
+            # instead of falsely showing “accepted”.
+            await callback.answer("Tekshirilmoqda…")
+            try:
+                p,status=await approve_payment_record(pid)
+                if not p:
+                    await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.", reply_markup=None)
+                    return
+                try:
+                    await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Natijangiz Mini App’da ochildi.")
+                except Exception:
+                    logger.exception("Admin approval notification failed")
+                if status == "approved" and p["attempt_id"]:
+                    try:
+                        await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
+                    except Exception:
+                        logger.exception("Paid certificate delivery failed")
+                try:
+                    await callback.message.edit_caption(
+                        caption=f"✅ <b>Payment #{pid} tasdiqlandi.</b>",
+                        reply_markup=None,
+                    )
+                except Exception:
+                    logger.exception("Failed to edit approved payment message")
+                return
+            except Exception:
+                logger.exception("Payment approval failed: payment_id=%s", pid)
+                try:
+                    await callback.message.edit_caption(
+                        caption=f"❌ <b>Payment #{pid} tasdiqlanmadi.</b> Server xatosi. Qayta urinib ko‘ring.",
+                        reply_markup=None,
+                    )
+                except Exception:
+                    logger.exception("Failed to edit failed approval message")
+                return
         elif action.startswith("reject:"):
-            await callback.answer("Qabul qilindi…")
-            try: pid=int(action.split(":",1)[1])
-            except ValueError: await callback.answer("Payment ID noto‘g‘ri",show_alert=True); return
+            try:
+                pid=int(action.split(":",1)[1])
+            except ValueError:
+                await callback.answer("Payment ID noto‘g‘ri",show_alert=True)
+                return
+            await callback.answer("Tekshirilmoqda…")
             p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",pid)
-            if not p: await callback.answer("Payment topilmadi",show_alert=True); return
+            if not p:
+                try: await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.", reply_markup=None)
+                except Exception: pass
+                return
             await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",pid)
-            try: await bot.send_message(p["user_id"],"❌ To‘lov rad etildi. Receiptni tekshirib qayta yuboring.")
-            except Exception: logger.exception("Admin rejection notification failed")
-            text=f"❌ Payment #{pid} rad etildi."
+            try:
+                await bot.send_message(p["user_id"],"❌ To‘lov rad etildi. Receiptni tekshirib qayta yuboring.")
+            except Exception:
+                logger.exception("Admin rejection notification failed")
+            try:
+                await callback.message.edit_caption(caption=f"❌ <b>Payment #{pid} rad etildi.</b>", reply_markup=None)
+            except Exception:
+                logger.exception("Failed to edit rejected payment message")
+            return
         elif action == "users":
             row = await db_fetchrow("SELECT COUNT(*) c FROM users")
             text = f"👥 Users: <b>{row['c']}</b>"
