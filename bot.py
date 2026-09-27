@@ -1449,7 +1449,23 @@ async def profile_save(request: Request):
     except: return json_error("Yosh noto‘g‘ri")
     if not full_name or len(full_name)>120 or gender not in ("male","female") or age<10 or age>120 or not country:
         return json_error("Profil ma’lumotlari noto‘g‘ri")
-    await db_execute("UPDATE users SET full_name=$1,gender=$2,age=$3,country=$4,updated_at=NOW() WHERE user_id=$5",full_name,gender,age,country,uid)
+    # Upsert instead of UPDATE-only: this is safe if bootstrap and profile save
+    # race each other, and guarantees the validated Telegram user has a row.
+    await db_execute("""
+        INSERT INTO users(user_id,username,first_name,last_name,full_name,gender,age,country,last_seen,updated_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+        ON CONFLICT(user_id) DO UPDATE SET
+          username=EXCLUDED.username,
+          first_name=EXCLUDED.first_name,
+          last_name=EXCLUDED.last_name,
+          full_name=EXCLUDED.full_name,
+          gender=EXCLUDED.gender,
+          age=EXCLUDED.age,
+          country=EXCLUDED.country,
+          last_seen=NOW(),
+          updated_at=NOW()
+    """, uid, user.get("username"), user.get("first_name"), user.get("last_name"),
+        full_name, gender, age, country)
     return {"ok":True}
 
 @app.post("/api/test/start")
