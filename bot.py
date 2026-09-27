@@ -866,43 +866,79 @@ async def admin_home(callback: CallbackQuery):
         await send_admin_panel(callback.message)
 
 def validate_init_data(init_data: str, bot_token: str):
+    """Validate Telegram Mini App initData exactly as a query string.
+
+    Telegram signs the decoded key/value pairs (excluding ``hash``), sorted
+    alphabetically and joined with newlines.  ``parse_qsl`` is important here:
+    manually hashing the still-percent-encoded values can produce an invalid
+    hash even though Telegram supplied valid initData.
+    """
     if not init_data:
         raise ValueError("initData is empty")
+
+    from urllib.parse import parse_qsl
+
+    try:
+        items = parse_qsl(init_data, keep_blank_values=True, strict_parsing=False)
+    except Exception as exc:
+        raise ValueError("invalid initData format") from exc
+
     pairs = {}
-    hash_value = None
-    for part in init_data.split("&"):
-        if "=" not in part:
-            continue
-        key, value = part.split("=", 1)
+    for key, value in items:
         if key == "hash":
-            hash_value = value
+            # Telegram sends one hash. Keep the last one if a malformed client
+            # supplied duplicates; duplicate fields are not accepted as trusted
+            # identity data unless the final HMAC still matches.
+            pairs["__telegram_hash__"] = value
         else:
-            pairs.setdefault(key, value)
+            pairs[key] = value
+
+    hash_value = pairs.pop("__telegram_hash__", "")
     if not hash_value:
         raise ValueError("hash missing")
-    # Telegram WebApp validation uses the raw percent-encoded values.
-    data_check = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
-    secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    calculated = hmac.new(secret_key, data_check.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    data_check = "\n".join(
+        f"{key}={pairs[key]}" for key in sorted(pairs)
+    )
+
+    secret_key = hmac.new(
+        b"WebAppData",
+        bot_token.encode("utf-8"),
+        hashlib.sha256
+    ).digest()
+
+    calculated = hmac.new(
+        secret_key,
+        data_check.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
     if not hmac.compare_digest(calculated, hash_value):
         raise ValueError("invalid hash")
+
     if "auth_date" not in pairs:
         raise ValueError("auth_date missing")
+
     try:
         auth_date = int(pairs["auth_date"])
     except ValueError:
         raise ValueError("invalid auth_date")
+
     if abs(int(datetime.now(timezone.utc).timestamp()) - auth_date) > 86400:
         raise ValueError("initData expired")
+
     user_raw = pairs.get("user")
     if not user_raw:
         raise ValueError("user missing")
+
     try:
-        user = json.loads(unquote(user_raw))
+        user = json.loads(user_raw)
     except Exception as exc:
         raise ValueError("invalid user json") from exc
+
     if not isinstance(user, dict) or not user.get("id"):
         raise ValueError("invalid user")
+
     return user
 
 async def authenticated_user(request: Request):
