@@ -1,331 +1,475 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="uz">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#0a0e1a" />
-<title>IQ TEST BOT</title>
-<link rel="stylesheet" href="/static/style.css" />
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta name="color-scheme" content="dark">
+  <title>IQ TEST BOT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
+  <div class="bg-orb orb-a"></div>
+  <div class="bg-orb orb-b"></div>
 
-<!-- ================= APP ROOT ================= -->
-<div id="app">
+  <main id="app" class="app-shell">
 
-  <!-- ============ LOADING OVERLAY ============ -->
-  <div id="global-loading" class="global-loading hidden">
-    <div class="loader-ring"></div>
-  </div>
+    <section id="loadingScreen" class="screen center-screen">
+      <div class="loader-ring"></div>
+      <h2>IQ TEST BOT</h2>
+      <p>Yuklanmoqda…</p>
+    </section>
 
-  <!-- ============ TOAST ============ -->
-  <div id="toast-root" class="toast-root"></div>
+    <section id="homeScreen" class="screen hidden">
 
-  <!-- ============ MODAL ============ -->
-  <div id="modal-root" class="modal-root hidden">
-    <div class="modal-backdrop" data-close-modal="1"></div>
-    <div class="modal-panel">
-      <h3 id="modal-title" class="modal-title"></h3>
-      <p id="modal-body" class="modal-body"></p>
-      <div class="modal-actions">
-        <button id="modal-cancel" class="btn btn-ghost" data-close-modal="1">Bekor</button>
-        <button id="modal-ok" class="btn btn-primary">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============ HEADER ============ -->
-  <header class="app-header">
-    <button id="btn-back" class="icon-btn hidden" aria-label="Orqaga">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-    </button>
-    <div class="brand">
-      <span class="brand-dot"></span>
-      <span class="brand-name">IQ TEST BOT</span>
-    </div>
-    <div id="header-right" class="header-right"></div>
-  </header>
-
-  <!-- ============ SCREENS ============ -->
-
-  <!-- HOME -->
-  <section id="screen-home" class="screen active">
-    <div class="hero">
-      <div class="brain-wrap">
-        <div class="brain-halo"></div>
-        <svg class="brain-svg" viewBox="0 0 200 200" aria-hidden="true">
-          <defs>
-            <radialGradient id="brainGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.9"/>
-              <stop offset="60%" stop-color="#60a5fa" stop-opacity="0.4"/>
-              <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
-            </radialGradient>
-          </defs>
-          <circle cx="100" cy="100" r="90" fill="url(#brainGlow)"/>
-          <path d="M70,70 Q60,90 75,105 Q60,120 80,135 Q95,145 105,130 Q115,145 130,135 Q150,120 135,105 Q150,90 140,70 Q125,55 105,65 Q95,55 70,70 Z"
-                fill="none" stroke="#e8eaf6" stroke-width="2" opacity="0.85"/>
-          <path d="M100,65 L100,130" stroke="#e8eaf6" stroke-width="1.2" opacity="0.6"/>
-          <path d="M85,80 Q95,90 85,100" stroke="#e8eaf6" stroke-width="1" fill="none" opacity="0.6"/>
-          <path d="M115,80 Q105,90 115,100" stroke="#e8eaf6" stroke-width="1" fill="none" opacity="0.6"/>
-        </svg>
-        <div class="sparkle s1"></div>
-        <div class="sparkle s2"></div>
-        <div class="sparkle s3"></div>
-      </div>
-      <h1 class="hero-title">18 TA MANTIQIY PUZZLE</h1>
-      <p class="hero-sub">IQ darajangizni sinab ko'ring</p>
-    </div>
-
-    <div class="cards-grid">
-      <button id="card-iq" class="card card-iq" data-target="iq">
-        <div class="card-icon">🧠</div>
-        <div class="card-body">
-          <div class="card-title">IQ Test</div>
-          <div class="card-desc">Mantiqiy fikrlashni sinash</div>
+      <header class="topbar">
+        <div>
+          <span class="eyebrow">IQ TEST BOT</span>
+          <h1>Salom, <span id="userName">Do‘st</span> 👋</h1>
         </div>
-        <div class="card-arrow">→</div>
+
+        <button id="profileTopBtn" class="icon-btn" aria-label="Profile">
+          ◎
+        </button>
+      </header>
+
+      <div class="hero glass">
+        <div class="brain">
+          <div class="brain-core">🧠</div>
+          <i></i>
+          <i></i>
+          <i></i>
+        </div>
+
+        <div class="hero-copy">
+          <span class="pill">18 TA MANTIQIY PUZZLE</span>
+
+          <h2>
+            IQ darajangizni sinab ko‘ring
+          </h2>
+
+          <p>
+            Diqqat, naqsh va mantiq asosidagi test.
+          </p>
+        </div>
+      </div>
+
+      <div class="live-card glass">
+
+        <div>
+          <small>Botga qo‘shilganlar</small>
+          <strong id="liveTotal">—</strong>
+        </div>
+
+        <div class="online">
+          <span></span>
+
+          <div>
+            <small>Hozir</small>
+            <strong id="liveOnline">—</strong>
+            <small>kishi onlayn</small>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="section-title">
+        <h3>Testlar</h3>
+        <span>ketma-ket ochiladi</span>
+      </div>
+
+      <div class="test-grid">
+
+        <button class="test-card iq" data-test="IQ">
+          <span class="card-icon">🧠</span>
+
+          <span>
+            <b>IQ</b>
+            <small>18 mantiqiy puzzle</small>
+          </span>
+
+          <em>›</em>
+        </button>
+
+        <button class="test-card locked" data-test="EQ">
+          <span class="card-icon">🎭</span>
+
+          <span>
+            <b>EQ</b>
+            <small id="eqState">IQdan keyin ochiladi</small>
+          </span>
+
+          <em>›</em>
+        </button>
+
+        <button class="test-card locked" data-test="PQ">
+          <span class="card-icon">⏳</span>
+
+          <span>
+            <b>PQ</b>
+            <small id="pqState">EQdan keyin ochiladi</small>
+          </span>
+
+          <em>›</em>
+        </button>
+
+        <button id="profileCard" class="test-card locked">
+          <span class="card-icon">⭐</span>
+
+          <span>
+            <b>Siz qanday insonsiz</b>
+            <small>IQ + EQ + PQdan keyin</small>
+          </span>
+
+          <em>›</em>
+        </button>
+
+      </div>
+
+      <button id="battleCard" class="battle-card">
+        <span>⚔️</span>
+
+        <div>
+          <b>Battle</b>
+          <small>Do‘stingiz bilan asynchronous duel</small>
+        </div>
+
+        <em>›</em>
       </button>
 
-      <button id="card-eq" class="card card-eq locked" data-target="eq">
-        <div class="card-icon">🎭</div>
-        <div class="card-body">
-          <div class="card-title">EQ Test</div>
-          <div class="card-desc">Emotsional intellekt</div>
-          <div class="card-lock">🔒 IQ dan keyin ochiladi</div>
+      <nav class="bottom-nav">
+        <button class="active" data-nav="home">
+          ⌂
+          <small>Home</small>
+        </button>
+
+        <button data-nav="ranking">
+          ♛
+          <small>Reyting</small>
+        </button>
+
+        <button data-nav="certificate">
+          ▣
+          <small>Sertifikat</small>
+        </button>
+
+        <button data-nav="profile">
+          ◎
+          <small>Profil</small>
+        </button>
+      </nav>
+
+    </section>
+
+
+    <section id="profileScreen" class="screen hidden">
+
+      <header class="subbar">
+        <button class="back" data-back>‹</button>
+        <h2>Profil</h2>
+        <span></span>
+      </header>
+
+      <div class="form-card glass">
+
+        <label>
+          Ism / familiya
+          <input
+            id="fullName"
+            maxlength="120"
+            placeholder="Ismingiz"
+          >
+        </label>
+
+        <label>
+          Jins
+          <select id="gender">
+            <option value="">Tanlang</option>
+            <option value="male">O‘g‘il</option>
+            <option value="female">Qiz</option>
+          </select>
+        </label>
+
+        <label>
+          Yosh
+          <input
+            id="age"
+            type="number"
+            min="10"
+            max="120"
+            inputmode="numeric"
+            placeholder="20"
+          >
+        </label>
+
+        <label>
+          Davlat
+          <select id="country">
+            <option value="">Tanlang</option>
+            <option>O‘zbekiston</option>
+            <option>Rossiya</option>
+            <option>English</option>
+            <option>Qozog‘iston</option>
+            <option>Qirg‘iziston</option>
+            <option>Turkiya</option>
+          </select>
+        </label>
+
+        <button id="saveProfile" class="primary">
+          Saqlash
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <section id="testScreen" class="screen hidden">
+
+      <header class="subbar">
+
+        <button id="testBack" class="back">
+          ‹
+        </button>
+
+        <div class="progress-wrap">
+          <span id="questionLabel">Q1</span>
+
+          <div class="progress">
+            <i id="progressBar"></i>
+          </div>
         </div>
-        <div class="card-arrow">→</div>
+
+        <span id="timer">30:00</span>
+
+      </header>
+
+      <div id="celebration" class="celebration hidden">
+        ✨ Ajoyib! Keyingi bosqichga o‘tdingiz.
+      </div>
+
+      <div class="question-head">
+
+        <span id="difficulty" class="pill">
+          EASY
+        </span>
+
+        <h2 id="questionText">
+          Matrix
+        </h2>
+
+      </div>
+
+      <div id="matrix" class="matrix glass"></div>
+
+      <div id="options" class="options"></div>
+
+      <button id="nextQuestion" class="primary" disabled>
+        Davom etish
       </button>
 
-      <button id="card-pq" class="card card-pq locked" data-target="pq">
-        <div class="card-icon">⏳</div>
-        <div class="card-body">
-          <div class="card-title">PQ Test</div>
-          <div class="card-desc">Samaradorlik va odatlar</div>
-          <div class="card-lock">🔒 EQ dan keyin ochiladi</div>
+    </section>
+
+
+    <section id="loadingResult" class="screen hidden center-screen">
+
+      <div class="loader-ring"></div>
+
+      <h2>
+        Natija tayyorlanmoqda
+      </h2>
+
+      <div class="check-list">
+        <span>✓ Javoblar tekshirildi</span>
+        <span>✓ Ball hisoblanmoqda</span>
+        <span>✓ Profil yangilanmoqda</span>
+      </div>
+
+      <div class="big-progress">
+        <i></i>
+      </div>
+
+    </section>
+
+
+    <section id="paymentScreen" class="screen hidden">
+
+      <header class="subbar">
+        <button class="back" data-back>‹</button>
+        <h2>To‘lov</h2>
+        <span></span>
+      </header>
+
+      <div class="payment-card glass">
+
+        <span class="pill">
+          TO‘LOV KUTILMOQDA
+        </span>
+
+        <h1 id="paymentAmount">
+          0 so‘m
+        </h1>
+
+        <p>
+          Quyidagi kartaga to‘lov qiling va receipt yuboring.
+        </p>
+
+        <div class="bank-box">
+
+          <b id="cardNumber">
+            Karta topilmadi
+          </b>
+
+          <button id="copyCard" class="small-btn">
+            Nusxa
+          </button>
+
+          <span id="cardHolder"></span>
+          <span id="cardBank"></span>
+
         </div>
-        <div class="card-arrow">→</div>
-      </button>
 
-      <button id="card-personal" class="card card-personal locked" data-target="personal">
-        <div class="card-icon">⭐</div>
-        <div class="card-body">
-          <div class="card-title">Siz qanday insonsiz</div>
-          <div class="card-desc">To'liq shaxsiy profil</div>
-          <div class="card-lock">🔒 IQ + EQ + PQ dan keyin</div>
+        <button id="sharePayment" class="secondary">
+          Telegramga o‘tish
+        </button>
+
+        <label class="file-label">
+          Receipt file_id
+
+          <input
+            id="receiptInput"
+            placeholder="Telegram file_id"
+          >
+        </label>
+
+        <button id="sendReceipt" class="primary">
+          Receipt yuborish
+        </button>
+
+        <div id="paymentStatus" class="inline-status"></div>
+
+      </div>
+
+    </section>
+
+
+    <section id="resultScreen" class="screen hidden">
+
+      <div class="result-glow"></div>
+
+      <header class="subbar">
+        <button class="back" data-back>‹</button>
+        <h2>Natija</h2>
+        <span></span>
+      </header>
+
+      <div class="result-card glass">
+
+        <span class="pill">
+          IQ RESULT
+        </span>
+
+        <div class="score-ring">
+          <strong id="resultScore">—</strong>
+          <small>IQ</small>
         </div>
-        <div class="card-arrow">→</div>
-      </button>
 
-      <button id="card-battle" class="card card-battle" data-target="battle">
-        <div class="card-icon">⚔️</div>
-        <div class="card-body">
-          <div class="card-title">Battle</div>
-          <div class="card-desc">Do'stingiz bilan duel</div>
+        <h2 id="resultLevel">
+          —
+        </h2>
+
+        <p id="resultCorrect">
+          —
+        </p>
+
+        <button id="certificateBtn" class="primary">
+          📜 Sertifikatni olish
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <section id="rankingScreen" class="screen hidden">
+
+      <header class="subbar">
+        <button class="back" data-back>‹</button>
+        <h2>Reyting</h2>
+        <span></span>
+      </header>
+
+      <div id="rankingList" class="ranking-list"></div>
+
+    </section>
+
+
+    <section id="certificateScreen" class="screen hidden">
+
+      <header class="subbar">
+        <button class="back" data-back>‹</button>
+        <h2>Sertifikat</h2>
+        <span></span>
+      </header>
+
+      <div id="certificateBox" class="certificate-box glass"></div>
+
+    </section>
+
+
+    <section id="battleScreen" class="screen hidden">
+
+      <header class="subbar">
+        <button class="back" data-back>‹</button>
+        <h2>Battle</h2>
+        <span></span>
+      </header>
+
+      <div class="battle-panel glass">
+
+        <h2>
+          ⚔️ Asynchronous duel
+        </h2>
+
+        <p>
+          4 belgili kod yarating yoki do‘stingiz kodini kiriting.
+        </p>
+
+        <button id="createBattle" class="primary">
+          Battle yaratish
+        </button>
+
+        <div class="divider">
+          yoki
         </div>
-        <div class="card-arrow">→</div>
-      </button>
-    </div>
 
-    <div class="live-counter" id="live-counter">
-      <div class="live-row">
-        <span class="live-label">Botga qo'shilganlar</span>
-        <span class="live-value" id="live-total">—</span>
+        <input
+          id="battleCode"
+          maxlength="4"
+          placeholder="AB12"
+        >
+
+        <button id="joinBattle" class="secondary">
+          Kod bilan kirish
+        </button>
+
+        <div id="battleInfo"></div>
+
       </div>
-      <div class="live-row">
-        <span class="live-label">Hozir onlayn</span>
-        <span class="live-value live-online" id="live-online">—</span>
-      </div>
-    </div>
-  </section>
 
-  <!-- PROFILE (before test) -->
-  <section id="screen-profile" class="screen">
-    <h2 class="screen-title">Ma'lumotlaringizni kiriting</h2>
-    <p class="screen-sub">Sertifikat uchun ism-familiya kerak</p>
+    </section>
 
-    <form id="profile-form" class="form" onsubmit="return false;">
-      <label class="field">
-        <span>Ism / Familiya</span>
-        <input id="prof-fullname" type="text" placeholder="Aziz Rahimov" maxlength="120" autocomplete="name" />
-      </label>
-      <label class="field">
-        <span>Jins</span>
-        <select id="prof-gender">
-          <option value="">Tanlang</option>
-          <option value="male">O'g'il</option>
-          <option value="female">Qiz</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Yosh</span>
-        <input id="prof-age" type="number" min="5" max="120" placeholder="18" />
-      </label>
-      <label class="field">
-        <span>Davlat</span>
-        <select id="prof-country">
-          <option value="">Tanlang</option>
-          <option value="Uzbekistan">O'zbekiston</option>
-          <option value="Russia">Rossiya</option>
-          <option value="Kazakhstan">Qozog'iston</option>
-          <option value="Kyrgyzstan">Qirg'iziston</option>
-          <option value="Turkey">Turkiya</option>
-          <option value="Other">Boshqa</option>
-        </select>
-      </label>
-      <div id="prof-error" class="field-error hidden"></div>
-      <button id="prof-submit" class="btn btn-primary btn-lg">Davom etish</button>
-    </form>
-  </section>
 
-  <!-- SAMPLE -->
-  <section id="screen-sample" class="screen">
-    <h2 class="screen-title">Namuna savol</h2>
-    <p class="screen-sub">Bu qanday ishlashini ko'rsatuvchi misol</p>
-    <div class="matrix-wrap" id="sample-matrix"></div>
-    <div class="options-grid" id="sample-options"></div>
-    <button id="sample-start" class="btn btn-primary btn-lg">Testni boshlash</button>
-  </section>
+    <section id="toast" class="toast" aria-live="polite"></section>
 
-  <!-- TEST -->
-  <section id="screen-test" class="screen">
-    <div class="test-top">
-      <div class="progress-bar"><div class="progress-fill" id="test-progress"></div></div>
-      <div class="test-meta">
-        <span id="test-counter">1 / 18</span>
-        <span id="test-diff" class="badge badge-easy">EASY</span>
-      </div>
-    </div>
+  </main>
 
-    <h2 id="test-question" class="screen-title test-q"></h2>
-    <div class="matrix-wrap" id="test-matrix"></div>
-    <div class="options-grid" id="test-options"></div>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/app.js"></script>
 
-    <div id="test-celebration" class="celebration hidden">
-      <div class="celebration-emoji">🎉</div>
-      <div class="celebration-text">Ajoyib! Davom etamiz</div>
-    </div>
-  </section>
-
-  <!-- LOADING RESULT -->
-  <section id="screen-loading" class="screen">
-    <div class="loading-wrap">
-      <div class="loader-ring big"></div>
-      <h2 class="loading-title">Natija tayyorlanmoqda…</h2>
-      <ul class="checklist" id="loading-checklist">
-        <li data-step="1">Javoblar tekshirilmoqda</li>
-        <li data-step="2">Ball hisoblanmoqda</li>
-        <li data-step="3">Daraja aniqlanmoqda</li>
-        <li data-step="4">Natija saqlanmoqda</li>
-      </ul>
-      <div class="progress-bar big"><div class="progress-fill" id="loading-progress"></div></div>
-    </div>
-  </section>
-
-  <!-- RESULT -->
-  <section id="screen-result" class="screen">
-    <div class="result-card">
-      <div class="result-badge" id="result-badge">🧠</div>
-      <h2 class="result-title" id="result-title">IQ Natijangiz</h2>
-      <div class="result-score" id="result-score">—</div>
-      <div class="result-level" id="result-level">—</div>
-
-      <div class="result-stats" id="result-stats"></div>
-
-      <div id="result-actions" class="result-actions">
-        <button id="result-cert" class="btn btn-primary">📜 Sertifikatni olish</button>
-        <button id="result-home" class="btn btn-ghost">🏠 Bosh sahifa</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- PAYMENT -->
-  <section id="screen-payment" class="screen">
-    <h2 class="screen-title">To'lov</h2>
-    <p class="screen-sub" id="payment-sub">Natijani ko'rish uchun to'lovni amalga oshiring</p>
-
-    <div class="pay-card">
-      <div class="pay-amount" id="pay-amount">— so'm</div>
-      <div class="pay-info">
-        <div class="pay-row"><span>Karta raqami</span><b id="pay-number">—</b></div>
-        <div class="pay-row"><span>Egasi</span><b id="pay-holder">—</b></div>
-        <div class="pay-row"><span>Bank</span><b id="pay-bank">—</b></div>
-      </div>
-      <button id="pay-copy" class="btn btn-primary btn-lg">📋 Kartani nusxalash</button>
-      <button id="pay-receipt" class="btn btn-ghost">🧾 Chekni yubordim</button>
-      <button id="pay-check" class="btn btn-ghost">🔄 Holatni tekshirish</button>
-    </div>
-
-    <div id="pay-status" class="pay-status"></div>
-  </section>
-
-  <!-- CERTIFICATE -->
-  <section id="screen-certificate" class="screen">
-    <h2 class="screen-title">Sertifikat</h2>
-    <div class="cert-wrap">
-      <div class="cert-preview" id="cert-preview">
-        <div class="cert-inner">
-          <div class="cert-brand">IQ TEST BOT</div>
-          <div class="cert-title">SERTIFIKAT</div>
-          <div class="cert-sub">AQLLIY SALOHIYAT TO'G'RISIDA</div>
-          <div class="cert-name" id="cert-name">—</div>
-          <div class="cert-score" id="cert-score">—</div>
-          <div class="cert-level" id="cert-level">—</div>
-          <div class="cert-code" id="cert-code">—</div>
-        </div>
-      </div>
-      <p class="cert-hint">To'liq PNG sertifikat Telegram botda:</p>
-      <button id="cert-open-bot" class="btn btn-primary btn-lg">📜 Botda ochish</button>
-    </div>
-  </section>
-
-  <!-- RANKING -->
-  <section id="screen-ranking" class="screen">
-    <h2 class="screen-title">Reyting</h2>
-    <div class="tabs" id="rank-tabs">
-      <button class="tab active" data-type="iq">IQ</button>
-      <button class="tab" data-type="eq">EQ</button>
-      <button class="tab" data-type="pq">PQ</button>
-    </div>
-    <div id="rank-list" class="rank-list"></div>
-    <div id="rank-me" class="rank-me"></div>
-  </section>
-
-  <!-- REFERRAL -->
-  <section id="screen-referral" class="screen">
-    <h2 class="screen-title">Pul ishlash</h2>
-    <p class="screen-sub">Do'stlaringizni taklif qiling</p>
-    <div class="ref-card">
-      <div class="ref-count" id="ref-count">0</div>
-      <div class="ref-label">Taklif qilinganlar</div>
-      <div class="ref-link" id="ref-link">—</div>
-      <button id="ref-copy" class="btn btn-primary">📋 Havolani nusxalash</button>
-    </div>
-  </section>
-
-  <!-- BATTLE -->
-  <section id="screen-battle" class="screen">
-    <h2 class="screen-title">⚔️ Battle</h2>
-    <div id="battle-content"></div>
-  </section>
-
-  <!-- PERSONAL -->
-  <section id="screen-personal" class="screen">
-    <h2 class="screen-title">⭐ Siz qanday insonsiz</h2>
-    <div id="personal-content" class="personal-content"></div>
-  </section>
-
-  <!-- EMPTY STATE -->
-  <section id="screen-error" class="screen">
-    <div class="empty">
-      <div class="empty-emoji">⚠️</div>
-      <h2 class="empty-title" id="error-title">Xatolik</h2>
-      <p class="empty-sub" id="error-sub">Qaytadan urinib ko'ring</p>
-      <button id="error-retry" class="btn btn-primary">Qaytadan</button>
-    </div>
-  </section>
-
-</div>
-
-<script src="/static/app.js"></script>
 </body>
 </html>
