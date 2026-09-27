@@ -1,4 +1,5 @@
 import os
+import re
 import io
 import json
 import hmac
@@ -1164,42 +1165,40 @@ async def admin_callback(callback: CallbackQuery):
             except ValueError:
                 await callback.answer("Payment ID noto‘g‘ri",show_alert=True)
                 return
-            # Answer immediately so Telegram stops the spinner, then perform the
-            # database work. If the database fails, the admin message is edited
-            # instead of falsely showing “accepted”.
             await callback.answer("Tekshirilmoqda…")
             try:
                 p,status=await approve_payment_record(pid)
                 if not p:
-                    await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.", reply_markup=None)
+                    await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.",reply_markup=None)
+                    return
+                if status == "rejected":
+                    await callback.message.edit_caption(caption=f"❌ <b>Payment #{pid} avval rad etilgan.</b>",reply_markup=None)
+                    return
+                if status == "already":
+                    await callback.message.edit_caption(caption=f"✅ <b>Payment #{pid} allaqachon tasdiqlangan.</b>",reply_markup=None)
                     return
                 try:
-                    await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Natijangiz Mini App’da ochildi.")
+                    await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.")
                 except Exception:
                     logger.exception("Admin approval notification failed")
-                if status == "approved" and p["attempt_id"]:
+                if p["attempt_id"]:
                     try:
-                        await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
+                        await ensure_and_send_iq_certificate(p["user_id"],p["attempt_id"])
                     except Exception:
                         logger.exception("Paid certificate delivery failed")
-                try:
-                    await callback.message.edit_caption(
-                        caption=f"✅ <b>Payment #{pid} tasdiqlandi.</b>",
-                        reply_markup=None,
-                    )
-                except Exception:
-                    logger.exception("Failed to edit approved payment message")
-                return
+                await callback.message.edit_caption(
+                    caption=f"✅ <b>Payment #{pid} tasdiqlandi.</b>",reply_markup=None
+                )
             except Exception:
-                logger.exception("Payment approval failed: payment_id=%s", pid)
+                logger.exception("Payment approval failed: payment_id=%s",pid)
                 try:
                     await callback.message.edit_caption(
                         caption=f"❌ <b>Payment #{pid} tasdiqlanmadi.</b> Server xatosi. Qayta urinib ko‘ring.",
-                        reply_markup=None,
+                        reply_markup=None
                     )
                 except Exception:
                     logger.exception("Failed to edit failed approval message")
-                return
+            return
         elif action.startswith("reject:"):
             try:
                 pid=int(action.split(":",1)[1])
@@ -1209,16 +1208,25 @@ async def admin_callback(callback: CallbackQuery):
             await callback.answer("Tekshirilmoqda…")
             p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",pid)
             if not p:
-                try: await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.", reply_markup=None)
+                try: await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.",reply_markup=None)
+                except Exception: pass
+                return
+            if p["status"] == "approved":
+                try: await callback.message.edit_caption(caption=f"⚠️ <b>Payment #{pid} allaqachon tasdiqlangan.</b>",reply_markup=None)
                 except Exception: pass
                 return
             await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",pid)
+            if p["attempt_id"]:
+                await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1",p["attempt_id"])
             try:
-                await bot.send_message(p["user_id"],"❌ To‘lov rad etildi. Receiptni tekshirib qayta yuboring.")
+                await bot.send_message(
+                    p["user_id"],
+                    "❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin."
+                )
             except Exception:
                 logger.exception("Admin rejection notification failed")
             try:
-                await callback.message.edit_caption(caption=f"❌ <b>Payment #{pid} rad etildi.</b>", reply_markup=None)
+                await callback.message.edit_caption(caption=f"❌ <b>Payment #{pid} rad etildi.</b>",reply_markup=None)
             except Exception:
                 logger.exception("Failed to edit rejected payment message")
             return
@@ -1596,7 +1604,7 @@ async def submit_iq_internal(user_id, session_id, answers, duration=0):
             if visible:
                 await conn.execute("""
                     INSERT INTO results(user_id,attempt_id,test_type,score,level)
-                    VALUES($1,$2,'IQ',$3,$4) ON CONFLICT(attempt_id) DO NOTHING
+                    SELECT $1,$2,'IQ',$3,$4 WHERE NOT EXISTS (SELECT 1 FROM results r WHERE r.attempt_id=$2)
                 """, user_id, attempt["id"], score, level_for_score(score))
             return attempt
 
@@ -1612,7 +1620,7 @@ async def expose_result(attempt_id, user_id):
             await conn.execute("UPDATE test_attempts SET result_visible=TRUE,payment_status='approved' WHERE id=$1",attempt_id)
             await conn.execute("""
                 INSERT INTO results(user_id,attempt_id,test_type,score,level)
-                VALUES($1,$2,$3,$4,$5) ON CONFLICT(attempt_id) DO NOTHING
+                SELECT $1,$2,$3,$4,$5 WHERE NOT EXISTS (SELECT 1 FROM results r WHERE r.attempt_id=$2)
             """,user_id,attempt_id,attempt["test_type"],attempt["score"],attempt["level"])
             return await conn.fetchrow("SELECT * FROM test_attempts WHERE id=$1",attempt_id)
 
@@ -1632,7 +1640,17 @@ async def health():
 async def app_page():
     path=os.path.join(BASE_DIR,"webapp","index.html")
     with open(path,"r",encoding="utf-8") as f:
-        return HTMLResponse(f.read())
+        html=f.read()
+    # Telegram WebView/Render can keep a 304-cached app.js after a deployment.
+    # Always add a file-mtime query so the latest frontend is loaded without
+    # requiring the user to clear Telegram cache manually.
+    app_js_path=os.path.join(BASE_DIR,"webapp","app.js")
+    try:
+        version=str(int(os.path.getmtime(app_js_path)))
+    except OSError:
+        version="1"
+    html=re.sub(r'/static/app\.js(?:\?[^"\']*)?', f'/static/app.js?v={version}', html)
+    return HTMLResponse(html, headers={"Cache-Control":"no-store, max-age=0"})
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR,"webapp")), name="static")
 
@@ -1670,12 +1688,12 @@ async def api_bootstrap(request: Request):
     eq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='EQ' LIMIT 1",uid))
     pq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='PQ' LIMIT 1",uid))
     pending_payment = await db_fetchrow("""
-        SELECT p.id, p.attempt_id, p.payment_type, p.amount, p.status,
+        SELECT p.id, p.attempt_id, p.battle_id, p.payment_type, p.amount, p.status,
                p.receipt_file_id, p.created_at,
                c.card_number, c.holder, c.bank
         FROM payments p
         LEFT JOIN payment_cards c ON c.id=p.card_id
-        WHERE p.user_id=$1 AND p.status='pending'
+        WHERE p.user_id=$1 AND p.status IN ('pending','approved','rejected')
         ORDER BY p.id DESC LIMIT 1
     """, uid)
     pending_payload = None
@@ -1800,7 +1818,7 @@ async def test_submit(session_id: str, request: Request):
                     """,uid,locked["test_type"],session_id,score,correct,duration,payment_status,visible,"EQ/PQ",json.dumps(answers))
                     await conn.execute("UPDATE test_sessions SET status='completed',answers=$2,score=$3,correct_count=$4,completed_at=NOW() WHERE session_id=$1::uuid",session_id,json.dumps(answers),score,correct)
                     if visible:
-                        await conn.execute("INSERT INTO results(user_id,attempt_id,test_type,score,level) VALUES($1,$2,$3,$4,$5) ON CONFLICT(attempt_id) DO NOTHING",uid,attempt["id"],locked["test_type"],score,"EQ/PQ")
+                        await conn.execute("INSERT INTO results(user_id,attempt_id,test_type,score,level) SELECT $1,$2,$3,$4,$5 WHERE NOT EXISTS (SELECT 1 FROM results r WHERE r.attempt_id=$2)",uid,attempt["id"],locked["test_type"],score,"EQ/PQ")
     if session["test_type"] == "IQ" and attempt["result_visible"]:
         # Free IQ: create and immediately send the certificate to the Telegram chat.
         # Certificate delivery must never turn a successfully completed test into HTTP 500.
@@ -1909,14 +1927,20 @@ async def payment_receipt(payment_id:int,request:Request,receipt:UploadFile|None
         except Exception:
             file_id=None
     if not file_id: return json_error("Receipt faylini tanlang")
-    await db_execute("UPDATE payments SET receipt_file_id=$1,updated_at=NOW() WHERE id=$2 AND user_id=$3",file_id,payment_id,uid)
+    await db_execute("""
+        UPDATE payments
+        SET receipt_file_id=$1,status='pending',updated_at=NOW()
+        WHERE id=$2 AND user_id=$3
+    """,file_id,payment_id,uid)
+    if p["attempt_id"]:
+        await db_execute("UPDATE test_attempts SET payment_status='pending',result_visible=FALSE WHERE id=$1 AND user_id=$2",p["attempt_id"],uid)
     return {"ok":True,"status":"pending"}
 
 @app.get("/api/payment/mine")
 async def my_payments(request:Request):
     user=await authenticated_user(request); uid=int(user["id"])
     rows=await db_fetch("""
-        SELECT p.id,p.attempt_id,p.payment_type,p.amount,p.status,p.receipt_file_id,p.created_at,
+        SELECT p.id,p.attempt_id,p.battle_id,p.payment_type,p.amount,p.status,p.receipt_file_id,p.created_at,
                c.card_number,c.holder,c.bank
         FROM payments p
         LEFT JOIN payment_cards c ON c.id=p.card_id
@@ -1944,35 +1968,87 @@ async def ensure_and_send_iq_certificate(user_id: int, attempt_id: int):
     return cert
 
 async def approve_payment_record(payment_id:int):
+    """Atomically approve a payment while supporting legacy PostgreSQL schemas."""
     async with db_pool.acquire() as conn:
         async with conn.transaction():
             p=await conn.fetchrow("SELECT * FROM payments WHERE id=$1 FOR UPDATE",payment_id)
-            if not p: return None, "not_found"
-            if p["status"]=="approved": return p, "already"
-            await conn.execute("UPDATE payments SET status='approved',updated_at=NOW() WHERE id=$1",payment_id)
+            if not p:
+                return None, "not_found"
+            if p["status"] == "approved":
+                return p, "already"
+            if p["status"] == "rejected":
+                return p, "rejected"
+
+            battle=None
+            approved_count=0
+            player_count=0
             if p["battle_id"]:
-                await conn.execute("UPDATE battle_players SET payment_id=$1 WHERE battle_id=$2 AND user_id=$3",p["id"],p["battle_id"],p["user_id"])
+                await conn.execute(
+                    "UPDATE battle_players SET payment_id=$1 WHERE battle_id=$2 AND user_id=$3",
+                    p["id"],p["battle_id"],p["user_id"]
+                )
                 battle=await conn.fetchrow("SELECT * FROM battles WHERE id=$1 FOR UPDATE",p["battle_id"])
-                approved_count=await conn.fetchval("SELECT COUNT(*) FROM battle_players bp JOIN payments pay ON pay.id=bp.payment_id WHERE bp.battle_id=$1 AND pay.status='approved'",p["battle_id"])
-                player_count=await conn.fetchval("SELECT COUNT(*) FROM battle_players WHERE battle_id=$1",p["battle_id"])
-                if battle and player_count==2 and approved_count==2:
-                    await conn.execute("UPDATE battles SET status='ready',ready_at=NOW() WHERE id=$1 AND status<>'finished'",p["battle_id"])
+                approved_count=await conn.fetchval(
+                    "SELECT COUNT(*) FROM battle_players bp JOIN payments pay ON pay.id=bp.payment_id WHERE bp.battle_id=$1 AND pay.status='approved'",
+                    p["battle_id"]
+                )
+                player_count=await conn.fetchval(
+                    "SELECT COUNT(*) FROM battle_players WHERE battle_id=$1",p["battle_id"]
+                )
+
             if p["attempt_id"]:
-                await conn.execute("UPDATE test_attempts SET payment_status='approved',result_visible=TRUE WHERE id=$1",p["attempt_id"])
-                await conn.execute("""
-                    INSERT INTO results(user_id,attempt_id,test_type,score,level)
-                    SELECT user_id,id,test_type,score,level FROM test_attempts WHERE id=$1
-                    ON CONFLICT(attempt_id) DO NOTHING
-                """,p["attempt_id"])
-                attempt_row=await conn.fetchrow("SELECT * FROM test_attempts WHERE id=$1",p["attempt_id"])
-                if attempt_row and attempt_row["test_type"]=="IQ":
-                    result_row=await conn.fetchrow("SELECT * FROM results WHERE attempt_id=$1",p["attempt_id"])
-                    user_row=await conn.fetchrow("SELECT full_name FROM users WHERE user_id=$1",p["user_id"])
-                    if result_row and user_row and user_row["full_name"]:
-                        await conn.execute("""
-                            INSERT INTO certificates(user_id,result_id,certificate_id,verification_code,type,full_name,score,level)
-                            VALUES($1,$2,$3,$4,'IQ',$5,$6,$7) ON CONFLICT(result_id) DO NOTHING
-                        """,p["user_id"],result_row["id"],"CERT-"+secrets.token_hex(6).upper(),"IQ-"+"".join(secrets.choice(string.ascii_uppercase+string.digits) for _ in range(6)),user_row["full_name"],attempt_row["score"],attempt_row["level"])
+                attempt_row=await conn.fetchrow(
+                    "SELECT * FROM test_attempts WHERE id=$1 FOR UPDATE",p["attempt_id"]
+                )
+                if not attempt_row:
+                    raise RuntimeError(f"Attempt #{p['attempt_id']} not found for payment #{payment_id}")
+                await conn.execute(
+                    "UPDATE test_attempts SET payment_status='approved',result_visible=TRUE WHERE id=$1",
+                    p["attempt_id"]
+                )
+
+                result_row=await conn.fetchrow(
+                    "SELECT * FROM results WHERE attempt_id=$1 ORDER BY id LIMIT 1",
+                    p["attempt_id"]
+                )
+                if not result_row:
+                    result_row=await conn.fetchrow("""
+                        INSERT INTO results(user_id,attempt_id,test_type,score,level)
+                        VALUES($1,$2,$3,$4,$5)
+                        RETURNING *
+                    """,p["user_id"],attempt_row["id"],attempt_row["test_type"],attempt_row["score"],attempt_row["level"])
+
+                if attempt_row["test_type"] == "IQ":
+                    user_row=await conn.fetchrow(
+                        "SELECT full_name FROM users WHERE user_id=$1",p["user_id"]
+                    )
+                    if user_row and user_row["full_name"]:
+                        cert_row=await conn.fetchrow(
+                            "SELECT * FROM certificates WHERE result_id=$1 ORDER BY id LIMIT 1",
+                            result_row["id"]
+                        )
+                        if not cert_row:
+                            cert_row=await conn.fetchrow("""
+                                INSERT INTO certificates(
+                                    user_id,result_id,certificate_id,verification_code,type,full_name,score,level
+                                )
+                                VALUES($1,$2,$3,$4,'IQ',$5,$6,$7)
+                                RETURNING *
+                            """,p["user_id"],result_row["id"],
+                                "CERT-"+secrets.token_hex(6).upper(),
+                                "IQ-"+"".join(secrets.choice(string.ascii_uppercase+string.digits) for _ in range(6)),
+                                user_row["full_name"],attempt_row["score"],attempt_row["level"])
+
+            # Do this last. If anything above fails, the transaction rolls back
+            # and the payment remains pending so the admin can retry.
+            await conn.execute(
+                "UPDATE payments SET status='approved',updated_at=NOW() WHERE id=$1",payment_id
+            )
+            if p["battle_id"] and battle and player_count == 2 and approved_count + 1 == 2:
+                await conn.execute(
+                    "UPDATE battles SET status='ready',ready_at=NOW() WHERE id=$1 AND status<>'finished'",
+                    p["battle_id"]
+                )
             return p, "approved"
 
 @app.post("/api/admin/payment/{payment_id}/approve")
@@ -1981,15 +2057,17 @@ async def admin_approve_payment(payment_id:int,request:Request):
     if not await is_admin(int(user["id"])): raise HTTPException(403,"Forbidden")
     p,status=await approve_payment_record(payment_id)
     if not p: return json_error("Payment topilmadi",404)
+    if status == "rejected": return json_error("Payment avval rad etilgan",409)
+    if status == "already": return {"ok":True,"status":"already"}
     try:
-        await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Natijangiz yoki Battle ochildi.")
+        await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.")
     except Exception: logger.exception("Payment notification failed")
-    if status == "approved" and p["attempt_id"]:
+    if p["attempt_id"]:
         try:
-            await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
+            await ensure_and_send_iq_certificate(p["user_id"],p["attempt_id"])
         except Exception:
             logger.exception("Paid certificate delivery failed")
-    return {"ok":True,"status":status}
+    return {"ok":True,"status":"approved"}
 
 @app.post("/api/admin/payment/{payment_id}/reject")
 async def admin_reject_payment(payment_id:int,request:Request):
@@ -1997,10 +2075,13 @@ async def admin_reject_payment(payment_id:int,request:Request):
     if not await is_admin(int(user["id"])): raise HTTPException(403,"Forbidden")
     p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",payment_id)
     if not p: return json_error("Payment topilmadi",404)
+    if p["status"] == "approved": return json_error("Tasdiqlangan paymentni rad etib bo‘lmaydi",409)
     await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",payment_id)
-    try: await bot.send_message(p["user_id"],"❌ To‘lov rad etildi. Iltimos, receiptni tekshirib qayta yuboring.")
+    if p["attempt_id"]:
+        await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1",p["attempt_id"])
+    try: await bot.send_message(p["user_id"],"❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin.")
     except Exception: logger.exception("Payment rejection notification failed")
-    return {"ok":True}
+    return {"ok":True,"status":"rejected"}
 
 @app.get("/api/payment/{payment_id}/card")
 async def payment_card(payment_id:int,request:Request):
