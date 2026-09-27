@@ -890,13 +890,27 @@ async def my_certificate(message: types.Message):
     if not row:
         await message.answer(t(lang,"no_cert"))
         return
-    await message.answer(
-        f"📜 <b>IQ TEST BOT</b>\n\n"
-        f"👤 {row['full_name']}\n"
-        f"🧠 IQ: <b>{row['score']}</b>\n"
-        f"🏷 {row['level'] or '—'}\n"
-        f"🔐 <code>{row['verification_code']}</code>"
-    )
+    # The Telegram certificate button must deliver the real PNG certificate,
+    # not a text-only summary. Reuse the exact same renderer as the Mini App.
+    try:
+        cert = await db_fetchrow("SELECT * FROM certificates WHERE certificate_id=$1", row["certificate_id"])
+        if not cert:
+            await message.answer("❌ Sertifikat topilmadi.")
+            return
+        raw = certificate_png(cert)
+        photo = BufferedInputFile(raw, filename=f"{cert['certificate_id']}.png")
+        await message.answer_photo(
+            photo,
+            caption=(
+                f"📜 <b>IQ TEST BOT — Sertifikat</b>\n\n"
+                f"👤 {cert['full_name']}\n"
+                f"🧠 IQ: <b>{cert['score']}</b> · {cert['level'] or '—'}\n"
+                f"🔐 <code>{cert['verification_code']}</code>"
+            )
+        )
+    except Exception:
+        logger.exception("Telegram certificate image delivery failed")
+        await message.answer("❌ Sertifikat rasmini yuborishda xatolik yuz berdi. Keyinroq qayta urinib ko‘ring.")
 
 @dp.message(F.text.in_({"🏆 Reyting","🏆 Рейтинг","🏆 Ranking"}))
 async def ranking_message(message: types.Message):
@@ -1197,7 +1211,16 @@ async def admin_callback(callback: CallbackQuery):
         else:
             text="Noma’lum bo‘lim."
         keyboard = payment_buttons + [[InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]
-        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+        markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+        try:
+            if callback.message.document or callback.message.photo:
+                await callback.message.edit_caption(caption=text, reply_markup=markup)
+            else:
+                await callback.message.edit_text(text, reply_markup=markup)
+        except Exception:
+            # A receipt message may not support the requested edit operation.
+            # Never make a successful payment approval look like a failed one.
+            await callback.message.answer(text, reply_markup=markup)
         await callback.answer()
     except Exception:
         logger.exception("Admin callback failed")
@@ -1544,7 +1567,24 @@ async def api_bootstrap(request: Request):
     iq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='IQ' LIMIT 1",uid))
     eq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='EQ' LIMIT 1",uid))
     pq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='PQ' LIMIT 1",uid))
-    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions()}
+    pending_payment = await db_fetchrow("""
+        SELECT p.id, p.attempt_id, p.payment_type, p.amount, p.status,
+               p.receipt_file_id, p.created_at,
+               c.card_number, c.holder, c.bank
+        FROM payments p
+        LEFT JOIN payment_cards c ON c.id=p.card_id
+        WHERE p.user_id=$1 AND p.status='pending'
+        ORDER BY p.id DESC LIMIT 1
+    """, uid)
+    pending_payload = None
+    if pending_payment:
+        pending_payload = dict(pending_payment)
+        pending_payload["card"] = {
+            "card_number": pending_payment["card_number"],
+            "holder": pending_payment["holder"],
+            "bank": pending_payment["bank"],
+        } if pending_payment["card_number"] else None
+    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions(),"pending_payment":pending_payload}
 
 @app.post("/api/profile/save")
 async def profile_save(request: Request):
@@ -1746,7 +1786,18 @@ async def payment_receipt(payment_id:int,request:Request,receipt:UploadFile|None
         if not ADMIN_USER_ID:
             return json_error("Admin sozlanmagan",500)
         tg_file=BufferedInputFile(raw,filename=receipt.filename or "receipt.jpg")
-        sent=await bot.send_document(ADMIN_USER_ID,tg_file,caption=f"💳 Receipt #{payment_id}\nUser: <code>{uid}</code>\nAmount: <b>{p['amount']}</b>")
+        admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"admin:approve:{payment_id}"),
+                InlineKeyboardButton(text="❌ Rad etish", callback_data=f"admin:reject:{payment_id}"),
+            ]
+        ])
+        sent=await bot.send_document(
+            ADMIN_USER_ID,
+            tg_file,
+            caption=f"💳 <b>Receipt #{payment_id}</b>\nUser: <code>{uid}</code>\nAmount: <b>{p['amount']:,}</b> so‘m\n\nTasdiqlash yoki rad etish:",
+            reply_markup=admin_kb,
+        )
         file_id=sent.document.file_id if sent.document else None
     else:
         # Backward-compatible path for an existing Telegram file_id.
@@ -1762,7 +1813,13 @@ async def payment_receipt(payment_id:int,request:Request,receipt:UploadFile|None
 @app.get("/api/payment/mine")
 async def my_payments(request:Request):
     user=await authenticated_user(request); uid=int(user["id"])
-    rows=await db_fetch("SELECT id,attempt_id,payment_type,amount,status,created_at FROM payments WHERE user_id=$1 ORDER BY id DESC LIMIT 20",uid)
+    rows=await db_fetch("""
+        SELECT p.id,p.attempt_id,p.payment_type,p.amount,p.status,p.receipt_file_id,p.created_at,
+               c.card_number,c.holder,c.bank
+        FROM payments p
+        LEFT JOIN payment_cards c ON c.id=p.card_id
+        WHERE p.user_id=$1 ORDER BY p.id DESC LIMIT 20
+    """,uid)
     return {"ok":True,"payments":[dict(r) for r in rows]}
 
 async def ensure_and_send_iq_certificate(user_id: int, attempt_id: int):
@@ -1776,6 +1833,9 @@ async def ensure_and_send_iq_certificate(user_id: int, attempt_id: int):
         return None
     existing = await db_fetchrow("SELECT * FROM certificates WHERE result_id=$1", result_row["id"])
     if existing:
+        # Approval can create the certificate inside its transaction before this
+        # delivery helper runs. Existing certificate rows must still be sent.
+        await send_certificate_to_user(user_id, existing, "📜 To‘lov tasdiqlandi — IQ sertifikatingiz tayyor!")
         return existing
     cert = await create_certificate(user_id, result_row["id"], user_row["full_name"], attempt["score"], attempt["level"])
     await send_certificate_to_user(user_id, cert, "📜 To‘lov tasdiqlandi — IQ sertifikatingiz tayyor!")
