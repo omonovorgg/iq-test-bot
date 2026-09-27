@@ -303,6 +303,14 @@
     } finally { state.busy = false; }
   }
 
+  function formatDuration(seconds) {
+    const total = Math.max(0, Math.round(Number(seconds) || 0));
+    if (!total) return "—";
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
   async function showResult(attemptId) {
     const d = await api(`/api/result/${attemptId}`);
     if (!d.visible) {
@@ -318,12 +326,46 @@
       } else toast("Natija hali yopiq");
       return;
     }
+    state.attemptId = attemptId;
+    state.paymentAttemptId = attemptId;
     state.testType = d.test_type || state.testType || "IQ";
-    $("#resultBadge").textContent = `${state.testType} RESULT`;
+    const questionCount = Number(d.question_count || (state.testType === "IQ" ? 18 : 6));
+    const correct = Number(d.correct_count || 0);
+    const accuracy = Math.max(0, Math.min(100, Number(d.accuracy ?? (questionCount ? Math.round(correct / questionCount * 100) : 0))));
+    const duration = Math.max(0, Number(d.duration || 0));
+    const avg = Number(d.avg_time || (questionCount && duration ? duration / questionCount : 0));
+    const score = Number(d.score || 0);
+
+    $("#resultBadge").textContent = state.testType === "IQ" ? "IQ TEST YAKUNLANDI" : `${state.testType} TEST YAKUNLANDI`;
     $("#resultUnit").textContent = state.testType === "IQ" ? "IQ" : "%";
-    $("#resultScore").textContent = d.score;
+    $("#resultScore").textContent = score;
     $("#resultLevel").textContent = d.level || (state.testType === "IQ" ? "—" : "Natija");
-    $("#resultCorrect").textContent = `${d.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
+    $("#resultQuestions").textContent = `${questionCount}/${questionCount}`;
+    $("#resultCorrectStat").textContent = `${correct}/${questionCount}`;
+    $("#resultDuration").textContent = formatDuration(duration);
+    $("#resultAvgTime").textContent = avg ? `${avg.toFixed(1)} s` : "—";
+    $("#resultAccuracy").textContent = `${accuracy}%`;
+    $("#accuracyBar").style.width = `${accuracy}%`;
+
+    const minScore = state.testType === "IQ" ? 70 : 0;
+    const maxScore = state.testType === "IQ" ? 130 : 100;
+    const ratio = Math.max(0, Math.min(1, (score - minScore) / Math.max(1, maxScore - minScore)));
+    $("#scoreRing")?.style.setProperty("--score-angle", `${Math.round(35 + ratio * 325)}deg`);
+
+    if (d.ranking_position) {
+      const total = Number(d.ranking_total || 0);
+      $("#resultRank").textContent = `#${d.ranking_position}`;
+      $("#resultRankText").textContent = total > 1 ? `${total} ta natija ichida` : "Birinchi natijangiz";
+    } else {
+      $("#resultRank").textContent = "—";
+      $("#resultRankText").textContent = "Reyting hali shakllanmagan";
+    }
+
+    $("#resultSummaryText").textContent = state.testType === "IQ"
+      ? `${correct} ta savolga to‘g‘ri javob berdingiz. IQ ballingiz ${score} va test darajasi “${d.level || "—"}” sifatida hisoblandi.`
+      : `Test natijangiz ${score}% ko‘rsatkich bilan yakunlandi.`;
+
+    $("#startEqFromResult")?.classList.toggle("hidden", state.testType !== "IQ" || !state.user?.hasIQ);
     show("resultScreen");
   }
 
@@ -727,6 +769,17 @@
     if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, "_blank");
   });
   $("#certificateBtn")?.addEventListener("click", loadCertificate);
+  $("#startEqFromResult")?.addEventListener("click", () => startTest("EQ"));
+  $("#retryIqBtn")?.addEventListener("click", () => startTest("IQ"));
+  $("#shareResultBtn")?.addEventListener("click", async () => {
+    const score = $("#resultScore")?.textContent || "—";
+    const level = $("#resultLevel")?.textContent || "";
+    const text = `🧠 IQ TEST BOT\nNatijam: ${score} IQ · ${level}`;
+    try {
+      if (navigator.share) await navigator.share({ title: "IQ TEST BOT", text });
+      else { await navigator.clipboard.writeText(text); toast("Natija nusxalandi"); }
+    } catch (_) {}
+  });
   $("#createBattle")?.addEventListener("click", createBattle);
   $("#joinBattle")?.addEventListener("click", joinBattle);
   $("#profileTopBtn")?.addEventListener("click", () => show("profileScreen"));
