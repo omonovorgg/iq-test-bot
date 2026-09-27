@@ -2,148 +2,58 @@
   "use strict";
 
   const tg = window.Telegram?.WebApp || null;
-
   if (tg) {
-    try {
-      tg.ready();
-      tg.expand();
-      tg.enableClosingConfirmation?.();
-    } catch (_) {}
+    try { tg.ready(); tg.expand(); } catch (_) {}
   }
 
-  const $ = (selector) => document.querySelector(selector);
-  const $$ = (selector) => [...document.querySelectorAll(selector)];
-
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
   const state = {
-    user: null,
-    prices: {},
-    questions: [],
-
-    sessionId: null,
-    testType: null,
-    mode: "NORMAL",
-
-    index: 0,
-    answers: {},
-    selected: null,
-    startedAt: 0,
-
-    attemptId: null,
-    paymentId: null,
-    paymentAttemptId: null,
-
-    battleId: null,
-    battlePolling: null,
-
-    pendingType: null,
-    busy: false
+    user: null, prices: {}, questions: [],
+    sessionId: null, testType: null, mode: "NORMAL",
+    index: 0, answers: {}, selected: null, startedAt: 0,
+    attemptId: null, paymentId: null, paymentAttemptId: null,
+    battleId: null, battlePolling: null, busy: false
   };
 
-  const screens = [
-    "loadingScreen",
-    "homeScreen",
-    "profileScreen",
-    "testScreen",
-    "loadingResult",
-    "paymentScreen",
-    "resultScreen",
-    "rankingScreen",
-    "certificateScreen",
-    "battleScreen"
-  ];
+  const screens = ["loadingScreen","homeScreen","profileScreen","testScreen","loadingResult","paymentScreen","resultScreen","rankingScreen","certificateScreen","battleScreen"];
 
   function show(id) {
-    screens.forEach((screenId) => {
-      document
-        .getElementById(screenId)
-        ?.classList.toggle("hidden", screenId !== id);
-    });
-
-    window.scrollTo({
-      top: 0,
-      behavior: "instant"
-    });
+    screens.forEach((x) => document.getElementById(x)?.classList.toggle("hidden", x !== id));
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   function toast(message) {
-    const element = $("#toast");
-
-    if (!element) return;
-
-    element.textContent = String(message || "");
-    element.classList.add("show");
-
-    clearTimeout(window.__toastTimer);
-
-    window.__toastTimer = setTimeout(() => {
-      element.classList.remove("show");
-    }, 2800);
+    const el = $("#toast");
+    if (!el) return;
+    el.textContent = message;
+    el.classList.add("show");
+    clearTimeout(window.__toast);
+    window.__toast = setTimeout(() => el.classList.remove("show"), 2800);
   }
 
-  function initData() {
-    return tg?.initData || "";
-  }
+  function initData() { return tg?.initData || ""; }
 
   async function api(path, options = {}) {
-    const method = String(options.method || "GET").toUpperCase();
-
+    const method = (options.method || "GET").toUpperCase();
     const headers = new Headers(options.headers || {});
-    const rawInitData = initData();
-
-    if (rawInitData) {
-      headers.set("X-Telegram-Init-Data", rawInitData);
-    }
-
-    if (
-      method !== "GET" &&
-      !(options.body instanceof FormData) &&
-      options.body !== undefined
-    ) {
+    const raw = initData();
+    if (raw) headers.set("X-Telegram-Init-Data", raw);
+    if (method !== "GET" && !(options.body instanceof FormData) && options.body !== undefined) {
       headers.set("Content-Type", "application/json");
     }
-
     const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 18000);
-
+    const timeout = setTimeout(() => controller.abort(), 18000);
     try {
-      const response = await fetch(path, {
-        ...options,
-        method,
-        headers,
-        signal: controller.signal
-      });
-
-      const text = await response.text();
-
+      const res = await fetch(path, { ...options, method, headers, signal: controller.signal });
+      const text = await res.text();
       let data = {};
-
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch (_) {
-        data = {
-          ok: false,
-          error: text || "Server javobi noto‘g‘ri."
-        };
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-          data.detail ||
-          `HTTP ${response.status}`
-        );
-      }
-
+      try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { ok: false, error: text || "Server javobi noto‘g‘ri" }; }
+      if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
       return data;
-    } catch (error) {
-      if (error?.name === "AbortError") {
-        throw new Error("Server javobi juda uzoq davom etdi.");
-      }
-
-      throw error;
+    } catch (err) {
+      if (err?.name === "AbortError") throw new Error("Server javobi juda uzoq davom etdi.");
+      throw err;
     } finally {
       clearTimeout(timeout);
     }
@@ -151,445 +61,141 @@
 
   async function apiBlob(path) {
     const headers = new Headers();
-    const rawInitData = initData();
-
-    if (rawInitData) {
-      headers.set(
-        "X-Telegram-Init-Data",
-        rawInitData
-      );
-    }
-
-    const response = await fetch(path, {
-      headers
-    });
-
-    if (!response.ok) {
-      let message = `HTTP ${response.status}`;
-
-      try {
-        const data = await response.json();
-
-        message =
-          data.error ||
-          data.detail ||
-          message;
-      } catch (_) {}
-
+    const raw = initData();
+    if (raw) headers.set("X-Telegram-Init-Data", raw);
+    const res = await fetch(path, { headers });
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try { const d = await res.json(); message = d.error || d.detail || message; } catch (_) {}
       throw new Error(message);
     }
-
-    return response.blob();
+    return res.blob();
   }
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(
-      /[&<>"']/g,
-      (character) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-      }[character])
-    );
+    return String(value ?? "").replace(/[&<>"']/g, (m) => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
+    }[m]));
   }
 
   function saveProgress() {
-    if (
-      !state.sessionId ||
-      state.mode !== "NORMAL"
-    ) {
-      return;
-    }
-
+    if (!state.sessionId || state.mode !== "NORMAL") return;
     try {
-      localStorage.setItem(
-        "iq_test_progress",
-        JSON.stringify({
-          sessionId: state.sessionId,
-          testType: state.testType,
-          index: state.index,
-          answers: state.answers,
-          startedAt: state.startedAt
-        })
-      );
+      localStorage.setItem("iq_test_progress", JSON.stringify({
+        sessionId: state.sessionId, testType: state.testType,
+        index: state.index, answers: state.answers, startedAt: state.startedAt
+      }));
     } catch (_) {}
   }
 
   function clearProgress() {
-    try {
-      localStorage.removeItem(
-        "iq_test_progress"
-      );
-    } catch (_) {}
+    try { localStorage.removeItem("iq_test_progress"); } catch (_) {}
   }
 
-  function difficulty(index) {
-    if (index < 6) return "EASY";
-    if (index < 12) return "MEDIUM";
-    return "HARD";
-  }
+  function difficulty(index) { return index < 6 ? "EASY" : index < 12 ? "MEDIUM" : "HARD"; }
 
   function svgFor(cell) {
-    if (!cell || typeof cell !== "object") {
-      return null;
-    }
-
-    const namespace =
-      "http://www.w3.org/2000/svg";
-
-    const svg =
-      document.createElementNS(
-        namespace,
-        "svg"
-      );
-
-    svg.setAttribute(
-      "viewBox",
-      "0 0 44 44"
-    );
-
-    svg.setAttribute(
-      "aria-hidden",
-      "true"
-    );
-
-    const add = (tag, attributes) => {
-      const element =
-        document.createElementNS(
-          namespace,
-          tag
-        );
-
-      Object.entries(attributes).forEach(
-        ([key, value]) => {
-          element.setAttribute(
-            key,
-            value
-          );
-        }
-      );
-
-      svg.appendChild(element);
-
-      return element;
+    if (!cell || typeof cell !== "object") return null;
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 44 44");
+    svg.setAttribute("aria-hidden", "true");
+    const add = (tag, attrs) => {
+      const el = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      svg.appendChild(el);
+      return el;
     };
 
     if (cell.type === "num") {
-      const text = add(
-        "text",
-        {
-          x: "22",
-          y: "28",
-          "text-anchor": "middle",
-          fill: "#f5f7ff",
-          "font-size": "18",
-          "font-weight": "800"
-        }
-      );
-
-      text.textContent =
-        String(cell.val ?? "");
-
+      const t = add("text", { x:"22", y:"28", "text-anchor":"middle", fill:"#f5f7ff", "font-size":"18", "font-weight":"800" });
+      t.textContent = String(cell.val);
       return svg;
     }
-
     if (cell.type === "dot") {
-      const count = Math.min(
-        9,
-        Math.max(
-          1,
-          Number(cell.count) || 1
-        )
-      );
-
-      const positions = [
-        [10, 10],
-        [22, 10],
-        [34, 10],
-        [10, 22],
-        [22, 22],
-        [34, 22],
-        [10, 34],
-        [22, 34],
-        [34, 34]
-      ];
-
-      positions
-        .slice(0, count)
-        .forEach(([cx, cy]) => {
-          add(
-            "circle",
-            {
-              cx,
-              cy,
-              r: "3",
-              fill: "#a78bfa"
-            }
-          );
-        });
-
+      const n = Math.min(24, Math.max(1, Number(cell.count) || 1));
+      const positions = [[10,10],[22,10],[34,10],[10,22],[22,22],[34,22],[10,34],[22,34],[34,34]];
+      positions.slice(0, n).forEach(([cx, cy]) => add("circle", { cx, cy, r:"3", fill:"#a78bfa" }));
       return svg;
     }
-
     if (cell.type === "grid") {
-      const position = Math.max(
-        0,
-        Math.min(
-          8,
-          Number(cell.pos) || 0
-        )
-      );
-
-      for (let index = 0; index < 9; index += 1) {
-        add(
-          "rect",
-          {
-            x:
-              5 +
-              (index % 3) * 11,
-            y:
-              5 +
-              Math.floor(index / 3) * 11,
-            width: "8",
-            height: "8",
-            rx: "2",
-            fill:
-              index === position
-                ? "#a78bfa"
-                : "#202a40",
-            stroke:
-              index === position
-                ? "#c9baff"
-                : "none"
-          }
-        );
+      const pos = Math.max(0, Math.min(8, Number(cell.pos) || 0));
+      for (let i = 0; i < 9; i++) {
+        add("rect", {
+          x: 5 + (i % 3) * 11, y: 5 + Math.floor(i / 3) * 11,
+          width:"8", height:"8", rx:"2",
+          fill: i === pos ? "#a78bfa" : "#202a40",
+          stroke: i === pos ? "#c9baff" : "none"
+        });
       }
-
       return svg;
     }
-
-    const drawShape = (
-      name,
-      cx,
-      cy,
-      size,
-      fillMode
-    ) => {
-      const fill =
-        fillMode === "empty"
-          ? "none"
-          : fillMode === "half"
-            ? "#a78bfa88"
-            : "#a78bfa";
-
+    const drawShape = (name, cx, cy, size, fillMode) => {
+      const fill = fillMode === "empty" ? "none" : fillMode === "half" ? "#a78bfa88" : "#a78bfa";
       const stroke = "#c9baff";
-
-      if (name === "circle") {
-        add(
-          "circle",
-          {
-            cx,
-            cy,
-            r: size,
-            fill,
-            stroke,
-            "stroke-width": "2"
-          }
-        );
-      } else if (name === "square") {
-        add(
-          "rect",
-          {
-            x: cx - size,
-            y: cy - size,
-            width: size * 2,
-            height: size * 2,
-            rx: "2",
-            fill,
-            stroke,
-            "stroke-width": "2"
-          }
-        );
-      } else if (name === "triangle") {
-        add(
-          "polygon",
-          {
-            points:
-              `${cx},${cy - size} ` +
-              `${cx + size},${cy + size} ` +
-              `${cx - size},${cy + size}`,
-            fill,
-            stroke,
-            "stroke-width": "2"
-          }
-        );
-      } else {
-        add(
-          "polygon",
-          {
-            points:
-              `${cx},${cy - size} ` +
-              `${cx + size},${cy} ` +
-              `${cx},${cy + size} ` +
-              `${cx - size},${cy}`,
-            fill,
-            stroke,
-            "stroke-width": "2"
-          }
-        );
-      }
+      if (name === "circle") add("circle", { cx, cy, r:size, fill, stroke, "stroke-width":"2" });
+      else if (name === "square") add("rect", { x:cx-size, y:cy-size, width:size*2, height:size*2, rx:"2", fill, stroke, "stroke-width":"2" });
+      else if (name === "triangle") add("polygon", { points:`${cx},${cy-size} ${cx+size},${cy+size} ${cx-size},${cy+size}`, fill, stroke, "stroke-width":"2" });
+      else add("polygon", { points:`${cx},${cy-size} ${cx+size},${cy} ${cx},${cy+size} ${cx-size},${cy}`, fill, stroke, "stroke-width":"2" });
     };
-
-    if (cell.type === "shape") {
-      drawShape(
-        cell.shape,
-        22,
-        22,
-        11,
-        cell.fill
-      );
-
-      return svg;
-    }
-
+    if (cell.type === "shape") { drawShape(cell.shape, 22, 22, 11, cell.fill); return svg; }
     if (cell.type === "combo") {
-      const shapes =
-        Array.isArray(cell.shapes)
-          ? cell.shapes.slice(0, 4)
-          : [];
-
-      const spots = [
-        [14, 22],
-        [30, 22],
-        [22, 12],
-        [22, 32]
-      ];
-
-      shapes.forEach((shape, index) => {
-        drawShape(
-          shape,
-          spots[index][0],
-          spots[index][1],
-          index ? 6 : 7,
-          cell.fill
-        );
-      });
-
+      const shapes = Array.isArray(cell.shapes) ? cell.shapes.slice(0, 4) : [];
+      const spots = [[14,22],[30,22],[22,12],[22,32]];
+      shapes.forEach((shape, i) => drawShape(shape, spots[i][0], spots[i][1], i ? 6 : 7, cell.fill));
       return svg;
     }
-
     return svg;
   }
 
   function renderCell(cell) {
-    const element =
-      document.createElement("div");
-
-    element.className =
-      "matrix-cell";
-
+    const div = document.createElement("div");
+    div.className = "matrix-cell";
     if (cell?.type === "question") {
-      element.classList.add("question");
-      element.textContent = "?";
+      div.classList.add("question");
+      div.textContent = "?";
     } else {
       const svg = svgFor(cell);
-
-      if (svg) {
-        element.appendChild(svg);
-      }
+      if (svg) div.appendChild(svg);
     }
-
-    return element;
+    return div;
   }
 
-  function renderOption(
-    option,
-    index
-  ) {
-    const button =
-      document.createElement("button");
-
+  function renderOption(option, index) {
+    const button = document.createElement("button");
     button.type = "button";
     button.className = "option";
-    button.dataset.i =
-      String(index);
-
-    const letter =
-      document.createElement("span");
-
+    button.dataset.i = String(index);
+    const letter = document.createElement("span");
     letter.className = "letter";
-    letter.textContent =
-      "ABCD"[index];
-
+    letter.textContent = "ABCD"[index];
     button.appendChild(letter);
 
     if (typeof option === "string") {
-      const text =
-        document.createElement("span");
-
-      text.className =
-        "text-option";
-
-      text.textContent =
-        option;
-
+      const text = document.createElement("span");
+      text.className = "text-option";
+      text.textContent = option;
       button.appendChild(text);
     } else {
       const svg = svgFor(option);
-
-      if (svg) {
-        button.appendChild(svg);
-      }
-    }
-
-    button.addEventListener(
-      "click",
-      () => {
-        if (state.busy) return;
-
-        state.selected = index;
-
-        $$(".option").forEach(
-          (element) => {
-            element.classList.remove(
-              "selected"
-            );
+      if (svg) button.appendChild(svg);
           }
-        );
 
-        button.classList.add(
-          "selected"
-        );
-
-        const nextButton =
-          $("#nextQuestion");
-
-        if (nextButton) {
-          nextButton.disabled =
-            false;
-        }
-      }
-    );
-
+    button.addEventListener("click", () => {
+      state.selected = index;
+      $$(".option").forEach((x) => x.classList.remove("selected"));
+      button.classList.add("selected");
+      $("#nextQuestion").disabled = false;
+    });
     return button;
   }
 
   function renderQuestion() {
-    const question =
-      state.questions[state.index];
-
-    if (!question) return;
+    const q = state.questions[state.index];
+    if (!q) return;
 
     state.selected = null;
-
-    const nextButton =
-      $("#nextQuestion");
-
-    if (nextButton) {
-      nextButton.disabled = true;
-    }
+    $("#nextQuestion").disabled = true;
 
     $("#questionLabel").textContent =
       `Q${state.index + 1}/${state.questions.length}`;
@@ -602,137 +208,71 @@
           : state.testType;
 
     $("#progressBar").style.width =
-      `${
-        ((state.index) /
-          Math.max(
-            1,
-            state.questions.length
-          )) *
-        100
-      }%`;
+      `${((state.index) / Math.max(1, state.questions.length)) * 100}%`;
 
     $("#questionText").textContent =
       state.testType === "IQ"
         ? "Qaysi variant matritsani to‘ldiradi?"
-        : question.text ||
-          "Savol";
+        : q.text || "Savol";
 
     const matrix = $("#matrix");
-
     matrix.innerHTML = "";
-
-    matrix.classList.toggle(
-      "hidden",
-      state.testType !== "IQ"
-    );
+    matrix.classList.toggle("hidden", state.testType !== "IQ");
 
     if (state.testType === "IQ") {
-      (question.matrix || [])
-        .forEach((cell) => {
-          matrix.appendChild(
-            renderCell(cell)
-          );
-        });
+      (q.matrix || []).forEach((cell) => {
+        matrix.appendChild(renderCell(cell));
+      });
     }
 
-    const options =
-      $("#options");
-
+    const options = $("#options");
     options.innerHTML = "";
 
-    (question.options || [])
-      .forEach(
-        (option, index) => {
-          options.appendChild(
-            renderOption(
-              option,
-              index
-            )
-          );
-        }
-      );
+    (q.options || []).forEach((option, i) => {
+      options.appendChild(renderOption(option, i));
+    });
 
-    if (nextButton) {
-      nextButton.textContent =
-        state.index ===
-        state.questions.length - 1
-          ? "Natijani ko‘rish"
-          : "Davom etish";
-    }
+    $("#nextQuestion").textContent =
+      state.index === state.questions.length - 1
+        ? "Natijani ko‘rish"
+        : "Davom etish";
 
-    $("#celebration")
-      ?.classList.toggle(
-        "hidden",
-        !(
-          state.testType === "IQ" &&
-          (
-            state.index === 6 ||
-            state.index === 12
-          )
-        )
-      );
+    $("#celebration")?.classList.toggle(
+      "hidden",
+      !(state.testType === "IQ" &&
+        (state.index === 6 || state.index === 12))
+    );
   }
 
   function startTimer() {
-    clearInterval(
-      window.__testTimer
-    );
+    clearInterval(window.__timer);
 
-    const started =
-      state.startedAt ||
-      Date.now();
-
-    const end =
-      started +
-      30 * 60 * 1000;
+    const started = state.startedAt || Date.now();
+    const end = started + 30 * 60 * 1000;
 
     const tick = () => {
-      const seconds =
-        Math.max(
-          0,
-          Math.floor(
-            (end - Date.now()) /
-              1000
-          )
-        );
+      const sec = Math.max(
+        0,
+        Math.floor((end - Date.now()) / 1000)
+      );
 
-      const timer =
-        $("#timer");
+      $("#timer").textContent =
+        `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 
-      if (timer) {
-        timer.textContent =
-          `${String(
-            Math.floor(
-              seconds / 60
-            )
-          ).padStart(2, "0")}:${String(
-            seconds % 60
-          ).padStart(2, "0")}`;
-      }
-
-      if (seconds <= 0) {
-        clearInterval(
-          window.__testTimer
-        );
-
+      if (sec <= 0) {
+        clearInterval(window.__timer);
         finishTest();
       }
     };
 
     tick();
-
-    window.__testTimer =
-      setInterval(
-        tick,
-        500
-      );
+    window.__timer = setInterval(tick, 500);
   }
 
   async function startTest(type) {
     if (state.busy) return;
 
-    const profile =
-      state.user || {};
+    const profile = state.user || {};
 
     if (
       !profile.full_name ||
@@ -741,155 +281,98 @@
       !profile.country
     ) {
       state.pendingType = type;
-
       show("profileScreen");
-
-      toast(
-        "Avval profilingizni to‘ldiring."
-      );
-
+      toast("Avval profilingizni to‘ldiring");
       return;
     }
 
-    if (
-      type === "EQ" &&
-      !state.user.hasIQ
-    ) {
-      toast(
-        "Avval IQ testini yakunlang."
-      );
-
+    if (type === "EQ" && !state.user.hasIQ) {
+      toast("Avval IQ testni yakunlang");
       return;
     }
 
-    if (
-      type === "PQ" &&
-      !state.user.hasEQ
-    ) {
-      toast(
-        "Avval EQ testini yakunlang."
-      );
-
+    if (type === "PQ" && !state.user.hasEQ) {
+      toast("Avval EQ testni yakunlang");
       return;
     }
 
     try {
       state.busy = true;
 
-      const data =
-        await api(
-          "/api/test/start",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              test_type: type
-            })
-          }
-        );
+      const d = await api("/api/test/start", {
+        method: "POST",
+        body: JSON.stringify({
+          test_type: type
+        })
+      });
 
       state.mode = "NORMAL";
       state.testType = type;
-      state.questions =
-        data.questions || [];
+      state.questions = d.questions || [];
+      state.sessionId = d.session_id;
 
-      state.sessionId =
-        data.session_id;
+      state.answers = d.resumed
+        ? (d.answers || {})
+        : {};
 
-      state.answers =
-        data.resumed
-          ? (data.answers || {})
-          : {};
-
-      state.index =
-        data.resumed
-          ? Math.min(
-              Object.keys(
-                state.answers
-              ).length,
-              Math.max(
-                0,
-                state.questions.length -
-                  1
-              )
-            )
-          : 0;
+      state.index = d.resumed
+        ? Math.min(
+            Object.keys(state.answers).length,
+            Math.max(0, state.questions.length - 1)
+          )
+        : 0;
 
       state.startedAt =
-        data.resumed &&
-        data.started_at
-          ? Date.parse(
-              data.started_at
-            )
+        d.resumed && d.started_at
+          ? Date.parse(d.started_at)
           : Date.now();
 
       saveProgress();
 
       show("testScreen");
-
       renderQuestion();
-
       startTimer();
-    } catch (error) {
-      toast(
-        error.message ||
-        "Testni boshlashda xato."
-      );
+
+    } catch (e) {
+      toast(e.message);
     } finally {
       state.busy = false;
     }
   }
 
   async function finishTest() {
-    if (
-      state.busy ||
-      !state.questions.length
-    ) {
-      return;
-    }
+    if (state.busy || !state.questions.length) return;
 
-    clearInterval(
-      window.__testTimer
-    );
+    clearInterval(window.__timer);
 
-    if (
-      state.selected !== null
-    ) {
-      state.answers[
-        String(
-          state.index + 1
-        )
-      ] = state.selected;
+    if (state.selected !== null) {
+      state.answers[String(state.index + 1)] =
+        state.selected;
     }
 
     saveProgress();
-
     show("loadingResult");
 
     try {
       state.busy = true;
 
-      if (
-        state.mode === "BATTLE"
-      ) {
-        const data =
-          await api(
-            `/api/battle/${encodeURIComponent(
-              state.battleId
-            )}/submit`,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                answers:
-                  state.answers
-              })
-            }
-          );
+      if (state.mode === "BATTLE") {
+        const d = await api(
+          `/api/battle/${state.battleId}/submit`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              answers: state.answers
+            })
+          }
+        );
+
+        state.busy = false;
 
         if (
-          data.already_finished ||
-          data.status === "finished" ||
-          data.status ===
-            "waiting_opponent"
+          d.already_finished ||
+          d.status === "finished" ||
+          d.status === "waiting_opponent"
         ) {
           await waitBattleResult();
         }
@@ -897,102 +380,61 @@
         return;
       }
 
-      const data =
-        await api(
-          `/api/test/${encodeURIComponent(
-            state.sessionId
-          )}/submit`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              answers:
-                state.answers,
-              duration:
-                Math.floor(
-                  (
-                    Date.now() -
-                    state.startedAt
-                  ) / 1000
-                )
-            })
-          }
-        );
+      const d = await api(
+        `/api/test/${state.sessionId}/submit`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            answers: state.answers,
+            duration: Math.floor(
+              (Date.now() - state.startedAt) / 1000
+            )
+          })
+        }
+      );
 
       clearProgress();
 
-      state.attemptId =
-        data.attempt_id;
+      state.attemptId = d.attempt_id;
+      state.paymentAttemptId = d.attempt_id;
 
-      state.paymentAttemptId =
-        data.attempt_id;
-
-      if (
-        data.payment_required
-      ) {
+      if (d.payment_required) {
         await renderPayment({
-          ...data,
-          payment_id:
-            data.payment_id
+          ...d,
+          payment_id: d.payment_id
         });
 
         show("paymentScreen");
       } else {
-        await showResult(
-          data.attempt_id
-        );
+        await showResult(d.attempt_id);
       }
-    } catch (error) {
-      show("testScreen");
 
-      toast(
-        error.message ||
-        "Natijani yuborishda xato."
-      );
+    } catch (e) {
+      show("testScreen");
+      toast(e.message);
+
     } finally {
       state.busy = false;
     }
   }
 
-  async function showResult(
-    attemptId
-  ) {
-    const data =
-      await api(
-        `/api/result/${encodeURIComponent(
-          attemptId
-        )}`
+  async function showResult(attemptId) {
+    const d = await api(`/api/result/${attemptId}`);
+
+    if (!d.visible) {
+      state.attemptId = attemptId;
+
+      const p = await api("/api/payment/mine");
+
+      const mine = p.payments.find(
+        (x) => Number(x.attempt_id) === Number(attemptId)
       );
 
-    if (!data.visible) {
-      state.attemptId =
-        attemptId;
-
-      const payments =
-        await api(
-          "/api/payment/mine"
-        );
-
-      const mine =
-        (payments.payments || [])
-          .find(
-            (payment) =>
-              Number(
-                payment.attempt_id
-              ) ===
-              Number(attemptId)
-          );
-
       if (mine) {
-        state.paymentId =
-          mine.id;
+        state.paymentId = mine.id;
+        state.paymentAttemptId = attemptId;
 
-        state.paymentAttemptId =
-          attemptId;
-
-        const card =
-          await getPaymentCard(
-            mine.id
-          );
+        const card = await getPaymentCard(mine.id);
 
         await renderPayment({
           amount: mine.amount,
@@ -1003,16 +445,14 @@
 
         show("paymentScreen");
       } else {
-        toast(
-          "Natija hali yopiq."
-        );
+        toast("Natija hali yopiq");
       }
 
       return;
     }
 
     state.testType =
-      data.test_type ||
+      d.test_type ||
       state.testType ||
       "IQ";
 
@@ -1025,10 +465,10 @@
         : "%";
 
     $("#resultScore").textContent =
-      data.score ?? "—";
+      d.score;
 
     $("#resultLevel").textContent =
-      data.level ||
+      d.level ||
       (
         state.testType === "IQ"
           ? "—"
@@ -1036,53 +476,40 @@
       );
 
     $("#resultCorrect").textContent =
-      `${data.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
+      `${d.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
 
     show("resultScreen");
   }
 
-  async function getPaymentCard(
-    paymentId
-  ) {
+  async function getPaymentCard(paymentId) {
     try {
-      const data =
-        await api(
-          `/api/payment/${encodeURIComponent(
-            paymentId
-          )}/card`
-        );
+      const d = await api(
+        `/api/payment/${paymentId}/card`
+      );
 
-      return data.card || null;
+      return d.card;
     } catch (_) {
       return null;
     }
   }
 
-  async function renderPayment(
-    data
-  ) {
+  async function renderPayment(d) {
     state.paymentId =
-      data.payment_id ||
+      d.payment_id ||
       state.paymentId;
 
     state.paymentAttemptId =
-      data.attempt_id ||
+      d.attempt_id ||
       state.paymentAttemptId;
 
     $("#paymentAmount").textContent =
-      `${Number(
-        data.amount || 0
-      ).toLocaleString(
-        "uz-UZ"
-      )} so‘m`;
+      `${Number(d.amount || 0).toLocaleString("uz-UZ")} so‘m`;
 
     const card =
-      data.card ||
+      d.card ||
       (
         state.paymentId
-          ? await getPaymentCard(
-              state.paymentId
-            )
+          ? await getPaymentCard(state.paymentId)
           : null
       );
 
@@ -1091,66 +518,43 @@
       "Faol karta topilmadi";
 
     $("#cardHolder").textContent =
-      card?.holder || "";
+      card?.holder ||
+      "";
 
     $("#cardBank").textContent =
-      card?.bank || "";
+      card?.bank ||
+      "";
 
     $("#paymentStatus").textContent =
-      data.status === "approved"
+      d.status === "approved"
         ? "To‘lov tasdiqlangan."
         : card
           ? "Kartaga to‘lov qiling va receipt yuklang."
           : "Admin karta qo‘shishini kuting.";
 
-    if ($("#receiptInput")) {
-      $("#receiptInput").value = "";
-    }
-
-    if ($("#receiptFile")) {
-      $("#receiptFile").value = "";
-    }
+    $("#receiptInput").value = "";
+    $("#receiptFile").value = "";
   }
-
-  async function refreshPayment() {
-    if (!state.paymentId) {
-      return;
-    }
+    async function refreshPayment() {
+    if (!state.paymentId) return;
 
     try {
-      const data =
-        await api(
-          "/api/payment/mine"
-        );
+      const p = await api("/api/payment/mine");
 
-      const mine =
-        (data.payments || [])
-          .find(
-            (payment) =>
-              Number(payment.id) ===
-              Number(state.paymentId)
-          );
+      const mine = p.payments.find(
+        (x) => Number(x.id) === Number(state.paymentId)
+      );
 
-      if (!mine) {
-        return;
-      }
+      if (!mine) return;
 
       $("#paymentStatus").textContent =
         `Status: ${mine.status}`;
 
-      if (
-        mine.status === "approved"
-      ) {
+      if (mine.status === "approved") {
         if (state.battleId) {
-          await checkBattleReady(
-            true
-          );
-        } else if (
-          state.paymentAttemptId
-        ) {
-          await showResult(
-            state.paymentAttemptId
-          );
+          await checkBattleReady(true);
+        } else if (state.paymentAttemptId) {
+          await showResult(state.paymentAttemptId);
         }
       }
     } catch (_) {}
@@ -1158,211 +562,150 @@
 
   async function sendReceipt() {
     if (!state.paymentId) {
-      toast("Payment topilmadi.");
+      toast("Payment topilmadi");
       return;
     }
 
     const file =
-      $("#receiptFile")
-        ?.files?.[0];
+      $("#receiptFile")?.files?.[0];
 
     const legacy =
-      $("#receiptInput")
-        ?.value
-        .trim();
+      $("#receiptInput")?.value.trim();
 
     if (!file && !legacy) {
-      toast(
-        "Receipt rasmini tanlang."
-      );
-
+      toast("Receipt rasmini tanlang");
       return;
     }
 
     try {
-      state.busy = true;
-
-      const formData =
-        new FormData();
+      const fd = new FormData();
 
       if (file) {
-        formData.append(
+        fd.append(
           "receipt",
           file,
           file.name
         );
       } else {
-        formData.append(
+        fd.append(
           "receipt_file_id",
           legacy
         );
       }
 
-      const data =
-        await api(
-          `/api/payment/${encodeURIComponent(
-            state.paymentId
-          )}/receipt`,
-          {
-            method: "POST",
-            body: formData
-          }
-        );
+      const d = await api(
+        `/api/payment/${state.paymentId}/receipt`,
+        {
+          method: "POST",
+          body: fd
+        }
+      );
 
       $("#paymentStatus").textContent =
         "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
 
-      toast(
-        "Receipt yuborildi."
-      );
+      toast("Receipt yuborildi");
 
       if (state.battleId) {
         startBattlePolling();
       } else if (
-        data.status === "approved" &&
+        d.status === "approved" &&
         state.paymentAttemptId
       ) {
         await showResult(
           state.paymentAttemptId
         );
       }
-    } catch (error) {
-      toast(
-        error.message ||
-        "Receipt yuborilmadi."
-      );
-    } finally {
-      state.busy = false;
+
+    } catch (e) {
+      toast(e.message);
     }
   }
 
   async function loadHome() {
-    const data =
-      await api(
-        "/api/bootstrap"
-      );
+    const d = await api("/api/bootstrap");
 
-    state.user =
-      data.user || {};
-
-    state.prices =
-      data.prices || {};
-
-    state.questions =
-      data.questions || [];
+    state.user = d.user;
+    state.prices = d.prices || {};
+    state.questions = d.questions || [];
 
     $("#userName").textContent =
-      data.user?.first_name ||
-      "Do‘st";
+      d.user.first_name || "Do‘st";
 
     $("#fullName").value =
-      data.user?.full_name ||
-      "";
+      d.user.full_name || "";
 
     $("#gender").value =
-      data.user?.gender ||
-      "";
+      d.user.gender || "";
 
     $("#age").value =
-      data.user?.age ||
-      "";
+      d.user.age || "";
 
     $("#country").value =
-      data.user?.country ||
-      "";
+      d.user.country || "";
 
     updateHomeLocks();
-
     renderPersonalProfile();
 
     show("homeScreen");
 
     updateLive();
 
-    clearInterval(
-      window.__liveTimer
-    );
+    clearInterval(window.__liveTimer);
 
     window.__liveTimer =
-      setInterval(
-        updateLive,
-        5000
-      );
+      setInterval(updateLive, 5000);
 
     await restoreProgress();
   }
 
   function updateHomeLocks() {
-    const hasIQ =
-      Boolean(state.user?.hasIQ);
-
-    const hasEQ =
-      Boolean(state.user?.hasEQ);
-
     $("#eqState").textContent =
-      hasIQ
+      state.user.hasIQ
         ? "Ochilgan"
         : "IQdan keyin ochiladi";
 
     $("#pqState").textContent =
-      hasEQ
+      state.user.hasEQ
         ? "Ochilgan"
         : "EQdan keyin ochiladi";
 
-    $(
-      ".test-card[data-test='EQ']"
-    )?.classList.toggle(
-      "locked",
-      !hasIQ
-    );
-
-    $(
-      ".test-card[data-test='PQ']"
-    )?.classList.toggle(
-      "locked",
-      !hasEQ
-    );
-
-    $("#profileCard")
+    $(".test-card[data-test=EQ]")
       ?.classList.toggle(
         "locked",
-        !(
-          hasIQ &&
-          hasEQ &&
-          Boolean(state.user?.hasPQ)
-        )
+        !state.user.hasIQ
+      );
+
+    $(".test-card[data-test=PQ]")
+      ?.classList.toggle(
+        "locked",
+        !state.user.hasEQ
       );
   }
 
   async function restoreProgress() {
-    let saved = null;
+    let saved;
 
     try {
-      saved =
-        JSON.parse(
-          localStorage.getItem(
-            "iq_test_progress"
-          ) || "null"
-        );
+      saved = JSON.parse(
+        localStorage.getItem(
+          "iq_test_progress"
+        ) || "null"
+      );
     } catch (_) {
       saved = null;
     }
 
-    if (!saved?.sessionId) {
-      return;
-    }
+    if (!saved?.sessionId) return;
 
     try {
-      const data =
-        await api(
-          `/api/test/${encodeURIComponent(
-            saved.sessionId
-          )}/resume`
-        );
+      const d = await api(
+        `/api/test/${saved.sessionId}/resume`
+      );
 
       if (
-        data.status === "completed" ||
-        data.status === "expired"
+        d.status === "completed" ||
+        d.status === "expired"
       ) {
         clearProgress();
         return;
@@ -1374,14 +717,14 @@
         saved.sessionId;
 
       state.testType =
-        data.test_type;
+        d.test_type;
 
       state.questions =
-        data.questions || [];
+        d.questions || [];
 
       state.answers =
         saved.answers ||
-        data.answers ||
+        d.answers ||
         {};
 
       state.index =
@@ -1389,10 +732,7 @@
           0,
           Math.min(
             Number(saved.index) || 0,
-            Math.max(
-              0,
-              state.questions.length - 1
-            )
+            state.questions.length - 1
           )
         );
 
@@ -1403,12 +743,12 @@
       show("testScreen");
 
       renderQuestion();
-
       startTimer();
 
       toast(
         "Testingiz saqlangan joyidan davom etdi."
       );
+
     } catch (_) {
       clearProgress();
     }
@@ -1416,47 +756,37 @@
 
   async function updateLive() {
     try {
-      const data =
-        await api(
-          "/api/stats/live"
-        );
+      const d =
+        await api("/api/stats/live");
 
       animateNumber(
         $("#liveTotal"),
-        data.total
+        d.total
       );
 
       animateNumber(
         $("#liveOnline"),
-        data.online
+        d.online
       );
+
     } catch (_) {}
   }
 
-  function animateNumber(
-    element,
-    number
-  ) {
-    if (!element) return;
+  function animateNumber(el, n) {
+    if (!el) return;
 
-    element.textContent =
-      Number(number || 0)
-        .toLocaleString(
-          "uz-UZ"
-        );
+    el.textContent =
+      Number(n || 0)
+        .toLocaleString("uz-UZ");
   }
 
   async function saveProfile() {
     const age =
-      Number(
-        $("#age").value
-      );
+      Number($("#age").value);
 
     const body = {
       full_name:
-        $("#fullName")
-          .value
-          .trim(),
+        $("#fullName").value.trim(),
 
       gender:
         $("#gender").value,
@@ -1476,9 +806,8 @@
       age > 120
     ) {
       toast(
-        "Profil ma’lumotlarini to‘liq kiriting."
+        "Profil ma’lumotlarini to‘liq kiriting"
       );
-
       return;
     }
 
@@ -1489,8 +818,7 @@
         "/api/profile/save",
         {
           method: "POST",
-          body:
-            JSON.stringify(body)
+          body: JSON.stringify(body)
         }
       );
 
@@ -1505,11 +833,7 @@
 
       renderPersonalProfile();
 
-      updateHomeLocks();
-
-      toast(
-        "Profil saqlandi."
-      );
+      toast("Profil saqlandi");
 
       const pending =
         state.pendingType;
@@ -1524,11 +848,10 @@
       } else {
         show("homeScreen");
       }
-    } catch (error) {
-      toast(
-        error.message ||
-        "Profilni saqlab bo‘lmadi."
-      );
+
+    } catch (e) {
+      toast(e.message);
+
     } finally {
       state.busy = false;
     }
@@ -1538,17 +861,12 @@
     const box =
       $("#personalSummary");
 
-    if (
-      !box ||
-      !state.user
-    ) {
-      return;
-    }
+    if (!box || !state.user) return;
 
     const ready =
-      Boolean(state.user.hasIQ) &&
-      Boolean(state.user.hasEQ) &&
-      Boolean(state.user.hasPQ);
+      state.user.hasIQ &&
+      state.user.hasEQ &&
+      state.user.hasPQ;
 
     if (!ready) {
       box.innerHTML = `
@@ -1561,7 +879,6 @@
           </span>
         </div>
       `;
-
       return;
     }
 
@@ -1589,18 +906,16 @@
           Muammolarni tahlil qilish,
           hissiy vaziyatni anglash va
           vazifalarni rejalashtirish
-          bo‘yicha test javoblaringiz
-          mavjud.
+          bo‘yicha test javoblaringiz mavjud.
         </p>
       </div>
 
       <div class="insight">
         <b>Rivojlanish nuqtalari</b>
         <p>
-          Natijalarni muntazam qayta
-          ko‘rib chiqish va real
-          hayotdagi qarorlar bilan
-          solishtirish foydali.
+          Natijalarni muntazam qayta ko‘rib
+          chiqish va real hayotdagi qarorlar
+          bilan solishtirish foydali.
         </p>
       </div>
     `;
@@ -1608,268 +923,181 @@
 
   async function loadRanking() {
     try {
-      const data =
-        await api(
-          "/api/ranking"
-        );
+      const d =
+        await api("/api/ranking");
 
       const box =
         $("#rankingList");
 
-      const ranking =
-        Array.isArray(
-          data.ranking
-        )
-          ? data.ranking
-          : [];
+      box.innerHTML =
+        d.ranking?.length
+          ? d.ranking.map((r) => `
+              <div class="rank-row">
+                <span class="rank-pos">
+                  #${r.position}
+                </span>
 
-      if (!ranking.length) {
-        box.innerHTML = `
-          <div class="form-card glass empty-state">
-            <b>Hali natijalar yo‘q.</b>
-          </div>
-        `;
-      } else {
-        box.innerHTML =
-          ranking
-            .map(
-              (item) => `
-                <div class="rank-row">
-                  <span class="rank-pos">
-                    #${escapeHtml(
-                      item.position
-                    )}
-                  </span>
+                <span>
+                  <b>
+                    ${escapeHtml(r.name)}
+                  </b>
 
-                  <span>
-                    <b>
-                      ${escapeHtml(
-                        item.name
-                      )}
-                    </b>
+                  <small>
+                    ${escapeHtml(r.level || "")}
+                  </small>
+                </span>
 
-                    <small>
-                      ${escapeHtml(
-                        item.level || ""
-                      )}
-                    </small>
-                  </span>
-
-                  <strong>
-                    ${escapeHtml(
-                      item.score
-                    )}
-                  </strong>
-                </div>
-              `
-            )
-            .join("");
-      }
+                <strong>
+                  ${r.score}
+                </strong>
+              </div>
+            `).join("")
+          : `
+            <div class="form-card glass empty-state">
+              <b>Hali natijalar yo‘q.</b>
+            </div>
+          `;
 
       show("rankingScreen");
-    } catch (error) {
-      toast(
-        error.message ||
-        "Reytingni yuklab bo‘lmadi."
-      );
+
+    } catch (e) {
+      toast(e.message);
     }
   }
 
   async function loadCertificate() {
     try {
-      const data =
-        await api(
-          "/api/certificate/mine"
-        );
+      const d =
+        await api("/api/certificate/mine");
 
-      const certificate =
-        data.certificate;
+      const c =
+        d.certificate;
 
-      const box =
-        $("#certificateBox");
-
-      if (!certificate) {
-        box.innerHTML = `
-          <div class="empty-state">
-            <b>Sertifikat yo‘q</b>
-
-            <span>
-              IQ testini yakunlang va
-              natija ochilgach sertifikat
-              yaratiladi.
+      $("#certificateBox").innerHTML =
+        c
+          ? `
+            <span class="pill">
+              VERIFIED
             </span>
-          </div>
-        `;
 
-        show(
-          "certificateScreen"
-        );
+            <h2>
+              ${escapeHtml(c.full_name)}
+            </h2>
 
-        return;
-      }
+            <div class="score-ring">
+              <strong>${c.score}</strong>
+              <small>IQ</small>
+            </div>
 
-      box.innerHTML = `
-        <span class="pill">
-          VERIFIED
-        </span>
+            <p>
+              ${escapeHtml(c.level || "")}
+            </p>
 
-        <h2>
-          ${escapeHtml(
-            certificate.full_name
-          )}
-        </h2>
+            <div class="cert-code">
+              ${escapeHtml(c.verification_code)}
+            </div>
 
-        <div class="score-ring">
-          <strong>
-            ${escapeHtml(
-              certificate.score
-            )}
-          </strong>
+            <p>IQ TEST BOT</p>
 
-          <small>IQ</small>
-        </div>
+            <button
+              id="certDownload"
+              class="primary">
+              PNG ochish
+            </button>
+          `
+          : `
+            <div class="empty-state">
+              <b>Sertifikat yo‘q</b>
+              <span>
+                IQ testini yakunlang va
+                natija ochilgach sertifikat
+                yaratiladi.
+              </span>
+            </div>
+          `;
 
-        <p>
-          ${escapeHtml(
-            certificate.level || ""
-          )}
-        </p>
-
-        <div class="cert-code">
-          ${escapeHtml(
-            certificate.verification_code
-          )}
-        </div>
-
-        <p>IQ TEST BOT</p>
-
-        <button
-          id="certDownload"
-          class="primary"
-          type="button"
-        >
-          PNG ochish
-        </button>
-      `;
-
-      $("#certDownload")
-        ?.addEventListener(
-          "click",
-          async () => {
-            try {
-              const blob =
-                await apiBlob(
-                  `/api/certificate/${encodeURIComponent(
-                    certificate.certificate_id
-                  )}/png`
-                );
-
-              const url =
-                URL.createObjectURL(
-                  blob
-                );
-
-              if (
-                tg?.openLink
-              ) {
-                tg.openLink(url);
-              } else {
-                window.open(
-                  url,
-                  "_blank"
-                );
-              }
-
-              setTimeout(
-                () =>
-                  URL.revokeObjectURL(
-                    url
-                  ),
-                30000
+      $("#certDownload")?.addEventListener(
+        "click",
+        async () => {
+          try {
+            const blob =
+              await apiBlob(
+                `/api/certificate/${encodeURIComponent(
+                  c.certificate_id
+                )}/png`
               );
-            } catch (error) {
-              toast(
-                error.message ||
-                "Sertifikatni ochib bo‘lmadi."
-              );
-            }
+
+            const url =
+              URL.createObjectURL(blob);
+
+            window.open(
+              url,
+              "_blank"
+            );
+
+            setTimeout(
+              () => URL.revokeObjectURL(url),
+              30000
+            );
+
+          } catch (e) {
+            toast(e.message);
           }
-        );
+        }
+      );
 
-      show(
-        "certificateScreen"
-      );
-    } catch (error) {
-      toast(
-        error.message ||
-        "Sertifikatni yuklab bo‘lmadi."
-      );
+      show("certificateScreen");
+
+    } catch (e) {
+      toast(e.message);
     }
   }
 
   function setBattleInfo(html) {
-    const element =
-      $("#battleInfo");
-
-    if (element) {
-      element.innerHTML =
-        html;
-    }
+    $("#battleInfo").innerHTML =
+      html;
   }
-
-  async function createBattle() {
+    async function createBattle() {
     if (state.busy) return;
 
     try {
       state.busy = true;
 
-      const data =
-        await api(
-          "/api/battle/create",
-          {
-            method: "POST",
-            body: "{}"
-          }
-        );
+      const d = await api(
+        "/api/battle/create",
+        {
+          method: "POST",
+          body: "{}"
+        }
+      );
 
       state.battleId =
-        data.battle_id;
+        d.battle_id;
 
-      state.paymentAttemptId =
-        null;
+      state.paymentAttemptId = null;
 
       setBattleInfo(`
         <div class="cert-code battle-code">
-          ${escapeHtml(
-            data.code
-          )}
+          ${escapeHtml(d.code)}
         </div>
 
         <p>
-          Do‘stingizga 4 belgili
-          kodni yuboring.
-          Ikkalangiz ham to‘lovni
-          tasdiqlatgach battle ochiladi.
+          Do‘stingizga 4 belgili kodni yuboring.
+          Ikkalangiz ham to‘lovni tasdiqlatgach
+          battle ochiladi.
         </p>
 
         <button
           id="battlePay"
-          class="primary"
-          type="button"
-        >
+          class="primary">
           To‘lovni boshlash ·
-          ${Number(
-            data.price || 0
-          ).toLocaleString(
-            "uz-UZ"
-          )}
+          ${Number(d.price).toLocaleString("uz-UZ")}
           so‘m
         </button>
 
         <div
           id="battleStatus"
-          class="inline-status"
-        >
+          class="inline-status">
           Opponent kutilmoqda…
         </div>
       `);
@@ -1878,11 +1106,10 @@
         () => startBattlePayment();
 
       startBattlePolling();
-    } catch (error) {
-      toast(
-        error.message ||
-        "Battle yaratilmadi."
-      );
+
+    } catch (e) {
+      toast(e.message);
+
     } finally {
       state.busy = false;
     }
@@ -1892,39 +1119,32 @@
     if (state.busy) return;
 
     const code =
-      $("#battleCode")
-        .value
+      $("#battleCode").value
         .trim()
         .toUpperCase();
 
     if (code.length !== 4) {
-      toast(
-        "4 belgili kod kiriting."
-      );
-
+      toast("4 belgili kod kiriting");
       return;
     }
 
     try {
       state.busy = true;
 
-      const data =
-        await api(
-          "/api/battle/join",
-          {
-            method: "POST",
-            body:
-              JSON.stringify({
-                code
-              })
-          }
-        );
+      const d = await api(
+        "/api/battle/join",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            code
+          })
+        }
+      );
 
       state.battleId =
-        data.battle_id;
+        d.battle_id;
 
-      state.paymentAttemptId =
-        null;
+      state.paymentAttemptId = null;
 
       setBattleInfo(`
         <div class="cert-code battle-code">
@@ -1938,22 +1158,15 @@
 
         <button
           id="battlePay"
-          class="primary"
-          type="button"
-        >
+          class="primary">
           To‘lovni boshlash ·
-          ${Number(
-            data.price || 0
-          ).toLocaleString(
-            "uz-UZ"
-          )}
+          ${Number(d.price).toLocaleString("uz-UZ")}
           so‘m
         </button>
 
         <div
           id="battleStatus"
-          class="inline-status"
-        >
+          class="inline-status">
           To‘lov kutilmoqda…
         </div>
       `);
@@ -1962,57 +1175,43 @@
         () => startBattlePayment();
 
       startBattlePolling();
-    } catch (error) {
-      toast(
-        error.message ||
-        "Battle'ga kirib bo‘lmadi."
-      );
+
+    } catch (e) {
+      toast(e.message);
+
     } finally {
       state.busy = false;
     }
   }
 
   async function startBattlePayment() {
-    if (!state.battleId) {
-      return;
-    }
+    if (!state.battleId) return;
 
-    state.paymentAttemptId =
-      null;
+    state.paymentAttemptId = null;
 
     try {
-      state.busy = true;
-
-      const data =
-        await api(
-          `/api/battle/${encodeURIComponent(
-            state.battleId
-          )}/payment`,
-          {
-            method: "POST",
-            body: "{}"
-          }
-        );
+      const d = await api(
+        `/api/battle/${state.battleId}/payment`,
+        {
+          method: "POST",
+          body: "{}"
+        }
+      );
 
       await renderPayment({
-        ...data,
-        payment_id:
-          data.payment_id
+        ...d,
+        payment_id: d.payment_id
       });
 
       state.paymentId =
-        data.payment_id;
+        d.payment_id;
 
       show("paymentScreen");
 
       startBattlePolling();
-    } catch (error) {
-      toast(
-        error.message ||
-        "Battle to‘lovi yaratilmadi."
-      );
-    } finally {
-      state.busy = false;
+
+    } catch (e) {
+      toast(e.message);
     }
   }
 
@@ -2023,9 +1222,7 @@
 
     state.battlePolling =
       setInterval(
-        () => {
-          checkBattleReady(false);
-        },
+        () => checkBattleReady(false),
         3000
       );
 
@@ -2035,38 +1232,32 @@
   async function checkBattleReady(
     showToastOnReady
   ) {
-    if (!state.battleId) {
-      return false;
-    }
+    if (!state.battleId) return false;
 
     try {
-      const data =
-        await api(
-          `/api/battle/${encodeURIComponent(
-            state.battleId
-          )}/start`
-        );
+      const d = await api(
+        `/api/battle/${state.battleId}/start`
+      );
 
       const status =
         $("#battleStatus");
 
       if (status) {
         status.textContent =
-          data.ready
+          d.ready
             ? "Battle tayyor. Test boshlanmoqda…"
             : `Holat: ${
-                data.status ||
-                "kutilmoqda"
+                d.status || "kutilmoqda"
               }`;
       }
 
-      if (data.ready) {
+      if (d.ready) {
         clearInterval(
           state.battlePolling
         );
 
         state.questions =
-          data.questions || [];
+          d.questions || [];
 
         state.mode =
           "BATTLE";
@@ -2083,7 +1274,6 @@
         show("testScreen");
 
         renderQuestion();
-
         startTimer();
 
         if (showToastOnReady) {
@@ -2094,6 +1284,7 @@
 
         return true;
       }
+
     } catch (_) {}
 
     return false;
@@ -2103,23 +1294,16 @@
     show("loadingResult");
 
     clearInterval(
-      window.__testTimer
+      window.__timer
     );
 
-    for (
-      let attempt = 0;
-      attempt < 40;
-      attempt += 1
-    ) {
+    for (let i = 0; i < 40; i++) {
       try {
-        const data =
-          await api(
-            `/api/battle/${encodeURIComponent(
-              state.battleId
-            )}/result`
-          );
+        const d = await api(
+          `/api/battle/${state.battleId}/result`
+        );
 
-        if (data.ready) {
+        if (d.ready) {
           $("#resultBadge").textContent =
             "BATTLE RESULT";
 
@@ -2127,32 +1311,27 @@
             "IQ";
 
           $("#resultScore").textContent =
-            data.my_score ?? "—";
+            d.my_score;
 
           $("#resultLevel").textContent =
-            data.outcome === "win"
+            d.outcome === "win"
               ? "G‘ALABA"
-              : data.outcome === "loss"
+              : d.outcome === "loss"
                 ? "MAG‘LUBIYAT"
                 : "DURANG";
 
           $("#resultCorrect").textContent =
-            `Opponent: ${
-              data.opponent_score ?? "—"
-            }`;
+            `Opponent: ${d.opponent_score}`;
 
           show("resultScreen");
-
           return;
         }
+
       } catch (_) {}
 
       await new Promise(
         (resolve) =>
-          setTimeout(
-            resolve,
-            2500
-          )
+          setTimeout(resolve, 2500)
       );
     }
 
@@ -2175,9 +1354,7 @@
         }
 
         state.answers[
-          String(
-            state.index + 1
-          )
+          String(state.index + 1)
         ] = state.selected;
 
         saveProgress();
@@ -2187,7 +1364,6 @@
           state.questions.length - 1
         ) {
           state.index += 1;
-
           renderQuestion();
         } else {
           finishTest();
@@ -2206,25 +1382,17 @@
       "click",
       async () => {
         try {
-          const number =
-            $("#cardNumber")
-              ?.textContent
-              ?.trim();
-
-          if (!number) {
-            throw new Error();
-          }
-
           await navigator.clipboard.writeText(
-            number
+            $("#cardNumber").textContent
           );
 
           toast(
-            "Karta nusxalandi."
+            "Karta nusxalandi"
           );
+
         } catch (_) {
           toast(
-            "Nusxalash imkoni bo‘lmadi."
+            "Nusxalash imkoni bo‘lmadi"
           );
         }
       }
@@ -2240,23 +1408,17 @@
     ?.addEventListener(
       "click",
       () => {
-        const username =
-          "iqtest_ubot";
-
         const url =
-          `https://t.me/${username}`;
+          `https://t.me/${encodeURIComponent(
+            "iqtest_ubot"
+          )}`;
 
-        if (
-          tg?.openTelegramLink
-        ) {
-          tg.openTelegramLink(
-            url
-          );
+        if (tg?.openTelegramLink) {
+          tg.openTelegramLink(url);
         } else {
           window.open(
             url,
-            "_blank",
-            "noopener,noreferrer"
+            "_blank"
           );
         }
       }
@@ -2283,17 +1445,13 @@
   $("#profileTopBtn")
     ?.addEventListener(
       "click",
-      () => {
-        show("profileScreen");
-      }
+      () => show("profileScreen")
     );
 
   $("#battleCard")
     ?.addEventListener(
       "click",
-      () => {
-        show("battleScreen");
-      }
+      () => show("battleScreen")
     );
 
   $("#profileCard")
@@ -2317,7 +1475,7 @@
       "click",
       () => {
         clearInterval(
-          window.__testTimer
+          window.__timer
         );
 
         if (
@@ -2332,151 +1490,78 @@
 
   $$("[data-back]")
     .forEach(
-      (button) => {
-        button.addEventListener(
+      (b) =>
+        b.addEventListener(
           "click",
-          () => {
-            show("homeScreen");
-          }
-        );
-      }
+          () => show("homeScreen")
+        )
     );
 
   $$(".test-card[data-test]")
     .forEach(
-      (button) => {
-        button.addEventListener(
+      (b) =>
+        b.addEventListener(
           "click",
-          () => {
+          () =>
             startTest(
-              button.dataset.test
-            );
-          }
-        );
-      }
+              b.dataset.test
+            )
+        )
     );
 
   $$("[data-nav]")
     .forEach(
-      (button) => {
-        button.addEventListener(
+      (b) =>
+        b.addEventListener(
           "click",
           () => {
-            const navigation =
-              button.dataset.nav;
+            const n =
+              b.dataset.nav;
 
-            if (
-              navigation === "home"
-            ) {
+            if (n === "home") {
               show("homeScreen");
             }
 
-            if (
-              navigation === "ranking"
-            ) {
+            if (n === "ranking") {
               loadRanking();
             }
 
-            if (
-              navigation === "certificate"
-            ) {
+            if (n === "certificate") {
               loadCertificate();
             }
 
-            if (
-              navigation === "profile"
-            ) {
+            if (n === "profile") {
               renderPersonalProfile();
               show("profileScreen");
             }
-
-            $$(".bottom-nav button")
-              .forEach(
-                (item) => {
-                  item.classList.toggle(
-                    "active",
-                    item === button
-                  );
-                }
-              );
           }
-        );
-      }
+        )
     );
 
-  if ($("#battleCode")) {
-    $("#battleCode")
-      .addEventListener(
-        "input",
-        (event) => {
-          event.target.value =
-            event.target.value
-              .replace(
-                /[^A-Z0-9]/gi,
-                ""
-              )
-              .toUpperCase()
-              .slice(0, 4);
-        }
-      );
-  }
-
-  const paymentRefreshTimer =
-    setInterval(
-      () => {
-        if (
-          state.paymentId &&
-          !$("#paymentScreen")
-            ?.classList.contains(
-              "hidden"
-            )
-        ) {
-          refreshPayment();
-        }
-      },
-      5000
-    );
-
-  window.addEventListener(
-    "beforeunload",
+  setInterval(
     () => {
-      clearInterval(
-        paymentRefreshTimer
-      );
-
-      clearInterval(
-        window.__liveTimer
-      );
-
-      clearInterval(
-        window.__testTimer
-      );
-
-      clearInterval(
-        state.battlePolling
-      );
-
       if (
-        state.mode === "NORMAL" &&
-        state.sessionId
+        state.paymentId &&
+        !$("#paymentScreen")
+          ?.classList.contains("hidden")
       ) {
-        saveProgress();
+        refreshPayment();
       }
-    }
+    },
+    5000
   );
 
   (async () => {
-    show("loadingScreen");
-
     try {
       await loadHome();
-    } catch (error) {
+    } catch (e) {
       show("homeScreen");
 
       toast(
-        error.message ||
-        "Mini App yuklanmadi."
+        e.message ||
+        "Mini App yuklanmadi"
       );
     }
   })();
+
 })();
