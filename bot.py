@@ -416,17 +416,59 @@ async def migrate():
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'",
         "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS is_retry BOOLEAN NOT NULL DEFAULT FALSE",
+        # Battle columns are explicitly migrated because CREATE TABLE IF NOT EXISTS
+        # does not alter an already-existing table.
+        "ALTER TABLE battles ADD COLUMN IF NOT EXISTS code TEXT",
+        "ALTER TABLE battles ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'waiting'",
+        "ALTER TABLE battles ADD COLUMN IF NOT EXISTS created_by BIGINT",
+        "ALTER TABLE battles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        "ALTER TABLE battles ADD COLUMN IF NOT EXISTS ready_at TIMESTAMPTZ",
+        "ALTER TABLE battles ADD COLUMN IF NOT EXISTS finalized_at TIMESTAMPTZ",
+        "ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS role TEXT",
+        "ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS payment_id BIGINT",
+        "ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS session_id UUID",
+        "ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS score INTEGER",
+        "ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS correct_count INTEGER",
+        "ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ",
+        "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ]
     for q in migrations:
         try:
             await db_execute(q)
         except Exception:
-            logger.exception("Migration failed")
+            logger.exception("Migration failed: %s", q)
             raise
 
+    # Existing databases may have battle_players rows created by an older
+    # version without the role column. Backfill those rows before enforcing
+    # NOT NULL, using battles.created_by to identify the creator.
     await db_execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_battle_one_opponent
-        ON battle_players(battle_id) WHERE role='opponent'
+        UPDATE battle_players bp
+        SET role = CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM battles b
+                WHERE b.id = bp.battle_id
+                  AND b.created_by = bp.user_id
+            ) THEN 'creator'
+            ELSE 'opponent'
+        END
+        WHERE bp.role IS NULL OR bp.role=''
+    """)
+    await db_execute("""
+        ALTER TABLE battle_players
+        ALTER COLUMN role SET DEFAULT 'opponent'
+    """)
+    await db_execute("""
+        ALTER TABLE battle_players
+        ALTER COLUMN role SET NOT NULL
+    """)
+
+    # Battle row locking in join/start flows is the concurrency guard. A normal
+    # index keeps legacy databases with duplicate historical rows migratable.
+    await db_execute("""
+        CREATE INDEX IF NOT EXISTS ix_battle_players_battle_role
+        ON battle_players(battle_id, role)
     """)
     await db_execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_test_attempt_session ON test_attempts(session_id) WHERE session_id IS NOT NULL")
     await db_execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_certificate_result ON certificates(result_id) WHERE result_id IS NOT NULL")
