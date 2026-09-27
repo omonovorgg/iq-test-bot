@@ -200,198 +200,6 @@ TRANSLATIONS = {
         "menu_earn":"💰 Заработать",
         "menu_help":"ℹ️ Цена и помощь",
         "menu_lang":"🌐 Язык",
-        "lang_changed":"Язык изменён.",
-    },
-    "en": {
-        "choose_lang":"Choose language:",
-        "welcome":"Hello, {name}! 👋\n\n<b>IQ TEST BOT</b>\n\nOpen the Mini App to take the test.",
-        "menu_test":"🧠 Take IQ · EQ · PQ",
-        "menu_cert":"📜 My certificate",
-        "menu_rank":"🏆 Ranking",
-        "menu_earn":"💰 Earn",
-        "menu_help":"ℹ️ Prices & help",
-        "menu_lang":"🌐 Language",
-        "no_cert":"You do not have a certificate yet.",
-        "cert_not_found":"Certificate not found.",
-        "lang_changed":"Language changed.",
-    }
-}
-
-def t(lang: str, key: str, **kwargs):
-    lang = lang if lang in TRANSLATIONS else "uz"
-    return TRANSLATIONS[lang].get(key, TRANSLATIONS["uz"].get(key, key)).format(**kwargs)
-
-async def db_execute(query, *args):
-    async with db_pool.acquire() as conn:
-        return await conn.execute(query, *args)
-
-async def db_fetchrow(query, *args):
-    async with db_pool.acquire() as conn:
-        return await conn.fetchrow(query, *args)
-
-async def db_fetch(query, *args):
-    async with db_pool.acquire() as conn:
-        return await conn.fetch(query, *args)
-
-async def migrate():
-    global db_pool
-    await db_execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        user_id BIGINT PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        last_name TEXT,
-        language TEXT NOT NULL DEFAULT 'uz',
-        full_name TEXT,
-        gender TEXT,
-        age INTEGER,
-        country TEXT,
-        last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )""")
-    await db_execute("""
-    CREATE TABLE IF NOT EXISTS admins (
-        user_id BIGINT PRIMARY KEY,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )""")
-    await db_execute("""
-    CREATE TABLE IF NOT EXISTS app_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-    )""")
-    await db_execute("""
-    CREATE TABLE IF NOT EXISTS test_sessions (
-        session_id UUID PRIMARY KEY,
-        user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        test_type TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        answers JSONB NOT NULL DEFAULT '{}'::jsonb,
-        questions JSONB,
-        score INTEGER,
-        correct_count INTEGER,
-        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        completed_at TIMESTAMPTZ,
-        expires_at TIMESTAMPTZ NOT NULL,
-        price INTEGER NOT NULL DEFAULT 0,
-        is_retry BOOLEAN NOT NULL DEFAULT FALSE
-    )""")
-    await db_execute("""
-    CREATE TABLE IF NOT EXISTS test_attempts (
-        id BIGSERIAL PRIMARY KEY,
-        user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        test_type TEXT NOT NULL,
-        session_id UUID UNIQUE REFERENCES test_sessions(session_id) ON DELETE SET NULL,
-        score INTEGER,
-        correct_count INTEGER,
-        duration INTEGER,
-        payment_status TEXT NOT NULL DEFAULT 'not_required',
-        result_visible BOOLEAN NOT NULL DEFAULT FALSE,
-        level TEXT,
-        answers JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    )""")
-            {"type":"shape","shape":"circle","fill":"full"},{"type":"shape","shape":"square","fill":"half"},{"type":"shape","shape":"triangle","fill":"empty"},
-        {"type":"shape","shape":"square","fill":"empty"},{"type":"shape","shape":"triangle","fill":"full"},{"type":"shape","shape":"diamond","fill":"half"},
-        {"type":"shape","shape":"triangle","fill":"half"},{"type":"shape","shape":"diamond","fill":"empty"},{"type":"question"}],
-        "options":[{"type":"shape","shape":"circle","fill":"full"},{"type":"shape","shape":"circle","fill":"half"},{"type":"shape","shape":"circle","fill":"empty"},{"type":"shape","shape":"diamond","fill":"full"}],"correct":0},
-    {"id":8,"weight":2,"matrix":[
-        {"type":"combo","shapes":["circle"],"fill":"full"},{"type":"combo","shapes":["square"],"fill":"half"},{"type":"combo","shapes":["triangle"],"fill":"empty"},
-        {"type":"combo","shapes":["square"],"fill":"half"},{"type":"combo","shapes":["triangle"],"fill":"empty"},{"type":"combo","shapes":["diamond"],"fill":"full"},
-        {"type":"combo","shapes":["triangle"],"fill":"empty"},{"type":"combo","shapes":["diamond"],"fill":"full"},{"type":"question"}],
-        "options":[{"type":"combo","shapes":["circle"],"fill":"half"},{"type":"combo","shapes":["circle"],"fill":"full"},{"type":"combo","shapes":["square"],"fill":"empty"},{"type":"combo","shapes":["diamond"],"fill":"half"}],"correct":1},
-    {"id":9,"weight":2,"matrix":[
-        {"type":"dot","count":1},{"type":"dot","count":3},{"type":"dot","count":6},
-        {"type":"dot","count":2},{"type":"dot","count":5},{"type":"dot","count":9},
-        {"type":"dot","count":3},{"type":"dot","count":7},{"type":"question"}],
-        "options":[{"type":"dot","count":10},{"type":"dot","count":11},{"type":"dot","count":12},{"type":"dot","count":13}],"correct":2},
-    {"id":10,"weight":2,"matrix":[
-        {"type":"grid","pos":0},{"type":"grid","pos":4},{"type":"grid","pos":8},
-        {"type":"grid","pos":1},{"type":"grid","pos":4},{"type":"grid","pos":7},
-        {"type":"grid","pos":2},{"type":"grid","pos":4},{"type":"question"}],
-        "options":[{"type":"grid","pos":6},{"type":"grid","pos":5},{"type":"grid","pos":3},{"type":"grid","pos":0}],"correct":0},
-    {"id":11,"weight":2,"matrix":[
-        {"type":"num","val":3},{"type":"num","val":5},{"type":"num","val":8},
-        {"type":"num","val":5},{"type":"num","val":8},{"type":"num","val":13},
-        {"type":"num","val":8},{"type":"num","val":13},{"type":"question"}],
-        "options":[{"type":"num","val":18},{"type":"num","val":21},{"type":"num","val":20},{"type":"num","val":22}],"correct":1},
-    {"id":12,"weight":2,"matrix":[
-        {"type":"combo","shapes":["circle","square"],"fill":"empty"},{"type":"combo","shapes":["circle","triangle"],"fill":"half"},{"type":"combo","shapes":["circle","diamond"],"fill":"full"},
-        {"type":"combo","shapes":["square","triangle"],"fill":"half"},{"type":"combo","shapes":["square","diamond"],"fill":"full"},{"type":"combo","shapes":["square","circle"],"fill":"empty"},
-        {"type":"combo","shapes":["triangle","diamond"],"fill":"full"},{"type":"combo","shapes":["triangle","circle"],"fill":"empty"},{"type":"question"}],
-        "options":[{"type":"combo","shapes":["triangle","square"],"fill":"half"},{"type":"combo","shapes":["triangle","square"],"fill":"full"},{"type":"combo","shapes":["diamond","square"],"fill":"empty"},{"type":"combo","shapes":["circle","diamond"],"fill":"half"}],"correct":0},
-    {"id":13,"weight":3,"matrix":[
-        {"type":"num","val":2},{"type":"num","val":3},{"type":"num","val":5},
-        {"type":"num","val":3},{"type":"num","val":5},{"type":"num","val":8},
-        {"type":"num","val":5},{"type":"num","val":8},{"type":"question"}],
-        "options":[{"type":"num","val":12},{"type":"num","val":13},{"type":"num","val":14},{"type":"num","val":15}],"correct":1},
-    {"id":14,"weight":3,"matrix":[
-        {"type":"grid","pos":0},{"type":"grid","pos":2},{"type":"grid","pos":4},
-        {"type":"grid","pos":3},{"type":"grid","pos":5},{"type":"grid","pos":7},
-        {"type":"grid","pos":6},{"type":"grid","pos":8},{"type":"question"}],
-        "options":[{"type":"grid","pos":1},{"type":"grid","pos":0},{"type":"grid","pos":2},{"type":"grid","pos":7}],"correct":0},
-    {"id":15,"weight":3,"matrix":[
-        {"type":"combo","shapes":["circle"],"fill":"empty"},{"type":"combo","shapes":["circle","square"],"fill":"half"},{"type":"combo","shapes":["circle","square","triangle"],"fill":"full"},
-        {"type":"combo","shapes":["square"],"fill":"half"},{"type":"combo","shapes":["square","triangle"],"fill":"full"},{"type":"combo","shapes":["square","triangle","diamond"],"fill":"empty"},
-        {"type":"combo","shapes":["triangle"],"fill":"full"},{"type":"combo","shapes":["triangle","diamond"],"fill":"empty"},{"type":"question"}],
-        "options":[{"type":"combo","shapes":["triangle","diamond","circle"],"fill":"half"},{"type":"combo","shapes":["triangle","diamond","circle"],"fill":"full"},{"type":"combo","shapes":["diamond","circle"],"fill":"half"},{"type":"combo","shapes":["triangle","circle"],"fill":"empty"}],"correct":0},
-    {"id":16,"weight":3,"matrix":[
-        {"type":"num","val":4},{"type":"num","val":7},{"type":"num","val":13},
-        {"type":"num","val":5},{"type":"num","val":9},{"type":"num","val":17},
-        {"type":"num","val":6},{"type":"num","val":11},{"type":"question"}],
-        "options":[{"type":"num","val":21},{"type":"num","val":22},{"type":"num","val":23},{"type":"num","val":24}],"correct":0},
-    {"id":17,"weight":3,"matrix":[
-        {"type":"combo","shapes":["circle"],"fill":"full"},{"type":"combo","shapes":["square"],"fill":"full"},{"type":"combo","shapes":["triangle"],"fill":"full"},
-        {"type":"combo","shapes":["square"],"fill":"half"},{"type":"combo","shapes":["triangle"],"fill":"half"},{"type":"combo","shapes":["diamond"],"fill":"half"},
-        {"type":"combo","shapes":["triangle"],"fill":"empty"},{"type":"combo","shapes":["diamond"],"fill":"empty"},{"type":"question"}],
-        "options":[{"type":"combo","shapes":["circle"],"fill":"empty"},{"type":"combo","shapes":["circle"],"fill":"half"},{"type":"combo","shapes":["diamond"],"fill":"empty"},{"type":"combo","shapes":["square"],"fill":"empty"}],"correct":0},
-    {"id":18,"weight":3,"matrix":[
-        {"type":"num","val":1},{"type":"num","val":4},{"type":"num","val":9},
-        {"type":"num","val":8},{"type":"num","val":27},{"type":"num","val":64},
-        {"type":"num","val":125},{"type":"num","val":216},{"type":"question"}],
-        "options":[{"type":"num","val":343},{"type":"num","val":512},{"type":"num","val":729},{"type":"num","val":256}],"correct":0},
-]
-
-EQ_QUESTIONS = [
-    ("You are interrupted during an important task. What is the most constructive first step?", ["React angrily", "Pause, clarify the interruption, and choose a response", "Ignore everyone", "Quit the task"], 1),
-    ("A friend criticizes your work in public. What is the most constructive response?", ["Attack back", "Change the subject", "Listen, ask what could be improved, and discuss it calmly", "Pretend nothing happened"], 2),
-    ("You notice a teammate is unusually quiet. What is the most useful response?", ["Pressure them to talk", "Check in privately and give them space to respond", "Gossip about it", "Exclude them"], 1),
-    ("You make a mistake that affects other people. What should you do next?", ["Acknowledge it, explain briefly, and help repair the impact", "Hide it until someone notices", "Blame someone else", "Wait silently"], 0),
-    ("Two people strongly disagree in a discussion. What is most likely to improve the conversation?", ["Choose a side immediately", "Raise your voice so your point wins", "Clarify each person's viewpoint and the point of disagreement", "End the discussion without hearing either side"], 2),
-    ("You receive a stressful message late at night. What is usually the most constructive approach?", ["Reply immediately while angry", "Forward it to several people", "Delete the sender", "Pause, regulate your reaction, and respond when you can think clearly"], 3),
-]
-PQ_QUESTIONS = [
-    ("You have three tasks due today. What is the most practical first step?", ["Do random tasks", "Prioritize them by urgency and impact", "Avoid all tasks", "Start with whichever looks easiest"], 1),
-    ("A long project feels overwhelming. What is most useful?", ["Never plan", "Wait until motivation appears", "Do everything at once", "Break the project into concrete milestones and next actions"], 3),
-    ("Your current plan stops producing the expected result. What should you do?", ["Repeat it blindly", "Abandon the goal immediately", "Review the evidence, identify what changed, and adjust the plan", "Blame the tool"], 2),
-    ("You keep delaying a difficult task. Which approach is most actionable?", ["Make the task larger", "Define a small concrete first action and start it", "Ignore the deadline", "Add unrelated tasks"], 1),
-    ("A goal conflicts with a new opportunity. What helps you decide?", ["Compare the trade-offs against your priorities", "Choose randomly", "Ask everyone else to decide for you", "Do both without limits"], 0),
-    ("You finish an important milestone. What improves the next phase?", ["Never review it", "Reset everything", "Record what worked, what failed, and what to change next", "Avoid feedback"], 2),
-]
-
-TRANSLATIONS = {
-    "uz": {
-        "choose_lang":"Tilni tanlang:",
-        "welcome":"Salom, {name}! 👋\n\n<b>IQ TEST BOT</b>\n\nAqlingizni sinash uchun Mini App'ni oching.",
-        "menu_test":"🧠 IQ · EQ · PQ testini ishlash",
-        "menu_cert":"📜 Sertifikatim",
-        "menu_rank":"🏆 Reyting",
-        "menu_earn":"💰 Pul ishlash",
-        "menu_help":"ℹ️ Narx va yordam",
-        "menu_lang":"🌐 Til",
-        "no_cert":"Hali sertifikatingiz yo‘q.",
-        "cert_not_found":"Sertifikat topilmadi.",
-        "lang_changed":"Til o‘zgartirildi.",
-    },
-    "ru": {
-        "choose_lang":"Выберите язык:",
-        "welcome":"Привет, {name}! 👋\n\n<b>IQ TEST BOT</b>\n\nОткройте Mini App, чтобы пройти тест.",
-        "menu_test":"🧠 Пройти IQ · EQ · PQ",
-        "menu_cert":"📜 Мой сертификат",
-        "menu_rank":"🏆 Рейтинг",
-        "menu_earn":"💰 Заработать",
-        "menu_help":"ℹ️ Цена и помощь",
-        "menu_lang":"🌐 Язык",
         "no_cert":"У вас пока нет сертификата.",
         "cert_not_found":"Сертификат не найден.",
         "lang_changed":"Язык изменён.",
@@ -693,4226 +501,1037 @@ def app_inline_keyboard(lang="uz"):
             web_app=WebAppInfo(url=WEBAPP_URL + "/app")
         )]
     ])
-        if not await is_admin(message.from_user.id):
+
+@dp.message(CommandStart())
+async def cmd_start(message: types.Message):
+    try:
+        await upsert_user(message.from_user)
+        start_arg = (message.text or "").split(maxsplit=1)[1].strip() if len((message.text or "").split(maxsplit=1)) > 1 else ""
+        if start_arg.startswith("ref_"):
+            try:
+                referrer_id = int(start_arg[4:])
+                if referrer_id != message.from_user.id:
+                    await db_execute(
+                        "INSERT INTO referrals(referrer_id,referred_id) VALUES($1,$2) ON CONFLICT(referred_id) DO NOTHING",
+                        referrer_id, message.from_user.id
+                    )
+            except (ValueError, asyncpg.PostgresError):
+                logger.info("Invalid referral start parameter")
+        row = await db_fetchrow("SELECT language FROM users WHERE user_id=$1", message.from_user.id)
+        lang = row["language"] if row else "uz"
+        if not row or row["language"] not in TRANSLATIONS:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🇺🇿 O‘zbekcha", callback_data="lang:uz"),
+                 InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru"),
+                 InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")]
+            ])
+            await message.answer(t("uz","choose_lang"), reply_markup=kb)
+            return
+        await message.answer(
+            t(lang,"welcome",name=message.from_user.first_name or "do‘st"),
+            reply_markup=app_inline_keyboard(lang)
+        )
+        await message.answer(
+            "⬇️ Quyidagi tugma orqali Mini App'ni oching.",
+            reply_markup=main_keyboard(lang)
+        )
+    except Exception:
+        logger.exception("/start failed")
+        await message.answer("Xatolik yuz berdi. Iltimos, qayta /start yuboring.")
+
+@dp.callback_query(F.data.startswith("lang:"))
+async def lang_callback(callback: CallbackQuery):
+    lang = callback.data.split(":",1)[1]
+    if lang not in TRANSLATIONS:
+        await callback.answer("Invalid language", show_alert=True)
+        return
+    await db_execute("UPDATE users SET language=$1,updated_at=NOW() WHERE user_id=$2", lang, callback.from_user.id)
+    await callback.answer(t(lang,"lang_changed"))
+    try:
+        await callback.message.edit_text(t(lang,"lang_changed"))
+    except Exception:
+        pass
+    await callback.message.answer(
+        t(lang,"welcome",name=callback.from_user.first_name or "friend"),
+        reply_markup=app_inline_keyboard(lang)
+    )
+    await callback.message.answer(
+        "⬇️ Quyidagi tugma orqali Mini App'ni oching.",
+        reply_markup=main_keyboard(lang)
+    )
+
+@dp.message(F.text.regexp(r"^IQ-[A-Za-z0-9]{6}$"))
+async def verify_certificate_message(message: types.Message):
+    code = message.text.strip().upper()
+    row = await db_fetchrow("SELECT full_name,score,level,verification_code,created_at FROM certificates WHERE verification_code=$1", code)
+    if not row:
+        await message.answer("❌ Sertifikat topilmadi.")
+        return
+    await message.answer(
+        f"📜 <b>IQ TEST BOT</b>\n\n👤 {row['full_name']}\n🧠 IQ: <b>{row['score']}</b>\n🏷 {row['level'] or '—'}\n🔐 <code>{row['verification_code']}</code>"
+    )
+
+@dp.message(F.text.in_({"🧠 IQ · EQ · PQ testini ishlash","🧠 Пройти IQ · EQ · PQ","🧠 Take IQ · EQ · PQ"}))
+async def open_app_from_old_keyboard(message: types.Message):
+    # Handles old persistent keyboards that may still contain the previous
+    # ReplyKeyboard web_app button. The Mini App itself must be launched
+    # from an inline web_app button so Telegram supplies initData.
+    row = await db_fetchrow(
+        "SELECT language FROM users WHERE user_id=$1",
+        message.from_user.id
+    )
+    lang = row["language"] if row and row["language"] in TRANSLATIONS else "uz"
+    await message.answer(
+        "🧠 Mini App'ni ochish uchun quyidagi tugmani bosing:",
+        reply_markup=app_inline_keyboard(lang)
+    )
+
+@dp.message(F.text.in_({"📜 Sertifikatim","📜 Мой сертификат","📜 My certificate"}))
+async def my_certificate(message: types.Message):
+    row = await db_fetchrow("""
+        SELECT certificate_id,verification_code,full_name,score,level,created_at
+        FROM certificates WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1
+    """, message.from_user.id)
+    lang_row = await db_fetchrow("SELECT language FROM users WHERE user_id=$1", message.from_user.id)
+    lang = lang_row["language"] if lang_row else "uz"
+    if not row:
+        await message.answer(t(lang,"no_cert"))
+        return
+    await message.answer(
+        f"📜 <b>IQ TEST BOT</b>\n\n"
+        f"👤 {row['full_name']}\n"
+        f"🧠 IQ: <b>{row['score']}</b>\n"
+        f"🏷 {row['level'] or '—'}\n"
+        f"🔐 <code>{row['verification_code']}</code>"
+    )
+
+@dp.message(F.text.in_({"🏆 Reyting","🏆 Рейтинг","🏆 Ranking"}))
+async def ranking_message(message: types.Message):
+    rows = await db_fetch("""
+        SELECT u.full_name, r.score, r.level
+        FROM results r JOIN users u ON u.user_id=r.user_id
+        WHERE r.test_type='IQ'
+        ORDER BY r.score DESC, r.created_at ASC LIMIT 10
+    """)
+    if not rows:
+        await message.answer("🏆 Reyting\n\nHali natijalar yo‘q.")
+        return
+    lines = ["🏆 <b>REYTING</b>",""]
+    for i, r in enumerate(rows,1):
+        lines.append(f"{i}. {r['full_name'] or 'Foydalanuvchi'} — <b>{r['score']}</b> · {r['level'] or '—'}")
+    await message.answer("\n".join(lines))
+
+@dp.message(F.text.in_({"ℹ️ Narx va yordam","ℹ️ Цена и помощь","ℹ️ Prices & help"}))
+async def help_message(message: types.Message):
+    vals = await asyncio.gather(
+        setting_int("iq_price"), setting_int("eq_price"), setting_int("pq_price"), setting_int("battle_price")
+    )
+    await message.answer(
+        f"<b>IQ TEST BOT</b>\n\n"
+        f"🧠 IQ — {vals[0]:,} so‘m\n🎭 EQ — {vals[1]:,} so‘m\n⏳ PQ — {vals[2]:,} so‘m\n⚔️ Battle — {vals[3]:,} so‘m"
+        .replace(",", " ")
+    )
+
+@dp.message(F.text.in_({"🌐 Til","🌐 Язык","🌐 Language"}))
+async def language_message(message: types.Message):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🇺🇿 O‘zbekcha", callback_data="lang:uz"),
+         InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru"),
+         InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")]
+    ])
+    await message.answer("Til / Язык / Language", reply_markup=kb)
+
+@dp.message(F.text.in_({"💰 Pul ishlash","💰 Заработать","💰 Earn"}))
+async def referral_message(message: types.Message):
+    count = await db_fetchrow("SELECT COUNT(*) AS c FROM referrals WHERE referrer_id=$1", message.from_user.id)
+    link = f"https://t.me/{BOT_USERNAME}?start=ref_{message.from_user.id}"
+    await message.answer(f"💰 <b>Pul ishlash</b>\n\nTaklif havolangiz:\n<code>{link}</code>\n\nTakliflar: <b>{count['c']}</b>")
+
+@dp.message(Command("addcard"))
+async def admin_add_card(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q."); return
+    payload=message.text.partition(" ")[2].strip()
+    parts=[x.strip() for x in payload.split("|",2)]
+    if len(parts)!=3 or not parts[0]:
+        await message.answer("Format: /addcard 8600...|HOLDER|BANK"); return
+    await db_execute("INSERT INTO payment_cards(card_number,holder,bank,active) VALUES($1,$2,$3,TRUE)",*parts)
+    await message.answer("✅ Karta qo‘shildi.")
+
+@dp.message(Command("delcard"))
+async def admin_delete_card(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q."); return
+    try: cid=int(message.text.partition(" ")[2].strip())
+    except: await message.answer("Format: /delcard ID"); return
+    await db_execute("DELETE FROM payment_cards WHERE id=$1",cid)
+    await message.answer("✅ Karta o‘chirildi.")
+
+@dp.message(Command("cardon"))
+async def admin_card_on(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q."); return
+    try: cid=int(message.text.partition(" ")[2].strip())
+    except: await message.answer("Format: /cardon ID"); return
+    await db_execute("UPDATE payment_cards SET active=TRUE WHERE id=$1",cid); await message.answer("✅ Karta faollashtirildi.")
+
+@dp.message(Command("cardoff"))
+async def admin_card_off(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q."); return
+    try: cid=int(message.text.partition(" ")[2].strip())
+    except: await message.answer("Format: /cardoff ID"); return
+    await db_execute("UPDATE payment_cards SET active=FALSE WHERE id=$1",cid); await message.answer("✅ Karta o‘chirildi.")
+
+@dp.message(Command("setprice"))
+async def admin_set_price(message: types.Message):
+    if not await is_admin(message.from_user.id):
         await message.answer("Ruxsat yo‘q."); return
     parts=message.text.split()
-    if len(parts)!=4:
-        await message.answer("Format: /setlive fake 95114 342"); return
-    mode=parts[1]
-    try: base=int(parts[2]); online=int(parts[3])
-    except: await message.answer("Sonlar noto‘g‘ri."); return
-    await db_execute("INSERT INTO app_settings(key,value) VALUES('live_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",mode)
-    await db_execute("INSERT INTO app_settings(key,value) VALUES('live_fake_base',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",str(base))
-    await db_execute("INSERT INTO app_settings(key,value) VALUES('live_fake_online',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",str(online))
-    await message.answer("✅ Live sozlamalari saqlandi.")
+    if len(parts)!=3 or parts[1] not in {"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}:
+        await message.answer("Format: /setprice iq_price 5000"); return
+    try: val=int(parts[2]); assert val>=0
+    except: await message.answer("Narx 0 yoki musbat son bo‘lsin."); return
+    await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",parts[1],str(val))
+    await message.answer(f"✅ {parts[1]} = {val}")
 
-def parse_init_data(init_data: str):
+@dp.message(Command("setlive"))
+async def admin_set_live(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q."); return
+    parts=message.text.split()
+    if len(parts) not in (3,5) or parts[1] not in ("fake","real"):
+        await message.answer("Format: /setlive fake 95114 342 8 yoki /setlive real"); return
+    await db_execute("INSERT INTO app_settings(key,value) VALUES('live_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",parts[1])
+    if parts[1]=="fake" and len(parts)==5:
+        for k,v in zip(("live_fake_base","live_fake_online","live_fake_delta"),parts[2:]):
+            try:int(v)
+            except: await message.answer("Fake qiymatlar son bo‘lsin."); return
+            await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",k,v)
+    await message.answer("✅ Live counter yangilandi.")
+
+@dp.message(Command("broadcast"))
+async def admin_broadcast(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q."); return
+    text=message.text.partition(" ")[2].strip()
+    if not text: await message.answer("Format: /broadcast Matn"); return
+    users=await db_fetch("SELECT user_id FROM users")
+    sent=0
+    for u in users:
+        try:
+            await bot.send_message(u["user_id"],text)
+            sent+=1
+            await asyncio.sleep(.05)
+        except Exception:
+            logger.exception("Broadcast delivery failed for user %s",u["user_id"])
+    await message.answer(f"✅ Yuborildi: {sent}/{len(users)}")
+
+@dp.message(Command("admin"))
+async def admin_command(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q.")
+        return
+    await send_admin_panel(message)
+
+async def send_admin_panel(target):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Users", callback_data="admin:users"),
+         InlineKeyboardButton(text="📊 Statistics", callback_data="admin:stats")],
+        [InlineKeyboardButton(text="💳 Payments", callback_data="admin:payments"),
+         InlineKeyboardButton(text="💰 Products", callback_data="admin:products")],
+        [InlineKeyboardButton(text="📜 Certificates", callback_data="admin:certs"),
+         InlineKeyboardButton(text="⚔️ Battles", callback_data="admin:battles")],
+        [InlineKeyboardButton(text="💳 Cards", callback_data="admin:cards"),
+         InlineKeyboardButton(text="🎯 Live Counter", callback_data="admin:live")],
+    ])
+    await target.answer("⚙️ <b>ADMIN PANEL</b>", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("admin:"))
+async def admin_callback(callback: CallbackQuery):
+    try:
+        if not await is_admin(callback.from_user.id):
+            await callback.answer("Ruxsat yo‘q", show_alert=True)
+            return
+        action = callback.data.split(":",1)[1]
+        payment_buttons = []
+        if action == "home":
+            try: await callback.message.delete()
+            except Exception: pass
+            await send_admin_panel(callback.message)
+            await callback.answer()
+            return
+        if action.startswith("approve:"):
+            try: pid=int(action.split(":",1)[1])
+            except ValueError: await callback.answer("Payment ID noto‘g‘ri",show_alert=True); return
+            p,status=await approve_payment_record(pid)
+            if not p: await callback.answer("Payment topilmadi",show_alert=True); return
+            try: await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi.")
+            except Exception: logger.exception("Admin approval notification failed")
+            text=f"✅ Payment #{pid} tasdiqlandi."
+        elif action.startswith("reject:"):
+            try: pid=int(action.split(":",1)[1])
+            except ValueError: await callback.answer("Payment ID noto‘g‘ri",show_alert=True); return
+            p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",pid)
+            if not p: await callback.answer("Payment topilmadi",show_alert=True); return
+            await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",pid)
+            try: await bot.send_message(p["user_id"],"❌ To‘lov rad etildi. Receiptni tekshirib qayta yuboring.")
+            except Exception: logger.exception("Admin rejection notification failed")
+            text=f"❌ Payment #{pid} rad etildi."
+        elif action == "users":
+            row = await db_fetchrow("SELECT COUNT(*) c FROM users")
+            text = f"👥 Users: <b>{row['c']}</b>"
+        elif action == "stats":
+            row = await db_fetchrow("SELECT COUNT(*) c FROM results")
+            text = f"📊 Results: <b>{row['c']}</b>"
+        elif action == "payments":
+            rows = await db_fetch("SELECT id,user_id,amount,status,payment_type FROM payments ORDER BY id DESC LIMIT 10")
+            text = "💳 <b>Payments</b>\n\n" + "\n".join(
+                f"#{r['id']} · {r['user_id']} · {r['amount']} · {r['status']} · {r['payment_type']}" for r in rows
+            ) if rows else "Payment yo‘q."
+            payment_buttons = [[InlineKeyboardButton(text=f"#{r['id']} ✅", callback_data=f"admin:approve:{r['id']}"), InlineKeyboardButton(text=f"#{r['id']} ❌", callback_data=f"admin:reject:{r['id']}")] for r in rows if r['status']=='pending']
+        elif action == "products":
+            keys=["iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"]
+            vals=await asyncio.gather(*(setting(k,"0") for k in keys))
+            text="💰 <b>Products</b>\n\n"+"\n".join(f"{k}: {v}" for k,v in zip(keys,vals))
+        elif action == "certs":
+            row=await db_fetchrow("SELECT COUNT(*) c FROM certificates")
+            text=f"📜 Certificates: <b>{row['c']}</b>"
+        elif action == "battles":
+            row=await db_fetchrow("SELECT COUNT(*) c FROM battles")
+            text=f"⚔️ Battles: <b>{row['c']}</b>"
+        elif action == "cards":
+            rows=await db_fetch("SELECT id,card_number,holder,bank,active FROM payment_cards ORDER BY id DESC")
+            text="💳 <b>Cards</b>\n\n" + "\n".join(
+                f"#{r['id']} · {r['card_number']} · {r['holder'] or ''} · {r['bank'] or ''} · {'ON' if r['active'] else 'OFF'}" for r in rows
+            ) if rows else "Kartalar yo‘q."
+        elif action == "live":
+            vals=await asyncio.gather(setting("live_mode","fake"),setting("live_fake_base","95114"),setting("live_fake_online","342"),setting("live_fake_delta","8"))
+            text=f"🎯 Live\nmode={vals[0]}\nbase={vals[1]}\nonline={vals[2]}\ndelta={vals[3]}"
+        else:
+            text="Noma’lum bo‘lim."
+        keyboard = payment_buttons + [[InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]
+        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+        await callback.answer()
+    except Exception:
+        logger.exception("Admin callback failed")
+        await callback.answer("Xatolik", show_alert=True)
+
+@dp.callback_query(F.data=="admin:home")
+async def admin_home(callback: CallbackQuery):
+    if await is_admin(callback.from_user.id):
+        await callback.message.delete()
+        await send_admin_panel(callback.message)
+
+def validate_init_data(init_data: str, bot_token: str):
     if not init_data:
-        raise HTTPException(status_code=401, detail="Missing Telegram initData")
-
-    pairs={}
-    hash_value=None
+        raise ValueError("initData is empty")
+    pairs = {}
+    hash_value = None
     for part in init_data.split("&"):
         if "=" not in part:
             continue
-        key,value=part.split("=",1)
-        if key=="hash":
-            hash_value=value
+        key, value = part.split("=", 1)
+        if key == "hash":
+            hash_value = value
         else:
-            pairs.setdefault(key,value)
-
+            pairs.setdefault(key, value)
     if not hash_value:
-        raise HTTPException(status_code=401, detail="Missing Telegram hash")
-
-    data_check="\n".join(
-        f"{k}={pairs[k]}" for k in sorted(pairs)
-    )
-
-    secret_key=hmac.new(
-        b"WebAppData",
-        BOT_TOKEN.encode("utf-8"),
-        hashlib.sha256
-    ).digest()
-
-    calculated=hmac.new(
-        secret_key,
-        data_check.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
-
-    if not hmac.compare_digest(calculated,hash_value):
-        raise HTTPException(status_code=401, detail="Invalid Telegram initData")
-
+        raise ValueError("hash missing")
+    # Telegram WebApp validation uses the raw percent-encoded values.
+    data_check = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
+    calculated = hmac.new(secret_key, data_check.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calculated, hash_value):
+        raise ValueError("invalid hash")
+    if "auth_date" not in pairs:
+        raise ValueError("auth_date missing")
     try:
-        auth_date=int(pairs.get("auth_date","0"))
+        auth_date = int(pairs["auth_date"])
     except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid auth_date")
-
-    if auth_date <= 0 or datetime.now(timezone.utc).timestamp()-auth_date > 86400:
-        raise HTTPException(status_code=401, detail="Expired Telegram initData")
-
-    user_raw=pairs.get("user")
+        raise ValueError("invalid auth_date")
+    if abs(int(datetime.now(timezone.utc).timestamp()) - auth_date) > 86400:
+        raise ValueError("initData expired")
+    user_raw = pairs.get("user")
     if not user_raw:
-        raise HTTPException(status_code=401, detail="Telegram user missing")
-
+        raise ValueError("user missing")
     try:
-        user=json.loads(unquote(user_raw))
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid Telegram user")
-
-    if not user.get("id"):
-        raise HTTPException(status_code=401, detail="Telegram user id missing")
-
+        user = json.loads(unquote(user_raw))
+    except Exception as exc:
+        raise ValueError("invalid user json") from exc
+    if not isinstance(user, dict) or not user.get("id"):
+        raise ValueError("invalid user")
     return user
 
-async def require_webapp_user(request: Request):
-    init_data=request.headers.get("X-Telegram-Init-Data","").strip()
+async def authenticated_user(request: Request):
+    init_data = request.headers.get("X-Telegram-Init-Data", "").strip()
     if not init_data:
-        init_data=request.headers.get("Telegram-WebApp-Init-Data","").strip()
-    user=parse_init_data(init_data)
-    await db_execute("""
-        INSERT INTO users(user_id,username,first_name,last_name,last_seen,updated_at)
-        VALUES($1,$2,$3,$4,NOW(),NOW())
-        ON CONFLICT(user_id) DO UPDATE SET
-          username=EXCLUDED.username,
-          first_name=EXCLUDED.first_name,
-          last_name=EXCLUDED.last_name,
-          last_seen=NOW(),
-          updated_at=NOW()
-    """,
-        int(user["id"]),
-        user.get("username"),
-        user.get("first_name"),
-        user.get("last_name")
-    )
-    return user
+        init_data = request.headers.get("X-Telegram-WebApp-Init-Data", "").strip()
+    try:
+        return validate_init_data(init_data, BOT_TOKEN)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
 
-def level_for_iq(score:int):
-    if score < 85:
-        return "Quyi"
-    if score < 100:
-        return "O‘rtacha"
-    if score < 115:
-        return "Yaxshi"
-    if score < 130:
-        return "Yuqori"
+def json_error(message, status=400):
+    return JSONResponse({"ok":False,"error":message}, status_code=status)
+
+def level_for_score(score):
+    if score < 85: return "Boshlang‘ich"
+    if score < 100: return "O‘rtacha"
+    if score < 115: return "Yaxshi"
+    if score < 125: return "Yuqori"
     return "Juda yuqori"
 
-def level_for_percent(score:int):
-    if score < 40:
-        return "Boshlang‘ich"
-    if score < 60:
-        return "O‘rtacha"
-    if score < 80:
-        return "Yaxshi"
-    return "Yuqori"
+def calculate_iq(answers):
+    total=0
+    max_total=sum(q["weight"] for q in IQ_QUESTIONS)
+    for q in IQ_QUESTIONS:
+        ans=answers.get(str(q["id"]))
+        if ans == q["correct"]:
+            total += q["weight"]
+    score = round(70 + 60 * total / max_total)
+    return max(70,min(130,score)), total, max_total
 
-def iq_score_from_weighted(correct_weight:int, max_weight:int):
-    if max_weight <= 0:
-        return 70
-    ratio=max(0,min(1,correct_weight/max_weight))
-    return int(round(70+ratio*60))
+def public_iq_questions():
+    return [{k:v for k,v in q.items() if k != "correct"} for q in IQ_QUESTIONS]
 
-def normalize_answer_map(value):
-    if isinstance(value,dict):
-        return {str(k):int(v) for k,v in value.items() if str(v).isdigit()}
-    return {}
+def new_session():
+    return uuid4()
 
-def test_questions(test_type:str):
-    if test_type=="IQ":
-        return IQ_QUESTIONS
-    if test_type=="EQ":
-        return [
-            {"id":i+1,"question":q,"options":opts,"correct":correct}
-            for i,(q,opts,correct) in enumerate(EQ_QUESTIONS)
-        ]
-    if test_type=="PQ":
-        return [
-            {"id":i+1,"question":q,"options":opts,"correct":correct}
-            for i,(q,opts,correct) in enumerate(PQ_QUESTIONS)
-        ]
-    raise ValueError("Unknown test type")
+async def get_owned_attempt(user_id, attempt_id):
+    return await db_fetchrow("SELECT * FROM test_attempts WHERE id=$1 AND user_id=$2", attempt_id, user_id)
 
-def public_questions(test_type:str):
-    result=[]
-    for q in test_questions(test_type):
-        if test_type=="IQ":
-            result.append({
-                "id":q["id"],
-                "weight":q["weight"],
-                "matrix":q["matrix"],
-                "options":q["options"],
-            })
-        else:
-            result.append({
-                "id":q["id"],
-                "question":q["question"],
-                "options":q["options"],
-            })
-    return result
+async def active_card():
+    return await db_fetchrow("SELECT * FROM payment_cards WHERE active=TRUE ORDER BY created_at DESC LIMIT 1")
 
-def max_weight(test_type:str):
-    if test_type=="IQ":
-        return sum(q["weight"] for q in IQ_QUESTIONS)
-    return len(test_questions(test_type))
-
-def calculate_result(test_type:str,answers:dict):
-    questions=test_questions(test_type)
-    correct=0
-    weighted=0
-
-    for q in questions:
-        raw=answers.get(str(q["id"]))
-        try:
-            answer=int(raw)
-        except (TypeError,ValueError):
-            continue
-
-        if answer==q["correct"]:
-            correct += 1
-            weighted += q.get("weight",1)
-
-    if test_type=="IQ":
-        score=iq_score_from_weighted(weighted,max_weight("IQ"))
-        level=level_for_iq(score)
-    else:
-        score=int(round(correct/max(1,len(questions))*100))
-        level=level_for_percent(score)
-
-    return score,correct,level
-
-async def get_user_language(user_id:int):
-    row=await db_fetchrow("SELECT language FROM users WHERE user_id=$1",user_id)
-    return row["language"] if row and row["language"] in TRANSLATIONS else "uz"
-
-async def user_has_previous_result(user_id:int,test_type:str):
-    return bool(await db_fetchrow(
-        "SELECT 1 FROM results WHERE user_id=$1 AND test_type=$2 LIMIT 1",
-        user_id,test_type
-    ))
-
-async def start_test_for_user(user_id:int,test_type:str):
-    if test_type not in {"IQ","EQ","PQ"}:
-        raise HTTPException(status_code=400,detail="Invalid test type")
-
-    retry=await user_has_previous_result(user_id,test_type)
-
-    price_key=f"{test_type.lower()}_retry_price" if retry else f"{test_type.lower()}_price"
-    price=await setting_int(price_key,0)
-
-    session_id=uuid4()
-    expires=datetime.now(timezone.utc)+timedelta(minutes=30)
-
-    await db_execute("""
-        INSERT INTO test_sessions(
-            session_id,user_id,test_type,status,answers,questions,
-            started_at,expires_at,price,is_retry
-        )
-        VALUES($1,$2,$3,'active','{}'::jsonb,$4::jsonb,NOW(),$5,$6,$7)
-    """,
-        session_id,
-        user_id,
-        test_type,
-        json.dumps(public_questions(test_type),ensure_ascii=False),
-        expires,
-        price,
-        retry
-    )
-
-    return {
-        "session_id":str(session_id),
-        "test_type":test_type,
-        "price":price,
-        "is_retry":retry,
-        "expires_at":expires.isoformat(),
-        "questions":public_questions(test_type)
-    }
-
-async def create_payment_for_attempt(
-    user_id:int,
-    payment_type:str,
-    amount:int,
-    attempt_id=None,
-    battle_id=None
-):
-    card=await db_fetchrow("""
-        SELECT id,card_number,holder,bank
-        FROM payment_cards
-        WHERE active=TRUE
-        ORDER BY id ASC
-        LIMIT 1
-    """)
-
-    payment=await db_fetchrow("""
-        INSERT INTO payments(
-            user_id,attempt_id,battle_id,payment_type,amount,card_id,status
-        )
-        VALUES($1,$2,$3,$4,$5,$6,'pending')
-        RETURNING id,created_at,status
-    """,
-        user_id,
-        attempt_id,
-        battle_id,
-        payment_type,
-        amount,
-        card["id"] if card else None
-    )
-
-    return payment,card
-
-async def notify_admin_payment(payment_id:int):
-    if not ADMIN_USER_ID:
-        return
-
-    row=await db_fetchrow("""
-        SELECT
-            p.id,p.user_id,p.payment_type,p.amount,p.status,
-            p.receipt_file_id,p.created_at,
-            u.username,u.first_name,u.last_name
-        FROM payments p
-        JOIN users u ON u.user_id=p.user_id
-        WHERE p.id=$1
-    """,payment_id)
-
-    if not row:
-        return
-
-    text=(
-        f"💳 <b>Yangi to‘lov</b>\n\n"
-        f"ID: <code>{row['id']}</code>\n"
-        f"User: <code>{row['user_id']}</code>\n"
-        f"Username: @{row['username'] or '—'}\n"
-        f"Ism: {row['first_name'] or ''} {row['last_name'] or ''}\n"
-        f"Turi: <b>{row['payment_type']}</b>\n"
-        f"Summa: <b>{row['amount']:,} so‘m</b>\n"
-        f"Status: {row['status']}"
-    ).replace(",", " ")
-
-    kb=InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Tasdiqlash",callback_data=f"payapprove:{payment_id}"),
-            InlineKeyboardButton(text="❌ Rad etish",callback_data=f"payreject:{payment_id}")
-        ]
-    ])
-
-    if row["receipt_file_id"]:
-        try:
-            await bot.send_document(
-                ADMIN_USER_ID,
-                row["receipt_file_id"],
-                caption=text,
-                reply_markup=kb
-            )
-            return
-        except Exception:
-            logger.exception("Failed sending payment receipt")
-
-    await bot.send_message(
-        ADMIN_USER_ID,
-        text,
-        reply_markup=kb
-    )
-
-async def finalize_test(session_id,answers):
-    async with db_pool.acquire() as conn:
-        async with conn.transaction():
-            session=await conn.fetchrow("""
-                SELECT *
-                FROM test_sessions
-                WHERE session_id=$1
-                FOR UPDATE
-            """,session_id)
-
-            if not session:
-                raise HTTPException(status_code=404,detail="Session not found")
-
-            if session["status"]=="completed":
-                attempt=await conn.fetchrow("""
-                    SELECT *
-                    FROM test_attempts
-                    WHERE session_id=$1
-                """,session_id)
-                return attempt
-
-            if session["status"]!="active":
-                raise HTTPException(status_code=409,detail="Session is not active")
-
-            if session["expires_at"] < datetime.now(timezone.utc):
-                await conn.execute(
-                    "UPDATE test_sessions SET status='expired' WHERE session_id=$1",
-                    session_id
-                )
-                raise HTTPException(status_code=410,detail="Session expired")
-
-            expected_questions=session["questions"] or []
-            expected_ids={str(q["id"]) for q in expected_questions}
-            clean_answers={}
-            for k,v in answers.items():
-                if str(k) in expected_ids:
-                    try:
-                        iv=int(v)
-                    except (TypeError,ValueError):
-                        continue
-                    if 0 <= iv <= 3:
-                        clean_answers[str(k)]=iv
-
-            test_type=session["test_type"]
-            score,correct,level=calculate_result(test_type,clean_answers)
-
-            attempt=await conn.fetchrow("""
-                INSERT INTO test_attempts(
-                    user_id,test_type,session_id,score,correct_count,
-                    duration,payment_status,result_visible,level,answers
-                )
-                VALUES(
-                    $1,$2,$3,$4,$5,
-                    EXTRACT(EPOCH FROM (NOW()-$6))::INTEGER,
-                    CASE WHEN $7=0 THEN 'not_required' ELSE 'pending' END,
-                    CASE WHEN $7=0 THEN TRUE ELSE FALSE END,
-                    $8,$9::jsonb
-                )
-                RETURNING *
-            """,
-                session["user_id"],
-                test_type,
-                session_id,
-                score,
-                correct,
-                session["started_at"],
-                session["price"],
-                level,
-                json.dumps(clean_answers)
-            )
-
-            await conn.execute("""
-                UPDATE test_sessions
-                SET status='completed',
-                    answers=$2::jsonb,
-                    score=$3,
-                    correct_count=$4,
-                    completed_at=NOW()
-                WHERE session_id=$1
-            """,
-                session_id,
-                json.dumps(clean_answers),
-                score,
-                correct
-            )
-
-            if session["price"] == 0:
-                result=await conn.fetchrow("""
-                    INSERT INTO results(
-                        user_id,attempt_id,test_type,score,level
-                    )
-                    VALUES($1,$2,$3,$4,$5)
-                    ON CONFLICT(attempt_id) DO UPDATE SET score=EXCLUDED.score
-                    RETURNING *
-                """,
-                    session["user_id"],
-                    attempt["id"],
-                    test_type,
-                    score,
-                    level
-                )
-                await conn.execute("""
-                    UPDATE test_attempts
-                    SET result_visible=TRUE
-                    WHERE id=$1
-                """,attempt["id"])
-            else:
-                result=None
-
-            return attempt
-
-def generate_verification_code():
-    alphabet=string.ascii_uppercase+string.digits
-    while True:
-        code="IQ-"+''.join(secrets.choice(alphabet) for _ in range(6))
-        return code
-
-def generate_certificate_id():
-    return "CERT-"+uuid4().hex[:10].upper()
-
-def safe_font(size:int,bold=False):
-    candidates=[]
-    if bold:
-        candidates=[
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-        ]
-    else:
-        candidates=[
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-        ]
-
-    for path in candidates:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path,size)
-            except Exception:
-                pass
-
-    return ImageFont.load_default()
-
-def create_certificate_png(full_name,score,level,verification_code,created_at):
-    width,height=1600,1100
-    img=Image.new("RGB",(width,height),(10,13,22))
-    draw=ImageDraw.Draw(img)
-
-    gold=(218,180,75)
-    white=(245,247,250)
-    muted=(165,172,190)
-    panel=(18,23,36)
-
-    draw.rounded_rectangle(
-        (35,35,width-35,height-35),
-        radius=32,
-        fill=panel,
-        outline=gold,
-        width=8
-    )
-    draw.rounded_rectangle(
-        (65,65,width-65,height-65),
-        radius=24,
-        outline=(90,100,120),
-        width=2
-    )
-
-    title_font=safe_font(72,True)
-    subtitle_font=safe_font(32,False)
-    name_font=safe_font(60,True)
-    score_font=safe_font(100,True)
-    normal_font=safe_font(34,False)
-    code_font=safe_font(40,True)
-
-    title="IQ TEST BOT"
-    bbox=draw.textbbox((0,0),title,font=title_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,130),
-        title,
-        font=title_font,
-        fill=gold
-    )
-
-    subtitle="SERTIFIKAT"
-    bbox=draw.textbbox((0,0),subtitle,font=subtitle_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,230),
-        subtitle,
-        font=subtitle_font,
-        fill=white
-    )
-
-    line="AQLLIY SALOHIYAT TO‘G‘RISIDA"
-    bbox=draw.textbbox((0,0),line,font=normal_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,285),
-        line,
-        font=normal_font,
-        fill=muted
-    )
-
-    # Simple brain/seal emblem.
-    cx,cy=800,425
-    draw.ellipse((cx-90,cy-90,cx+90,cy+90),outline=gold,width=6)
-    draw.arc((cx-55,cy-55,cx+10,cy+55),90,270,fill=gold,width=5)
-    draw.arc((cx-10,cy-55,cx+55,cy+55),270,90,fill=gold,width=5)
-    draw.line((cx,cy-55,cx,cy+55),fill=gold,width=4)
-
-    bbox=draw.textbbox((0,0),full_name,font=name_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,545),
-        full_name,
-        font=name_font,
-        fill=white
-    )
-
-    score_text=f"IQ  {score}"
-    bbox=draw.textbbox((0,0),score_text,font=score_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,650),
-        score_text,
-        font=score_font,
-        fill=gold
-    )
-
-    level_text=f"Daraja: {level}"
-    bbox=draw.textbbox((0,0),level_text,font=normal_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,790),
-        level_text,
-        font=normal_font,
-        fill=white
-    )
-
-    date_text=created_at.strftime("%d.%m.%Y")
-    bbox=draw.textbbox((0,0),date_text,font=normal_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,850),
-        date_text,
-        font=normal_font,
-        fill=muted
-    )
-
-    code_text=verification_code
-    bbox=draw.textbbox((0,0),code_text,font=code_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,930),
-        code_text,
-        font=code_font,
-        fill=white
-    )
-
-    brand="IQ TEST BOT"
-    bbox=draw.textbbox((0,0),brand,font=subtitle_font)
-    draw.text(
-        ((width-(bbox[2]-bbox[0]))/2,1000),
-        brand,
-        font=subtitle_font,
-        fill=gold
-    )
-
-    output=io.BytesIO()
-    img.save(output,format="PNG",optimize=True)
-    output.seek(0)
-    return output.getvalue()
-
-async def ensure_certificate(user_id:int,result_id:int):
-    existing=await db_fetchrow("""
-        SELECT *
-        FROM certificates
-        WHERE result_id=$1
-    """,result_id)
-
+async def create_certificate(user_id, result_id, full_name, score, level):
+    existing = await db_fetchrow("SELECT * FROM certificates WHERE result_id=$1", result_id)
     if existing:
         return existing
+    code = "IQ-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+    cid = "CERT-" + secrets.token_hex(6).upper()
+    return await db_fetchrow("""
+        INSERT INTO certificates(user_id,result_id,certificate_id,verification_code,type,full_name,score,level)
+        VALUES($1,$2,$3,$4,'IQ',$5,$6,$7) RETURNING *
+    """, user_id,result_id,cid,code,full_name,score,level)
 
-    result=await db_fetchrow("""
-        SELECT
-            r.id,r.score,r.level,r.created_at,
-            u.full_name,u.first_name,u.last_name
-        FROM results r
-        JOIN users u ON u.user_id=r.user_id
-        WHERE r.id=$1 AND r.user_id=$2
-    """,result_id,user_id)
+def font_path(size=64):
+    patterns = [
+        "/usr/share/fonts/**/*.ttf",
+        "/usr/local/share/fonts/**/*.ttf",
+        "/usr/share/fonts/truetype/dejavu/*.ttf",
+    ]
+    files=[]
+    for p in patterns: files.extend(glob.glob(p, recursive=True))
+    preferred=[p for p in files if "DejaVuSans" in p]
+    return preferred[0] if preferred else (files[0] if files else None)
 
-    if not result:
-        return None
+def certificate_png(cert):
+    img=Image.new("RGB",(1600,1100),(8,11,22))
+    d=ImageDraw.Draw(img)
+    gold=(220,180,75); white=(245,247,255); muted=(180,188,210)
+    d.rounded_rectangle((35,35,1565,1065),radius=35,outline=gold,width=8)
+    d.rounded_rectangle((65,65,1535,1035),radius=25,outline=(65,72,100),width=2)
+    cx,cy=800,250
+    d.ellipse((cx-95,cy-95,cx+95,cy+95),outline=gold,width=5)
+    d.ellipse((cx-70,cy-70,cx+70,cy+70),outline=(120,130,170),width=2)
+    for i in range(8):
+        x=cx+int(45*((i%4)-1.5)); y=cy+int(35*((i//4)-0.5))
+        d.ellipse((x-10,y-10,x+10,y+10),fill=gold)
+    fp=font_path()
+    if not fp:
+        raise RuntimeError("Professional TTF font topilmadi")
+    def font(sz):
+        return ImageFont.truetype(fp,sz)
+    def center(txt,y,f,fill=white):
+        box=d.textbbox((0,0),txt,font=f); d.text(((1600-(box[2]-box[0]))/2,y),txt,font=f,fill=fill)
+    def center_fit(txt,y,max_size,min_size,fill=white,max_width=1320):
+        size=max_size
+        while size>min_size:
+            f=font(size); box=d.textbbox((0,0),txt,font=f)
+            if box[2]-box[0] <= max_width: break
+            size-=2
+        center(txt,y,font(max(size,min_size)),fill)
+    center("SERTIFIKAT",380,font(82),gold)
+    center("AQLLIY SALOHIYAT TO‘G‘RISIDA",485,font(42),muted)
+    center_fit(str(cert["full_name"]),590,66,34,white)
+    center_fit(f"IQ  {cert['score']}  ·  {cert['level'] or '—'}",690,48,30,white)
+    center_fit(f"Verification: {cert['verification_code']}",790,38,24,muted)
+    center("IQ TEST BOT",910,font(36),gold)
+    bio=io.BytesIO(); img.save(bio,"PNG"); bio.seek(0)
+    return bio.getvalue()
 
-    full_name=(
-        result["full_name"]
-        or " ".join(
-            x for x in [result["first_name"],result["last_name"]]
-            if x
-        )
-        or "Foydalanuvchi"
-    )
-
-    verification_code=generate_verification_code()
-    certificate_id=generate_certificate_id()
-
-    row=await db_fetchrow("""
-        INSERT INTO certificates(
-            user_id,result_id,certificate_id,verification_code,
-            type,full_name,score,level
-        )
-        VALUES($1,$2,$3,$4,'IQ',$5,$6,$7)
-        ON CONFLICT(result_id) DO UPDATE SET
-            full_name=EXCLUDED.full_name,
-            score=EXCLUDED.score,
-            level=EXCLUDED.level
-        RETURNING *
-    """,
-        user_id,
-        result_id,
-        certificate_id,
-        verification_code,
-        full_name,
-        result["score"],
-        result["level"]
-    )
-
-    return row
-
-def parse_full_name(value):
-    value=" ".join((value or "").strip().split())
-    if len(value)<2:
-        raise HTTPException(status_code=400,detail="Full name is required")
-    return value[:150]
-
-@asynccontextmanager
-async def lifespan(app:FastAPI):
-    global db_pool
-
-    db_pool=await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=1,
-        max_size=10,
-        command_timeout=30
-    )
-
-    await migrate()
-
-    webhook_url=PUBLIC_BASE_URL.rstrip("/")+"/telegram/webhook"
-
-    await bot.set_webhook(
-        url=webhook_url,
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=True
-    )
-
-    try:
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="🧠 IQ TEST",
-                web_app=WebAppInfo(url=WEBAPP_URL+"/app")
+async def submit_iq_internal(user_id, session_id, answers, duration=0):
+    async with db_pool.acquire() as conn:
+        async with conn.transaction():
+            session = await conn.fetchrow(
+                "SELECT * FROM test_sessions WHERE session_id=$1 AND user_id=$2 FOR UPDATE",
+                session_id, user_id
             )
-        )
-    except Exception:
-        logger.exception("Failed to configure Telegram menu button")
+            if not session:
+                raise ValueError("session_not_found")
+            if session["status"] == "completed":
+                return await conn.fetchrow("SELECT * FROM test_attempts WHERE session_id=$1", session_id)
+            if session["expires_at"] < datetime.now(timezone.utc):
+                raise ValueError("session_expired")
+            score, correct_count, _ = calculate_iq(answers)
+            price = int(session["price"] or 0)
+            payment_status = "approved" if (price or 0) == 0 else "pending"
+            visible = (price or 0) == 0
+            attempt = await conn.fetchrow("""
+                INSERT INTO test_attempts(user_id,test_type,session_id,score,correct_count,duration,payment_status,result_visible,level,answers)
+                VALUES($1,'IQ',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+            """, user_id, session_id, score, correct_count, max(0, int(duration)),
+                payment_status, visible, level_for_score(score), json.dumps(answers))
+            await conn.execute("""
+                UPDATE test_sessions SET status='completed',answers=$2,score=$3,correct_count=$4,completed_at=NOW()
+                WHERE session_id=$1
+            """, session_id, json.dumps(answers), score, correct_count)
+            if visible:
+                await conn.execute("""
+                    INSERT INTO results(user_id,attempt_id,test_type,score,level)
+                    VALUES($1,$2,'IQ',$3,$4) ON CONFLICT(attempt_id) DO NOTHING
+                """, user_id, attempt["id"], score, level_for_score(score))
+            return attempt
 
-    info=await bot.get_webhook_info()
-    logger.info(
-        "Telegram webhook configured: %s pending=%s",
-        info.url,
-        info.pending_update_count
-    )
+async def expose_result(attempt_id, user_id):
+    async with db_pool.acquire() as conn:
+        async with conn.transaction():
+            attempt=await conn.fetchrow("SELECT * FROM test_attempts WHERE id=$1 AND user_id=$2 FOR UPDATE",attempt_id,user_id)
+            if not attempt: return None
+            if attempt["result_visible"]:
+                return attempt
+            payment=await conn.fetchrow("SELECT * FROM payments WHERE attempt_id=$1 AND user_id=$2 AND status='approved' ORDER BY id DESC LIMIT 1",attempt_id,user_id)
+            if not payment: return attempt
+            await conn.execute("UPDATE test_attempts SET result_visible=TRUE,payment_status='approved' WHERE id=$1",attempt_id)
+            await conn.execute("""
+                INSERT INTO results(user_id,attempt_id,test_type,score,level)
+                VALUES($1,$2,$3,$4,$5) ON CONFLICT(attempt_id) DO NOTHING
+            """,user_id,attempt_id,attempt["test_type"],attempt["score"],attempt["level"])
+            return await conn.fetchrow("SELECT * FROM test_attempts WHERE id=$1",attempt_id)
 
-    logger.info("IQ TEST BOT ready")
-
-    yield
-
-    try:
-        await bot.delete_webhook(drop_pending_updates=False)
-    except Exception:
-        logger.exception("Failed to delete webhook")
-
-    try:
-        await bot.session.close()
-    except Exception:
-        logger.exception("Failed to close bot session")
-
-    if db_pool:
-        await db_pool.close()
-        db_pool=None
-
-app=FastAPI(
-    title="IQ TEST BOT",
-    lifespan=lifespan
-)
-
-app.mount(
-    "/static",
-    StaticFiles(directory=os.path.join(BASE_DIR,"webapp")),
-    name="static"
-)
+app = FastAPI(title="IQ TEST BOT")
 
 @app.get("/health")
 async def health():
-    db_ok=False
-    if db_pool:
-        try:
-            await db_fetchrow("SELECT 1")
-            db_ok=True
-        except Exception:
-            db_ok=False
+    return {"status":"ok"}
 
-    return {
-        "ok":True,
-        "database":db_ok,
-        "service":"IQ TEST BOT"
-    }
-
-@app.get("/app",response_class=HTMLResponse)
-async def webapp_page():
+@app.get("/app", response_class=HTMLResponse)
+async def app_page():
     path=os.path.join(BASE_DIR,"webapp","index.html")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404,detail="Mini App not found")
-
     with open(path,"r",encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
-@app.post("/telegram/webhook")
-async def telegram_webhook(request:Request):
-    if WEBHOOK_SECRET:
-        provided=request.headers.get("X-Telegram-Bot-Api-Secret-Token","")
-        if not hmac.compare_digest(provided,WEBHOOK_SECRET):
-            raise HTTPException(status_code=401,detail="Invalid webhook secret")
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR,"webapp")), name="static")
 
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    supplied=request.headers.get("X-Telegram-Bot-Api-Secret-Token","")
+    if not WEBHOOK_SECRET or not hmac.compare_digest(supplied,WEBHOOK_SECRET):
+        raise HTTPException(status_code=403,detail="Forbidden")
     try:
         payload=await request.json()
-        update=types.Update.model_validate(payload)
+        update=Update.model_validate(payload)
         await dp.feed_update(bot,update)
         return {"ok":True}
     except Exception:
-        logger.exception("Webhook update failed")
-        raise HTTPException(status_code=500,detail="Webhook processing failed")
+        logger.exception("Webhook processing failed")
+        raise HTTPException(status_code=500,detail="Webhook processing error")
 
 @app.get("/api/bootstrap")
-async def api_bootstrap(request:Request):
-    user=await require_webapp_user(request)
-    user_id=int(user["id"])
-
-    row=await db_fetchrow("""
-        SELECT
-            u.user_id,u.username,u.first_name,u.last_name,
-            u.language,u.full_name,u.gender,u.age,u.country,
-            (
-                SELECT COUNT(*)
-                FROM results r
-                WHERE r.user_id=u.user_id AND r.test_type='IQ'
-            ) AS iq_count
-        FROM users u
-        WHERE u.user_id=$1
-    """,user_id)
-
-    live_base=await setting_int("live_fake_base",95114)
-    live_online=await setting_int("live_fake_online",342)
-
-    return {
-        "ok":True,
-        "user":{
-            "id":row["user_id"],
-            "username":row["username"],
-            "first_name":row["first_name"],
-            "last_name":row["last_name"],
-            "language":row["language"],
-            "full_name":row["full_name"],
-            "gender":row["gender"],
-            "age":row["age"],
-            "country":row["country"],
-            "iq_count":row["iq_count"],
-        },
-        "prices":{
-            "iq":await setting_int("iq_price"),
-            "iq_retry":await setting_int("iq_retry_price"),
-            "eq":await setting_int("eq_price"),
-            "eq_retry":await setting_int("eq_retry_price"),
-            "pq":await setting_int("pq_price"),
-            "pq_retry":await setting_int("pq_retry_price"),
-            "battle":await setting_int("battle_price"),
-        },
-        "live":{
-            "base":live_base,
-            "online":live_online
-        }
-    }
+async def api_bootstrap(request: Request):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
+    await db_execute("""
+        INSERT INTO users(user_id,username,first_name,last_name,last_seen,updated_at)
+        VALUES($1,$2,$3,$4,NOW(),NOW())
+        ON CONFLICT(user_id) DO UPDATE SET username=$2,first_name=$3,last_name=$4,last_seen=NOW(),updated_at=NOW()
+    """,uid,user.get("username"),user.get("first_name"),user.get("last_name"))
+    row=await db_fetchrow("SELECT * FROM users WHERE user_id=$1",uid)
+    prices={k:await setting_int(k) for k in ["iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"]}
+    iq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='IQ' LIMIT 1",uid))
+    eq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='EQ' LIMIT 1",uid))
+    pq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='PQ' LIMIT 1",uid))
+    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions()}
 
 @app.post("/api/profile/save")
-async def api_profile_save(request:Request):
-    user=await require_webapp_user(request)
-    user_id=int(user["id"])
-    body=await request.json()
-
-    full_name=parse_full_name(body.get("full_name"))
-    gender=str(body.get("gender") or "")[:30]
-    country=str(body.get("country") or "")[:80]
-
-    try:
-        age=int(body.get("age"))
-    except (TypeError,ValueError):
-        raise HTTPException(status_code=400,detail="Invalid age")
-
-    if age<5 or age>100:
-        raise HTTPException(status_code=400,detail="Invalid age")
-
-    await db_execute("""
-        UPDATE users
-        SET full_name=$1,gender=$2,age=$3,country=$4,updated_at=NOW()
-        WHERE user_id=$5
-    """,
-        full_name,gender,age,country,user_id
-    )
-
-    return {
-        "ok":True,
-        "profile":{
-            "full_name":full_name,
-            "gender":gender,
-            "age":age,
-            "country":country
-        }
-    }
+async def profile_save(request: Request):
+    user=await authenticated_user(request); data=await request.json(); uid=int(user["id"])
+    full_name=str(data.get("full_name","")).strip()
+    gender=str(data.get("gender","")).strip()
+    country=str(data.get("country","")).strip()
+    try: age=int(data.get("age"))
+    except: return json_error("Yosh noto‘g‘ri")
+    if not full_name or len(full_name)>120 or gender not in ("male","female") or age<10 or age>120 or not country:
+        return json_error("Profil ma’lumotlari noto‘g‘ri")
+    await db_execute("UPDATE users SET full_name=$1,gender=$2,age=$3,country=$4,updated_at=NOW() WHERE user_id=$5",full_name,gender,age,country,uid)
+    return {"ok":True}
 
 @app.post("/api/test/start")
-async def api_test_start(request:Request):
-    user=await require_webapp_user(request)
-    body=await request.json()
-    test_type=str(body.get("test_type","IQ")).upper()
+async def test_start(request: Request):
+    user=await authenticated_user(request)
+    data=await request.json()
+    uid=int(user["id"])
+    typ=str(data.get("test_type","IQ")).upper()
+    if typ not in ("IQ","EQ","PQ"):
+        return json_error("Noto‘g‘ri test")
+    if typ=="EQ":
+        exists=await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='IQ' LIMIT 1",uid)
+        if not exists: return json_error("Avval IQ testni yakunlang",403)
+    if typ=="PQ":
+        exists=await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='EQ' LIMIT 1",uid)
+        if not exists: return json_error("Avval EQ testni yakunlang",403)
 
-    return {
-        "ok":True,
-        "test":await start_test_for_user(int(user["id"]),test_type)
-    }
+    price_key={"IQ":"iq_price","EQ":"eq_price","PQ":"pq_price"}[typ]
+    retry_key={"IQ":"iq_retry_price","EQ":"eq_retry_price","PQ":"pq_retry_price"}[typ]
+    has_previous=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type=$2 LIMIT 1",uid,typ))
+    price=await setting_int(retry_key if has_previous else price_key,0)
+    active=await db_fetchrow("SELECT session_id,test_type,questions,answers,started_at,expires_at,price,is_retry FROM test_sessions WHERE user_id=$1 AND test_type=$2 AND status='active' AND expires_at>NOW() ORDER BY started_at DESC LIMIT 1",uid,typ)
+    if active:
+        return {"ok":True,"session_id":str(active["session_id"]),"test_type":active["test_type"],"questions":active["questions"],"answers":active["answers"],"started_at":active["started_at"].isoformat(),"expires_at":active["expires_at"].isoformat(),"price":int(active["price"] or 0),"is_retry":bool(active["is_retry"]),"resumed":True}
+    sid=new_session()
+    expires=datetime.now(timezone.utc)+timedelta(minutes=30)
+    if typ=="IQ":
+        questions=public_iq_questions()
+    else:
+        source=EQ_QUESTIONS if typ=="EQ" else PQ_QUESTIONS
+        questions=[{"id":i+1,"text":q,"options":opts} for i,(q,opts,_) in enumerate(source)]
+    await db_execute(
+        "INSERT INTO test_sessions(session_id,user_id,test_type,status,questions,expires_at,price,is_retry) VALUES($1,$2,$3,'active',$4,$5,$6,$7)",
+        sid,uid,typ,json.dumps(questions),expires,price,has_previous
+    )
+    return {"ok":True,"session_id":str(sid),"test_type":typ,"questions":questions,"expires_at":expires.isoformat(),"price":price,"is_retry":has_previous}
 
 @app.post("/api/test/{session_id}/submit")
-async def api_test_submit(session_id:str,request:Request):
-    user=await require_webapp_user(request)
-
-    try:
-        sid=__import__("uuid").UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400,detail="Invalid session id")
-
-    body=await request.json()
-    answers=normalize_answer_map(body.get("answers",{}))
-
-    session=await db_fetchrow(
-        "SELECT user_id FROM test_sessions WHERE session_id=$1",
-        sid
-    )
-
-    if not session:
-        raise HTTPException(status_code=404,detail="Session not found")
-
-    if int(session["user_id"]) != int(user["id"]):
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    attempt=await finalize_test(sid,answers)
-
-    payment=None
-    card=None
-
-    if attempt["payment_status"]=="pending":
-        payment,card=await create_payment_for_attempt(
-            int(user["id"]),
-            f"{attempt['test_type'].lower()}_retry",
-            await db_fetchrow(
-                "SELECT price FROM test_sessions WHERE session_id=$1",
-                sid
-            )["price"],
-            attempt_id=attempt["id"]
-        )
-        await notify_admin_payment(payment["id"])
-
-    result=await db_fetchrow("""
-        SELECT *
-        FROM results
-        WHERE attempt_id=$1
-    """,attempt["id"])
-
-    return {
-        "ok":True,
-        "attempt":{
-            "id":attempt["id"],
-            "test_type":attempt["test_type"],
-            "score":attempt["score"],
-            "correct_count":attempt["correct_count"],
-            "level":attempt["level"],
-            "result_visible":attempt["result_visible"]
-        },
-        "payment":{
-            "id":payment["id"] if payment else None,
-            "status":payment["status"] if payment else None,
-            "amount":payment["amount"] if payment else 0,
-            "card":{
-                "id":card["id"],
-                "card_number":card["card_number"],
-                "holder":card["holder"],
-                "bank":card["bank"]
-            } if card else None
-        },
-        "result":{
-            "id":result["id"],
-            "score":result["score"],
-            "level":result["level"]
-        } if result else None
-    }
+async def test_submit(session_id: str, request: Request):
+    user=await authenticated_user(request)
+    data=await request.json()
+    uid=int(user["id"])
+    answers=data.get("answers") or {}
+    try: duration=max(0,int(data.get("duration") or 0))
+    except (TypeError,ValueError): duration=0
+    session=await db_fetchrow("SELECT * FROM test_sessions WHERE session_id=$1::uuid AND user_id=$2",session_id,uid)
+    if not session: return json_error("Session topilmadi",404)
+    if session["status"] == "completed":
+        attempt=await db_fetchrow("SELECT * FROM test_attempts WHERE session_id=$1::uuid",session_id)
+        if not attempt: return json_error("Session holati noto‘g‘ri",409)
+    elif session["expires_at"] < datetime.now(timezone.utc):
+        return json_error("Test vaqti tugagan",409)
+    elif session["test_type"]=="IQ":
+        try: attempt=await submit_iq_internal(uid,session_id,answers,duration)
+        except ValueError as exc: return json_error(str(exc),409)
+    else:
+        source=EQ_QUESTIONS if session["test_type"]=="EQ" else PQ_QUESTIONS
+        async with db_pool.acquire() as conn:
+            async with conn.transaction():
+                locked=await conn.fetchrow("SELECT * FROM test_sessions WHERE session_id=$1::uuid AND user_id=$2 FOR UPDATE",session_id,uid)
+                if locked["status"]=="completed":
+                    attempt=await conn.fetchrow("SELECT * FROM test_attempts WHERE session_id=$1::uuid",session_id)
+                else:
+                    correct=sum(1 for i,(_,_,c) in enumerate(source) if answers.get(str(i+1)) == c or str(answers.get(str(i+1))) == str(c))
+                    score=round(100*correct/len(source))
+                    price=int(locked["price"] or 0)
+                    visible=price==0
+                    payment_status="approved" if visible else "pending"
+                    attempt=await conn.fetchrow("""
+                        INSERT INTO test_attempts(user_id,test_type,session_id,score,correct_count,duration,payment_status,result_visible,level,answers)
+                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+                    """,uid,locked["test_type"],session_id,score,correct,duration,payment_status,visible,"EQ/PQ",json.dumps(answers))
+                    await conn.execute("UPDATE test_sessions SET status='completed',answers=$2,score=$3,correct_count=$4,completed_at=NOW() WHERE session_id=$1::uuid",session_id,json.dumps(answers),score,correct)
+                    if visible:
+                        await conn.execute("INSERT INTO results(user_id,attempt_id,test_type,score,level) VALUES($1,$2,$3,$4,$5) ON CONFLICT(attempt_id) DO NOTHING",uid,attempt["id"],locked["test_type"],score,"EQ/PQ")
+    if session["test_type"] == "IQ" and attempt["result_visible"]:
+        result_row = await db_fetchrow("SELECT * FROM results WHERE attempt_id=$1", attempt["id"])
+        user_row = await db_fetchrow("SELECT full_name FROM users WHERE user_id=$1", uid)
+        if result_row and user_row and user_row["full_name"]:
+            await create_certificate(uid, result_row["id"], user_row["full_name"], attempt["score"], attempt["level"])
+    price=int(session["price"] or 0)
+    if price>0 and attempt["payment_status"]!="approved":
+        card=await active_card()
+        existing=await db_fetchrow("SELECT id,status,amount,card_id FROM payments WHERE attempt_id=$1 AND user_id=$2 ORDER BY id DESC LIMIT 1",attempt["id"],uid)
+        if existing:
+            payment_id=existing["id"]
+            if existing["status"]=="approved":
+                return {"ok":True,"payment_required":False,"attempt_id":attempt["id"],"score":attempt["score"],"level":attempt["level"],"correct_count":attempt["correct_count"]}
+        else:
+            created=await db_fetchrow("INSERT INTO payments(user_id,attempt_id,payment_type,amount,card_id,status) VALUES($1,$2,$3,$4,$5,'pending') RETURNING id",uid,attempt["id"],session["test_type"],price,card["id"] if card else None)
+            payment_id=created["id"]
+        return {"ok":True,"payment_required":True,"attempt_id":attempt["id"],"payment_id":payment_id,"amount":price,"card":dict(card) if card else None}
+    return {"ok":True,"payment_required":False,"attempt_id":attempt["id"],"score":attempt["score"],"level":attempt["level"],"correct_count":attempt["correct_count"]}
 
 @app.get("/api/test/{session_id}/resume")
-async def api_test_resume(session_id:str,request:Request):
-    user=await require_webapp_user(request)
-
-    try:
-        sid=__import__("uuid").UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400,detail="Invalid session id")
-
-    row=await db_fetchrow("""
-        SELECT *
-        FROM test_sessions
-        WHERE session_id=$1 AND user_id=$2
-    """,sid,int(user["id"]))
-
-    if not row:
-        raise HTTPException(status_code=404,detail="Session not found")
-
-    return {
-        "ok":True,
-        "session":{
-            "session_id":str(row["session_id"]),
-            "test_type":row["test_type"],
-            "status":row["status"],
-            "answers":row["answers"] or {},
-            "questions":row["questions"] or [],
-            "price":row["price"],
-            "expires_at":row["expires_at"].isoformat()
-        }
-    }
+async def test_resume(session_id: str, request: Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    s=await db_fetchrow("SELECT * FROM test_sessions WHERE session_id=$1 AND user_id=$2",session_id,uid)
+    if not s: return json_error("Session topilmadi",404)
+    if s["status"]=="active" and s["expires_at"] < datetime.now(timezone.utc):
+        await db_execute("UPDATE test_sessions SET status='expired' WHERE session_id=$1::uuid AND user_id=$2 AND status='active'",session_id,uid)
+        return {"ok":True,"status":"expired","test_type":s["test_type"],"questions":s["questions"],"answers":s["answers"]}
+    return {"ok":True,"status":s["status"],"test_type":s["test_type"],"questions":s["questions"],"answers":s["answers"]}
 
 @app.get("/api/result/{attempt_id}")
-async def api_result(attempt_id:int,request:Request):
-    user=await require_webapp_user(request)
-
-    row=await db_fetchrow("""
-        SELECT *
-        FROM test_attempts
-        WHERE id=$1 AND user_id=$2
-    """,attempt_id,int(user["id"]))
-
-    if not row:
-        raise HTTPException(status_code=404,detail="Result not found")
-
-    if not row["result_visible"]:
-        payment=await db_fetchrow("""
-            SELECT id,amount,status,receipt_file_id
-            FROM payments
-            WHERE attempt_id=$1
-            ORDER BY id DESC LIMIT 1
-        """,attempt_id)
-
-        return {
-            "ok":True,
-            "locked":True,
-            "attempt":{
-                "id":row["id"],
-                "test_type":row["test_type"],
-                "score":row["score"],
-                "correct_count":row["correct_count"],
-                "level":row["level"]
-            },
-            "payment":{
-                "id":payment["id"] if payment else None,
-                "amount":payment["amount"] if payment else 0,
-                "status":payment["status"] if payment else None,
-                "has_receipt":bool(payment and payment["receipt_file_id"])
-            }
-        }
-
-    result=await db_fetchrow(
-        "SELECT * FROM results WHERE attempt_id=$1",
-        attempt_id
-    )
-
-    return {
-        "ok":True,
-        "locked":False,
-        "attempt":{
-            "id":row["id"],
-            "test_type":row["test_type"],
-            "score":row["score"],
-            "correct_count":row["correct_count"],
-            "level":row["level"],
-            "duration":row["duration"]
-        },
-        "result":{
-            "id":result["id"],
-            "score":result["score"],
-            "level":result["level"],
-            "created_at":result["created_at"].isoformat()
-        } if result else None
-    }
+async def get_result(attempt_id:int,request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    a=await get_owned_attempt(uid,attempt_id)
+    if not a: return json_error("Natija topilmadi",404)
+    if not a["result_visible"]: return {"ok":True,"visible":False,"payment_status":a["payment_status"]}
+    return {"ok":True,"visible":True,"score":a["score"],"level":a["level"],"correct_count":a["correct_count"],"test_type":a["test_type"]}
 
 @app.post("/api/payment/create")
-async def api_payment_create(request:Request):
-    user=await require_webapp_user(request)
-    body=await request.json()
-
-    payment_type=str(body.get("payment_type","iq_retry"))
-    if payment_type not in {"iq","iq_retry","eq","eq_retry","pq","pq_retry","battle"}:
-        raise HTTPException(status_code=400,detail="Invalid payment type")
-
-    amount=await setting_int(payment_type+"_price",0)
-
-    payment,card=await create_payment_for_attempt(
-        int(user["id"]),
-        payment_type,
-        amount
-    )
-
-    await notify_admin_payment(payment["id"])
-
-    return {
-        "ok":True,
-        "payment":{
-            "id":payment["id"],
-            "amount":payment["amount"],
-            "status":payment["status"]
-        },
-        "card":{
-            "id":card["id"],
-            "card_number":card["card_number"],
-            "holder":card["holder"],
-            "bank":card["bank"]
-        } if card else None
-    }
+async def payment_create(request:Request):
+    user=await authenticated_user(request); data=await request.json(); uid=int(user["id"])
+    attempt_id=data.get("attempt_id"); payment_type=str(data.get("payment_type","IQ"))
+    a=await get_owned_attempt(uid,int(attempt_id))
+    if not a: return json_error("Attempt topilmadi",404)
+    if a["payment_status"]=="approved": return {"ok":True,"status":"approved"}
+    if payment_type != a["test_type"]:
+        return json_error("Payment turi attempt bilan mos emas")
+    key={"IQ":"iq_price","EQ":"eq_price","PQ":"pq_price"}.get(payment_type)
+    if not key: return json_error("Payment turi noto‘g‘ri")
+    amount=await setting_int(key)
+    if amount <= 0:
+        return {"ok":True,"status":"not_required","amount":0}
+    card=await active_card()
+    existing=await db_fetchrow("SELECT id,status,amount,card_id FROM payments WHERE attempt_id=$1 AND user_id=$2 ORDER BY id DESC LIMIT 1",int(attempt_id),uid)
+    if existing and existing["status"] in ("pending","approved"):
+        selected_card=await db_fetchrow("SELECT id,card_number,holder,bank,active FROM payment_cards WHERE id=$1",existing["card_id"]) if existing["card_id"] else card
+        return {"ok":True,"payment_id":existing["id"],"status":existing["status"],"amount":existing["amount"],"card":dict(selected_card) if selected_card else None}
+    p=await db_fetchrow("INSERT INTO payments(user_id,attempt_id,payment_type,amount,card_id,status) VALUES($1,$2,$3,$4,$5,'pending') RETURNING id",uid,int(attempt_id),payment_type,amount,card["id"] if card else None)
+    return {"ok":True,"payment_id":p["id"],"status":"pending","amount":amount,"card":dict(card) if card else None}
 
 @app.post("/api/payment/{payment_id}/receipt")
-async def api_payment_receipt(
-    payment_id:int,
-    request:Request,
-    file:UploadFile=File(...)
-):
-    user=await require_webapp_user(request)
-
-    payment=await db_fetchrow("""
-        SELECT id,user_id,status,amount
-        FROM payments
-        WHERE id=$1
-    """,payment_id)
-
-    if not payment:
-        raise HTTPException(status_code=404,detail="Payment not found")
-
-    if int(payment["user_id"]) != int(user["id"]):
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    if payment["status"] not in {"pending","rejected"}:
-        raise HTTPException(status_code=409,detail="Payment cannot accept receipt")
-
-    content_type=(file.content_type or "").lower()
-    if content_type not in {"image/jpeg","image/png","image/webp"}:
-        raise HTTPException(status_code=400,detail="Receipt must be an image")
-
-    data=await file.read()
-    if not data or len(data)>10*1024*1024:
-        raise HTTPException(status_code=400,detail="Invalid receipt size")
-
-    telegram_file=None
-    try:
-        telegram_file=await bot.send_document(
-            ADMIN_USER_ID,
-            BufferedInputFile(data,filename=file.filename or "receipt.jpg"),
-            caption=(
-                f"🧾 <b>To‘lov cheki</b>\n\n"
-                f"Payment: <code>{payment_id}</code>\n"
-                f"User: <code>{user['id']}</code>\n"
-                f"Summa: <b>{payment['amount']:,} so‘m</b>"
-            ).replace(",", " ")
-        )
-    except Exception:
-        logger.exception("Failed to send receipt to admin")
-
+async def payment_receipt(payment_id:int,request:Request,receipt:UploadFile|None=File(default=None)):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
+    p=await db_fetchrow("SELECT * FROM payments WHERE id=$1 AND user_id=$2",payment_id,uid)
+    if not p: return json_error("Payment topilmadi",404)
+    if p["status"]=="approved": return {"ok":True,"status":"approved"}
     file_id=None
-    if telegram_file and getattr(telegram_file,"document",None):
-        file_id=telegram_file.document.file_id
+    if receipt is not None:
+        if not receipt.content_type or not receipt.content_type.startswith("image/"):
+            return json_error("Receipt faqat rasm bo‘lishi kerak")
+        raw=await receipt.read()
+        if len(raw)>8*1024*1024:
+            return json_error("Receipt 8 MB dan kichik bo‘lishi kerak")
+        if not ADMIN_USER_ID:
+            return json_error("Admin sozlanmagan",500)
+        tg_file=BufferedInputFile(raw,filename=receipt.filename or "receipt.jpg")
+        sent=await bot.send_document(ADMIN_USER_ID,tg_file,caption=f"💳 Receipt #{payment_id}\nUser: <code>{uid}</code>\nAmount: <b>{p['amount']}</b>")
+        file_id=sent.document.file_id if sent.document else None
+    else:
+        # Backward-compatible path for an existing Telegram file_id.
+        try:
+            form=await request.form()
+            file_id=str(form.get("receipt_file_id") or "").strip() or None
+        except Exception:
+            file_id=None
+    if not file_id: return json_error("Receipt faylini tanlang")
+    await db_execute("UPDATE payments SET receipt_file_id=$1,updated_at=NOW() WHERE id=$2 AND user_id=$3",file_id,payment_id,uid)
+    return {"ok":True,"status":"pending"}
 
-    await db_execute("""
-        UPDATE payments
-        SET receipt_file_id=COALESCE($2,receipt_file_id),
-            status='pending',
-            updated_at=NOW()
-        WHERE id=$1
-    """,payment_id,file_id)
+@app.get("/api/payment/mine")
+async def my_payments(request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    rows=await db_fetch("SELECT id,attempt_id,payment_type,amount,status,created_at FROM payments WHERE user_id=$1 ORDER BY id DESC LIMIT 20",uid)
+    return {"ok":True,"payments":[dict(r) for r in rows]}
 
-    await notify_admin_payment(payment_id)
-
-    return {
-        "ok":True,
-        "payment_id":payment_id,
-        "status":"pending"
-    }
-    @app.get("/api/payment/mine")
-
-async def api_payment_mine(request:Request):
-
-    user=await require_webapp_user(request)
-
-    rows=await db_fetch("""
-
-        SELECT id,payment_type,amount,status,receipt_file_id,created_at
-
-        FROM payments
-
-        WHERE user_id=$1
-
-        ORDER BY id DESC
-
-        LIMIT 30
-
-    """,int(user["id"]))
-
-    return {
-
-        "ok":True,
-
-        "payments":[
-
-            {
-
-                "id":r["id"],
-
-                "payment_type":r["payment_type"],
-
-                "amount":r["amount"],
-
-                "status":r["status"],
-
-                "has_receipt":bool(r["receipt_file_id"]),
-
-                "created_at":r["created_at"].isoformat()
-
-            }
-
-            for r in rows
-
-        ]
-
-    }
-
-@app.get("/api/payment/{payment_id}/card")
-
-async def api_payment_card(payment_id:int,request:Request):
-
-    user=await require_webapp_user(request)
-
-    payment=await db_fetchrow("""
-
-        SELECT id,user_id,amount,status,card_id
-
-        FROM payments
-
-        WHERE id=$1
-
-    """,payment_id)
-
-    if not payment:
-
-        raise HTTPException(status_code=404,detail="Payment not found")
-
-    if int(payment["user_id"]) != int(user["id"]):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    card=await db_fetchrow("""
-
-        SELECT id,card_number,holder,bank
-
-        FROM payment_cards
-
-        WHERE id=$1 AND active=TRUE
-
-    """,payment["card_id"])
-
-    if not card:
-
-        card=await db_fetchrow("""
-
-            SELECT id,card_number,holder,bank
-
-            FROM payment_cards
-
-            WHERE active=TRUE
-
-            ORDER BY id ASC
-
-            LIMIT 1
-
-        """)
-
-    return {
-
-        "ok":True,
-
-        "card":{
-
-            "id":card["id"],
-
-            "card_number":card["card_number"],
-
-            "holder":card["holder"],
-
-            "bank":card["bank"]
-
-        } if card else None
-
-    }
+async def approve_payment_record(payment_id:int):
+    async with db_pool.acquire() as conn:
+        async with conn.transaction():
+            p=await conn.fetchrow("SELECT * FROM payments WHERE id=$1 FOR UPDATE",payment_id)
+            if not p: return None, "not_found"
+            if p["status"]=="approved": return p, "already"
+            await conn.execute("UPDATE payments SET status='approved',updated_at=NOW() WHERE id=$1",payment_id)
+            if p["battle_id"]:
+                await conn.execute("UPDATE battle_players SET payment_id=$1 WHERE battle_id=$2 AND user_id=$3",p["id"],p["battle_id"],p["user_id"])
+                battle=await conn.fetchrow("SELECT * FROM battles WHERE id=$1 FOR UPDATE",p["battle_id"])
+                approved_count=await conn.fetchval("SELECT COUNT(*) FROM battle_players bp JOIN payments pay ON pay.id=bp.payment_id WHERE bp.battle_id=$1 AND pay.status='approved'",p["battle_id"])
+                player_count=await conn.fetchval("SELECT COUNT(*) FROM battle_players WHERE battle_id=$1",p["battle_id"])
+                if battle and player_count==2 and approved_count==2:
+                    await conn.execute("UPDATE battles SET status='ready',ready_at=NOW() WHERE id=$1 AND status<>'finished'",p["battle_id"])
+            if p["attempt_id"]:
+                await conn.execute("UPDATE test_attempts SET payment_status='approved',result_visible=TRUE WHERE id=$1",p["attempt_id"])
+                await conn.execute("""
+                    INSERT INTO results(user_id,attempt_id,test_type,score,level)
+                    SELECT user_id,id,test_type,score,level FROM test_attempts WHERE id=$1
+                    ON CONFLICT(attempt_id) DO NOTHING
+                """,p["attempt_id"])
+                attempt_row=await conn.fetchrow("SELECT * FROM test_attempts WHERE id=$1",p["attempt_id"])
+                if attempt_row and attempt_row["test_type"]=="IQ":
+                    result_row=await conn.fetchrow("SELECT * FROM results WHERE attempt_id=$1",p["attempt_id"])
+                    user_row=await conn.fetchrow("SELECT full_name FROM users WHERE user_id=$1",p["user_id"])
+                    if result_row and user_row and user_row["full_name"]:
+                        await conn.execute("""
+                            INSERT INTO certificates(user_id,result_id,certificate_id,verification_code,type,full_name,score,level)
+                            VALUES($1,$2,$3,$4,'IQ',$5,$6,$7) ON CONFLICT(result_id) DO NOTHING
+                        """,p["user_id"],result_row["id"],"CERT-"+secrets.token_hex(6).upper(),"IQ-"+"".join(secrets.choice(string.ascii_uppercase+string.digits) for _ in range(6)),user_row["full_name"],attempt_row["score"],attempt_row["level"])
+            return p, "approved"
 
 @app.post("/api/admin/payment/{payment_id}/approve")
-
-async def api_admin_payment_approve(payment_id:int,request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    async with db_pool.acquire() as conn:
-
-        async with conn.transaction():
-
-            payment=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM payments
-
-                WHERE id=$1
-
-                FOR UPDATE
-
-            """,payment_id)
-
-            if not payment:
-
-                raise HTTPException(status_code=404,detail="Payment not found")
-
-            if payment["status"]=="approved":
-
-                return {"ok":True,"status":"approved"}
-
-            await conn.execute("""
-
-                UPDATE payments
-
-                SET status='approved',updated_at=NOW()
-
-                WHERE id=$1
-
-            """,payment_id)
-
-            if payment["attempt_id"]:
-
-                attempt=await conn.fetchrow("""
-
-                    SELECT *
-
-                    FROM test_attempts
-
-                    WHERE id=$1
-
-                    FOR UPDATE
-
-                """,payment["attempt_id"])
-
-                if attempt and not attempt["result_visible"]:
-
-                    result=await conn.fetchrow("""
-
-                        INSERT INTO results(
-
-                            user_id,attempt_id,test_type,score,level
-
-                        )
-
-                        VALUES($1,$2,$3,$4,$5)
-
-                        ON CONFLICT(attempt_id) DO UPDATE
-
-                        SET score=EXCLUDED.score,
-
-                            level=EXCLUDED.level
-
-                        RETURNING *
-
-                    """,
-
-                        attempt["user_id"],
-
-                        attempt["id"],
-
-                        attempt["test_type"],
-
-                        attempt["score"],
-
-                        attempt["level"]
-
-                    )
-
-                    await conn.execute("""
-
-                        UPDATE test_attempts
-
-                        SET result_visible=TRUE,
-
-                            payment_status='approved'
-
-                        WHERE id=$1
-
-                    """,attempt["id"])
-
-                else:
-
-                    result=None
-
-            else:
-
-                result=None
-
-    return {
-
-        "ok":True,
-
-        "status":"approved",
-
-        "result_id":result["id"] if result else None
-
-    }
+async def admin_approve_payment(payment_id:int,request:Request):
+    user=await authenticated_user(request)
+    if not await is_admin(int(user["id"])): raise HTTPException(403,"Forbidden")
+    p,status=await approve_payment_record(payment_id)
+    if not p: return json_error("Payment topilmadi",404)
+    try:
+        await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Natijangiz yoki Battle ochildi.")
+    except Exception: logger.exception("Payment notification failed")
+    return {"ok":True,"status":status}
 
 @app.post("/api/admin/payment/{payment_id}/reject")
+async def admin_reject_payment(payment_id:int,request:Request):
+    user=await authenticated_user(request)
+    if not await is_admin(int(user["id"])): raise HTTPException(403,"Forbidden")
+    p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",payment_id)
+    if not p: return json_error("Payment topilmadi",404)
+    await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",payment_id)
+    try: await bot.send_message(p["user_id"],"❌ To‘lov rad etildi. Iltimos, receiptni tekshirib qayta yuboring.")
+    except Exception: logger.exception("Payment rejection notification failed")
+    return {"ok":True}
 
-async def api_admin_payment_reject(payment_id:int,request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    await db_execute("""
-
-        UPDATE payments
-
-        SET status='rejected',updated_at=NOW()
-
-        WHERE id=$1
-
-    """,payment_id)
-
-    return {
-
-        "ok":True,
-
-        "status":"rejected"
-
-    }
+@app.get("/api/payment/{payment_id}/card")
+async def payment_card(payment_id:int,request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    p=await db_fetchrow("SELECT * FROM payments WHERE id=$1 AND user_id=$2",payment_id,uid)
+    if not p: return json_error("Payment topilmadi",404)
+    card=await db_fetchrow("SELECT id,card_number,holder,bank,active FROM payment_cards WHERE id=$1 AND active=TRUE",p["card_id"])
+    return {"ok":True,"card":dict(card) if card else None}
 
 @app.get("/api/certificate/mine")
-
-async def api_certificate_mine(request:Request):
-
-    user=await require_webapp_user(request)
-
-    result=await db_fetchrow("""
-
-        SELECT *
-
-        FROM results
-
-        WHERE user_id=$1 AND test_type='IQ'
-
-        ORDER BY created_at DESC
-
-        LIMIT 1
-
-    """,int(user["id"]))
-
-    if not result:
-
-        return {
-
-            "ok":True,
-
-            "certificate":None
-
-        }
-
-    cert=await ensure_certificate(
-
-        int(user["id"]),
-
-        int(result["id"])
-
-    )
-
-    if not cert:
-
-        return {
-
-            "ok":True,
-
-            "certificate":None
-
-        }
-
-    return {
-
-        "ok":True,
-
-        "certificate":{
-
-            "id":cert["id"],
-
-            "certificate_id":cert["certificate_id"],
-
-            "verification_code":cert["verification_code"],
-
-            "type":cert["type"],
-
-            "full_name":cert["full_name"],
-
-            "score":cert["score"],
-
-            "level":cert["level"],
-
-            "created_at":cert["created_at"].isoformat(),
-
-            "verify_url":f"{PUBLIC_BASE_URL}/api/certificate/{cert['verification_code']}"
-
-        }
-
-    }
+async def certificate_mine(request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    row=await db_fetchrow("SELECT * FROM certificates WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",uid)
+    if not row: return {"ok":True,"certificate":None}
+    return {"ok":True,"certificate":dict(row)}
 
 @app.get("/api/certificate/{verification_code}")
-
-async def api_certificate_verify(verification_code:str):
-
-    cert=await db_fetchrow("""
-
-        SELECT
-
-            certificate_id,verification_code,type,
-
-            full_name,score,level,created_at
-
-        FROM certificates
-
-        WHERE verification_code=$1
-
-    """,verification_code.upper())
-
-    if not cert:
-
-        raise HTTPException(status_code=404,detail="Certificate not found")
-
-    return {
-
-        "ok":True,
-
-        "certificate":{
-
-            "certificate_id":cert["certificate_id"],
-
-            "verification_code":cert["verification_code"],
-
-            "type":cert["type"],
-
-            "full_name":cert["full_name"],
-
-            "score":cert["score"],
-
-            "level":cert["level"],
-
-            "created_at":cert["created_at"].isoformat()
-
-        }
-
-    }
+async def certificate_verify(verification_code:str,request:Request):
+    # Public verification by unique code, no private fields beyond certificate.
+    row=await db_fetchrow("SELECT full_name,score,level,verification_code,created_at FROM certificates WHERE verification_code=$1",verification_code.upper())
+    if not row: return json_error("Sertifikat topilmadi",404)
+    return {"ok":True,"certificate":dict(row)}
 
 @app.get("/api/certificate/{certificate_id}/png")
-
-async def api_certificate_png(certificate_id:str,request:Request):
-
-    user=await require_webapp_user(request)
-
-    cert=await db_fetchrow("""
-
-        SELECT *
-
-        FROM certificates
-
-        WHERE certificate_id=$1 AND user_id=$2
-
-    """,certificate_id,int(user["id"]))
-
-    if not cert:
-
-        raise HTTPException(status_code=404,detail="Certificate not found")
-
-    created_at=cert["created_at"]
-
-    data=create_certificate_png(
-
-        cert["full_name"],
-
-        cert["score"],
-
-        cert["level"] or "",
-
-        cert["verification_code"],
-
-        created_at
-
-    )
-
-    return Response(
-
-        content=data,
-
-        media_type="image/png",
-
-        headers={
-
-            "Content-Disposition":
-
-                f'inline; filename="{cert["certificate_id"]}.png"'
-
-        }
-
-    )
+async def certificate_png_endpoint(certificate_id:str,request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    cert=await db_fetchrow("SELECT * FROM certificates WHERE certificate_id=$1 AND user_id=$2",certificate_id,uid)
+    if not cert: return json_error("Sertifikat topilmadi",404)
+    return Response(certificate_png(cert),media_type="image/png",headers={"Content-Disposition":f'inline; filename="{certificate_id}.png"'})
 
 @app.get("/api/ranking")
-
 async def api_ranking(request:Request):
-
-    user=await require_webapp_user(request)
-
+    user=await authenticated_user(request); uid=int(user["id"])
     rows=await db_fetch("""
-
-        SELECT
-
-            r.user_id,
-
-            COALESCE(u.full_name,
-
-                NULLIF(TRIM(CONCAT_WS(' ',u.first_name,u.last_name)),''),
-
-                COALESCE(u.username,'Foydalanuvchi')
-
-            ) AS name,
-
-            r.score,
-
-            r.level,
-
-            r.created_at
-
-        FROM results r
-
-        JOIN users u ON u.user_id=r.user_id
-
+        SELECT u.full_name,r.score,r.level
+        FROM results r JOIN users u ON u.user_id=r.user_id
         WHERE r.test_type='IQ'
-
-        ORDER BY r.score DESC,r.created_at ASC
-
-        LIMIT 100
-
+        ORDER BY r.score DESC,r.created_at ASC LIMIT 100
     """)
-
-    ranking=[]
-
-    for index,row in enumerate(rows,1):
-
-        ranking.append({
-
-            "rank":index,
-
-            "user_id":row["user_id"],
-
-            "name":row["name"],
-
-            "score":row["score"],
-
-            "level":row["level"],
-
-            "created_at":row["created_at"].isoformat()
-
-        })
-
-    me=next(
-
-        (x for x in ranking if int(x["user_id"])==int(user["id"])),
-
-        None
-
-    )
-
-    return {
-
-        "ok":True,
-
-        "ranking":ranking,
-
-        "me":me
-
-    }
+    items=[{"position":i+1,"name":r["full_name"] or "Foydalanuvchi","score":r["score"],"level":r["level"]} for i,r in enumerate(rows)]
+    pos=next((x["position"] for x in items if x["name"] and False),None)
+    mine=await db_fetchrow("""
+        SELECT COUNT(*)+1 AS position FROM results
+        WHERE test_type='IQ' AND score > COALESCE((SELECT MAX(score) FROM results WHERE user_id=$1 AND test_type='IQ'),-1)
+    """,uid)
+    return {"ok":True,"ranking":items,"my_position":mine["position"] if mine else None}
 
 @app.get("/api/stats/live")
-
-async def api_stats_live(request:Request):
-
-    await require_webapp_user(request)
-
+async def stats_live(request:Request):
     mode=await setting("live_mode","fake")
+    if mode=="real":
+        row=await db_fetchrow("SELECT COUNT(*) c FROM users WHERE last_seen > NOW()-INTERVAL '5 minutes'")
+        online=max(0,int(row["c"]))
+        total=await db_fetchrow("SELECT COUNT(*) c FROM users")
+        return {"ok":True,"mode":"real","total":int(total["c"]),"online":online}
+    base=await setting_int("live_fake_base",95114); online=await setting_int("live_fake_online",342); delta=await setting_int("live_fake_delta",8)
+    import random
+    value=max(1,base+random.randint(-delta,delta))
+    on=max(1,online+random.randint(-max(1,delta//2),max(1,delta//2)))
+    return {"ok":True,"mode":"fake","total":value,"online":on}
 
-    if mode=="fake":
-
-        base=await setting_int("live_fake_base",95114)
-
-        online=await setting_int("live_fake_online",342)
-
-        delta=await setting_int("live_fake_delta",8)
-
-        now=int(datetime.now(timezone.utc).timestamp())
-
-        cycle=(now//5)%max(1,delta*2+1)-delta
-
-        return {
-
-            "ok":True,
-
-            "mode":"fake",
-
-            "total":max(0,base+cycle),
-
-            "online":max(0,online+(cycle%5))
-
-        }
-
-    total=await db_fetchrow("""
-
-        SELECT COUNT(*) AS c
-
-        FROM users
-
-    """)
-
-    online=await db_fetchrow("""
-
-        SELECT COUNT(*) AS c
-
-        FROM users
-
-        WHERE last_seen > NOW()-INTERVAL '5 minutes'
-
-    """)
-
-    return {
-
-        "ok":True,
-
-        "mode":"real",
-
-        "total":int(total["c"]),
-
-        "online":int(online["c"])
-
-    }
-
-def make_battle_code():
-
+def battle_code():
     alphabet=string.ascii_uppercase+string.digits
-
-    while True:
-
-        code="".join(secrets.choice(alphabet) for _ in range(4))
-
-        return code
+    return "".join(secrets.choice(alphabet) for _ in range(4))
 
 @app.post("/api/battle/create")
-
-async def api_battle_create(request:Request):
-
-    user=await require_webapp_user(request)
-
-    user_id=int(user["id"])
-
-    existing=await db_fetchrow("""
-
-        SELECT b.id,b.code,b.status
-
-        FROM battles b
-
-        JOIN battle_players bp ON bp.battle_id=b.id
-
-        WHERE bp.user_id=$1
-
-          AND b.status IN ('waiting','ready','active')
-
-        ORDER BY b.created_at DESC
-
-        LIMIT 1
-
-    """,user_id)
-
-    if existing:
-
-        return {
-
-            "ok":True,
-
-            "battle":{
-
-                "id":str(existing["id"]),
-
-                "code":existing["code"],
-
-                "status":existing["status"]
-
-            }
-
-        }
-
-    battle_id=uuid4()
-
-    code=make_battle_code()
-
-    async with db_pool.acquire() as conn:
-
-        async with conn.transaction():
-
-            await conn.execute("""
-
-                INSERT INTO battles(
-
-                    id,code,status,created_by
-
-                )
-
-                VALUES($1,$2,'waiting',$3)
-
-            """,battle_id,code,user_id)
-
-            await conn.execute("""
-
-                INSERT INTO battle_players(
-
-                    battle_id,user_id,role
-
-                )
-
-                VALUES($1,$2,'creator')
-
-            """,battle_id,user_id)
-
-    return {
-
-        "ok":True,
-
-        "battle":{
-
-            "id":str(battle_id),
-
-            "code":code,
-
-            "status":"waiting"
-
-        }
-
-    }
+async def battle_create(request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    price=await setting_int("battle_price",7500)
+    for _ in range(10):
+        code=battle_code()
+        try:
+            row=await db_fetchrow("INSERT INTO battles(id,code,created_by,status) VALUES($1,$2,$3,'waiting') RETURNING id,code",uuid4(),code,uid)
+            break
+        except asyncpg.UniqueViolationError:
+            continue
+    else: return json_error("Battle kodini yaratib bo‘lmadi",500)
+    await db_execute("INSERT INTO battle_players(battle_id,user_id,role) VALUES($1,$2,'creator')",row["id"],uid)
+    return {"ok":True,"battle_id":str(row["id"]),"code":row["code"],"price":price}
 
 @app.post("/api/battle/join")
-
-async def api_battle_join(request:Request):
-
-    user=await require_webapp_user(request)
-
-    user_id=int(user["id"])
-
-    body=await request.json()
-
-    code=str(body.get("code","")).strip().upper()
-
-    if len(code)!=4:
-
-        raise HTTPException(status_code=400,detail="Invalid battle code")
-
+async def battle_join(request:Request):
+    user=await authenticated_user(request)
+    data=await request.json()
+    uid=int(user["id"])
+    code=str(data.get("code","")).upper().strip()
+    if len(code)!=4 or any(c not in string.ascii_uppercase+string.digits for c in code):
+        return json_error("Battle kodi 4 belgidan iborat")
     async with db_pool.acquire() as conn:
-
         async with conn.transaction():
-
-            battle=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM battles
-
-                WHERE code=$1
-
-                FOR UPDATE
-
-            """,code)
-
-            if not battle:
-
-                raise HTTPException(status_code=404,detail="Battle not found")
-
-            if battle["status"]!="waiting":
-
-                raise HTTPException(status_code=409,detail="Battle is not waiting")
-
-            if int(battle["created_by"])==user_id:
-
-                raise HTTPException(status_code=400,detail="Cannot join your own battle")
-
-            already=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM battle_players
-
-                WHERE battle_id=$1 AND user_id=$2
-
-            """,battle["id"],user_id)
-
-            if already:
-
-                return {
-
-                    "ok":True,
-
-                    "battle":{
-
-                        "id":str(battle["id"]),
-
-                        "code":battle["code"],
-
-                        "status":battle["status"]
-
-                    }
-
-                }
-
-            await conn.execute("""
-
-                INSERT INTO battle_players(
-
-                    battle_id,user_id,role
-
-                )
-
-                VALUES($1,$2,'opponent')
-
-            """,battle["id"],user_id)
-
-            await conn.execute("""
-
-                UPDATE battles
-
-                SET status='ready',ready_at=NOW()
-
-                WHERE id=$1
-
-            """,battle["id"])
-
-    return {
-
-        "ok":True,
-
-        "battle":{
-
-            "id":str(battle["id"]),
-
-            "code":battle["code"],
-
-            "status":"ready"
-
-        }
-
-    }
+            battle=await conn.fetchrow("SELECT * FROM battles WHERE code=$1 FOR UPDATE",code)
+            if not battle: return json_error("Battle topilmadi",404)
+            if battle["created_by"]==uid: return json_error("O‘zingizga opponent bo‘la olmaysiz")
+            if battle["status"] not in ("waiting","payments"): return json_error("Battle allaqachon boshlangan")
+            existing=await conn.fetchrow("SELECT * FROM battle_players WHERE battle_id=$1 AND user_id=$2",battle["id"],uid)
+            if not existing:
+                try:
+                    await conn.execute("INSERT INTO battle_players(battle_id,user_id,role) VALUES($1,$2,'opponent')",battle["id"],uid)
+                except asyncpg.UniqueViolationError:
+                    return json_error("Bu battle allaqachon to‘ldirilgan",409)
+            await conn.execute("UPDATE battles SET status='payments' WHERE id=$1 AND status='waiting'",battle["id"])
+    price=await setting_int("battle_price",7500)
+    return {"ok":True,"battle_id":str(battle["id"]),"price":price}
 
 @app.get("/api/battle/{battle_id}")
-
-async def api_battle_get(battle_id:str,request:Request):
-
-    user=await require_webapp_user(request)
-
-    try:
-
-        bid=__import__("uuid").UUID(battle_id)
-
-    except ValueError:
-
-        raise HTTPException(status_code=400,detail="Invalid battle id")
-
-    battle=await db_fetchrow("""
-
-        SELECT *
-
-        FROM battles
-
-        WHERE id=$1
-
-    """,bid)
-
-    if not battle:
-
-        raise HTTPException(status_code=404,detail="Battle not found")
-
-    player=await db_fetchrow("""
-
-        SELECT *
-
-        FROM battle_players
-
-        WHERE battle_id=$1 AND user_id=$2
-
-    """,bid,int(user["id"]))
-
-    if not player:
-
-        raise HTTPException(status_code=403,detail="Not a battle participant")
-
-    opponent=await db_fetchrow("""
-
-        SELECT
-
-            bp.user_id,bp.role,bp.score,bp.finished_at,
-
-            u.username,u.first_name,u.last_name
-
-        FROM battle_players bp
-
-        JOIN users u ON u.user_id=bp.user_id
-
-        WHERE bp.battle_id=$1
-
-          AND bp.user_id<>$2
-
-        LIMIT 1
-
-    """,bid,int(user["id"]))
-
-    return {
-
-        "ok":True,
-
-        "battle":{
-
-            "id":str(battle["id"]),
-
-            "code":battle["code"],
-
-            "status":battle["status"],
-
-            "created_at":battle["created_at"].isoformat(),
-
-            "ready_at":battle["ready_at"].isoformat() if battle["ready_at"] else None,
-
-        },
-
-        "me":{
-
-            "role":player["role"],
-
-            "score":player["score"],
-
-            "finished":bool(player["finished_at"])
-
-        },
-
-        "opponent":{
-
-            "username":opponent["username"],
-
-            "first_name":opponent["first_name"],
-
-            "last_name":opponent["last_name"],
-
-            "finished":bool(opponent["finished_at"])
-
-        } if opponent else None
-
-    }
+async def battle_get(battle_id:str,request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    b=await db_fetchrow("SELECT * FROM battles WHERE id=$1::uuid",battle_id)
+    if not b: return json_error("Battle topilmadi",404)
+    p=await db_fetchrow("SELECT * FROM battle_players WHERE battle_id=$1::uuid AND user_id=$2",battle_id,uid)
+    if not p: raise HTTPException(403,"Forbidden")
+    players=await db_fetch("SELECT user_id,role,score,finished_at FROM battle_players WHERE battle_id=$1::uuid ORDER BY role",battle_id)
+    # Never expose opponent score before both finish.
+    both_finished=all(x["finished_at"] is not None for x in players) and len(players)==2
+    safe_players=[]
+    for x in players:
+        safe_players.append({"role":x["role"],"is_me":x["user_id"]==uid,"finished":x["finished_at"] is not None,"score":x["score"] if (x["user_id"]==uid or both_finished) else None})
+    return {"ok":True,"battle":{"id":str(b["id"]),"code":b["code"],"status":b["status"],"players":safe_players}}
 
 @app.post("/api/battle/{battle_id}/payment")
-
-async def api_battle_payment(battle_id:str,request:Request):
-
-    user=await require_webapp_user(request)
-
-    try:
-
-        bid=__import__("uuid").UUID(battle_id)
-
-    except ValueError:
-
-        raise HTTPException(status_code=400,detail="Invalid battle id")
-
-    player=await db_fetchrow("""
-
-        SELECT *
-
-        FROM battle_players
-
-        WHERE battle_id=$1 AND user_id=$2
-
-    """,bid,int(user["id"]))
-
-    if not player:
-
-        raise HTTPException(status_code=403,detail="Not a battle participant")
-
-    existing=await db_fetchrow("""
-
-        SELECT *
-
-        FROM payments
-
-        WHERE battle_id=$1
-
-          AND user_id=$2
-
-          AND status IN ('pending','approved')
-
-        ORDER BY id DESC
-
-        LIMIT 1
-
-    """,bid,int(user["id"]))
-
-    if existing:
-
-        card=await db_fetchrow("""
-
-            SELECT id,card_number,holder,bank
-
-            FROM payment_cards
-
-            WHERE id=$1
-
-        """,existing["card_id"])
-
-        return {
-
-            "ok":True,
-
-            "payment":{
-
-                "id":existing["id"],
-
-                "amount":existing["amount"],
-
-                "status":existing["status"]
-
-            },
-
-            "card":{
-
-                "id":card["id"],
-
-                "card_number":card["card_number"],
-
-                "holder":card["holder"],
-
-                "bank":card["bank"]
-
-            } if card else None
-
-        }
-
+async def battle_payment(battle_id:str,request:Request):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
+    p=await db_fetchrow("SELECT * FROM battle_players WHERE battle_id=$1::uuid AND user_id=$2",battle_id,uid)
+    if not p: raise HTTPException(403,"Forbidden")
     amount=await setting_int("battle_price",7500)
+    existing=await db_fetchrow("SELECT * FROM payments WHERE battle_id=$1::uuid AND user_id=$2 ORDER BY id DESC LIMIT 1",battle_id,uid)
+    card=await active_card()
+    if existing:
+        if existing["status"]=="approved":
+            return {"ok":True,"payment_id":existing["id"],"amount":existing["amount"],"status":"approved","card":dict(card) if card else None}
+        if existing["status"]=="pending":
+            selected_card=await db_fetchrow("SELECT id,card_number,holder,bank,active FROM payment_cards WHERE id=$1",existing["card_id"]) if existing["card_id"] else card
+            return {"ok":True,"payment_id":existing["id"],"amount":existing["amount"],"status":"pending","card":dict(selected_card) if selected_card else None}
+    pay=await db_fetchrow("INSERT INTO payments(user_id,battle_id,payment_type,amount,card_id,status) VALUES($1,$2::uuid,'BATTLE',$3,$4,'pending') RETURNING id",uid,battle_id,amount,card["id"] if card else None)
+    await db_execute("UPDATE battle_players SET payment_id=$1 WHERE battle_id=$2::uuid AND user_id=$3",pay["id"],battle_id,uid)
+    return {"ok":True,"payment_id":pay["id"],"amount":amount,"status":"pending","card":dict(card) if card else None}
 
-    payment,card=await create_payment_for_attempt(
-
-        int(user["id"]),
-
-        "battle",
-
-        amount,
-
-        battle_id=bid
-
-    )
-
-    await db_execute("""
-
-        UPDATE battle_players
-
-        SET payment_id=$1
-
-        WHERE battle_id=$2 AND user_id=$3
-
-    """,payment["id"],bid,int(user["id"]))
-
-    await notify_admin_payment(payment["id"])
-
-    return {
-
-        "ok":True,
-
-        "payment":{
-
-            "id":payment["id"],
-
-            "amount":payment["amount"],
-
-            "status":payment["status"]
-
-        },
-
-        "card":{
-
-            "id":card["id"],
-
-            "card_number":card["card_number"],
-
-            "holder":card["holder"],
-
-            "bank":card["bank"]
-
-        } if card else None
-
-    }
-
-@app.post("/api/battle/{battle_id}/start")
-
-async def api_battle_start(battle_id:str,request:Request):
-
-    user=await require_webapp_user(request)
-
-    try:
-
-        bid=__import__("uuid").UUID(battle_id)
-
-    except ValueError:
-
-        raise HTTPException(status_code=400,detail="Invalid battle id")
-
+@app.get("/api/battle/{battle_id}/start")
+async def battle_start(battle_id:str,request:Request):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
     async with db_pool.acquire() as conn:
-
-        async with conn.transaction():
-
-            battle=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM battles
-
-                WHERE id=$1
-
-                FOR UPDATE
-
-            """,bid)
-
-            if not battle:
-
-                raise HTTPException(status_code=404,detail="Battle not found")
-
-            player=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM battle_players
-
-                WHERE battle_id=$1 AND user_id=$2
-
-            """,bid,int(user["id"]))
-
-            if not player:
-
-                raise HTTPException(status_code=403,detail="Not a participant")
-
-            players=await conn.fetch("""
-
-                SELECT *
-
-                FROM battle_players
-
-                WHERE battle_id=$1
-
-                ORDER BY role
-
-            """,bid)
-
-            if len(players)!=2:
-
-                raise HTTPException(status_code=409,detail="Waiting for opponent")
-
-            for p in players:
-
-                if not p["payment_id"]:
-
-                    raise HTTPException(status_code=402,detail="Payment required")
-
-                payment=await conn.fetchrow("""
-
-                    SELECT status
-
-                    FROM payments
-
-                    WHERE id=$1
-
-                """,p["payment_id"])
-
-                if not payment or payment["status"]!="approved":
-
-                    raise HTTPException(status_code=402,detail="Both payments must be approved")
-
-                if p["session_id"]:
-
-                    continue
-
-                session_id=uuid4()
-
-                expires=datetime.now(timezone.utc)+timedelta(minutes=30)
-
-                await conn.execute("""
-
-                    INSERT INTO test_sessions(
-
-                        session_id,user_id,test_type,status,answers,questions,
-
-                        started_at,expires_at,price,is_retry
-
-                    )
-
-                    VALUES(
-
-                        $1,$2,'IQ','active','{}'::jsonb,$3::jsonb,
-
-                        NOW(),$4,0,FALSE
-
-                    )
-
-                """,
-
-                    session_id,
-
-                    p["user_id"],
-
-                    json.dumps(public_questions("IQ"),ensure_ascii=False),
-
-                    expires
-
-                )
-
-                await conn.execute("""
-
-                    UPDATE battle_players
-
-                    SET session_id=$1
-
-                    WHERE battle_id=$2 AND user_id=$3
-
-                """,
-
-                    session_id,bid,p["user_id"]
-
-                )
-
-            await conn.execute("""
-
-                UPDATE battles
-
-                SET status='active'
-
-                WHERE id=$1
-
-            """,bid)
-
-    me=await db_fetchrow("""
-
-        SELECT session_id
-
-        FROM battle_players
-
-        WHERE battle_id=$1 AND user_id=$2
-
-    """,bid,int(user["id"]))
-
-    return {
-
-        "ok":True,
-
-        "battle_id":str(bid),
-
-        "session_id":str(me["session_id"]),
-
-        "questions":public_questions("IQ")
-
-    }
+        battle=await conn.fetchrow("SELECT * FROM battles WHERE id=$1::uuid",battle_id)
+        player=await conn.fetchrow("SELECT * FROM battle_players WHERE battle_id=$1::uuid AND user_id=$2",battle_id,uid)
+        if not battle or not player: raise HTTPException(403,"Forbidden")
+        players=await conn.fetch("""SELECT bp.*, pay.status AS payment_status FROM battle_players bp LEFT JOIN payments pay ON pay.id=bp.payment_id WHERE bp.battle_id=$1::uuid ORDER BY bp.role""",battle_id)
+    if len(players)!=2 or any(x["payment_status"]!="approved" for x in players):
+        return {"ok":True,"ready":False,"status":battle["status"] if battle else "unknown"}
+    return {"ok":True,"ready":True,"status":"ready","questions":public_iq_questions()}
 
 @app.post("/api/battle/{battle_id}/submit")
-
-async def api_battle_submit(battle_id:str,request:Request):
-
-    user=await require_webapp_user(request)
-
-    try:
-
-        bid=__import__("uuid").UUID(battle_id)
-
-    except ValueError:
-
-        raise HTTPException(status_code=400,detail="Invalid battle id")
-
-    body=await request.json()
-
-    answers=normalize_answer_map(body.get("answers",{}))
-
-    player=await db_fetchrow("""
-
-        SELECT *
-
-        FROM battle_players
-
-        WHERE battle_id=$1 AND user_id=$2
-
-    """,bid,int(user["id"]))
-
-    if not player:
-
-        raise HTTPException(status_code=403,detail="Not a participant")
-
-    if not player["session_id"]:
-
-        raise HTTPException(status_code=409,detail="Battle has not started")
-
+async def battle_submit(battle_id:str,request:Request):
+    user=await authenticated_user(request)
+    data=await request.json()
+    uid=int(user["id"])
+    answers=data.get("answers") or {}
     async with db_pool.acquire() as conn:
-
         async with conn.transaction():
-
-            bp=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM battle_players
-
-                WHERE battle_id=$1 AND user_id=$2
-
-                FOR UPDATE
-
-            """,bid,int(user["id"]))
-
-            if bp["finished_at"]:
-
-                return {
-
-                    "ok":True,
-
-                    "already_finished":True,
-
-                    "score":bp["score"]
-
-                }
-
-            session=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM test_sessions
-
-                WHERE session_id=$1
-
-                FOR UPDATE
-
-            """,bp["session_id"])
-
-            if not session:
-
-                raise HTTPException(status_code=404,detail="Battle test session not found")
-
-            score,correct,level=calculate_result("IQ",answers)
-
-            await conn.execute("""
-
-                UPDATE test_sessions
-
-                SET status='completed',
-
-                    answers=$2::jsonb,
-
-                    score=$3,
-
-                    correct_count=$4,
-
-                    completed_at=NOW()
-
-                WHERE session_id=$1
-
-            """,
-
-                bp["session_id"],
-
-                json.dumps(answers),
-
-                score,
-
-                correct
-
-            )
-
-            await conn.execute("""
-
-                UPDATE battle_players
-
-                SET score=$1,
-
-                    correct_count=$2,
-
-                    finished_at=NOW()
-
-                WHERE battle_id=$3 AND user_id=$4
-
-            """,
-
-                score,correct,bid,int(user["id"])
-
-            )
-
-            finished_count=await conn.fetchval("""
-
-                SELECT COUNT(*)
-
-                FROM battle_players
-
-                WHERE battle_id=$1 AND finished_at IS NOT NULL
-
-            """,bid)
-
-            if finished_count==2:
-
-                await conn.execute("""
-
-                    UPDATE battles
-
-                    SET status='finished',
-
-                        finalized_at=NOW()
-
-                    WHERE id=$1
-
-                """,bid)
-
-    return {
-
-        "ok":True,
-
-        "score":score,
-
-        "correct_count":correct,
-
-        "level":level,
-
-        "waiting_for_opponent":finished_count<2
-
-    }
+            p=await conn.fetchrow("SELECT * FROM battle_players WHERE battle_id=$1::uuid AND user_id=$2 FOR UPDATE",battle_id,uid)
+            if not p: raise HTTPException(403,"Forbidden")
+            approved=await conn.fetchrow("SELECT 1 FROM payments WHERE id=$1 AND status='approved' AND user_id=$2",p["payment_id"],uid)
+            if not approved: return json_error("Battle payment approved emas",403)
+            battle=await conn.fetchrow("SELECT * FROM battles WHERE id=$1::uuid FOR UPDATE",battle_id)
+            if not battle or battle["status"] not in ("ready","finished"):
+                return json_error("Battle hali tayyor emas",409)
+            if p["finished_at"] is not None:
+                return {"ok":True,"already_finished":True,"score":p["score"]}
+            score,correct,_=calculate_iq(answers)
+            await conn.execute("UPDATE battle_players SET score=$1,correct_count=$2,finished_at=NOW() WHERE battle_id=$3::uuid AND user_id=$4",score,correct,battle_id,uid)
+            players=await conn.fetch("SELECT user_id,score,finished_at FROM battle_players WHERE battle_id=$1::uuid FOR UPDATE",battle_id)
+            if len(players)==2 and all(x["finished_at"] is not None for x in players):
+                await conn.execute("UPDATE battles SET status='finished',finalized_at=NOW() WHERE id=$1::uuid AND status<>'finished'",battle_id)
+                status="finished"
+            else:
+                status="waiting_opponent"
+    return {"ok":True,"score":score,"status":status}
 
 @app.get("/api/battle/{battle_id}/result")
-
-async def api_battle_result(battle_id:str,request:Request):
-
-    user=await require_webapp_user(request)
-
-    try:
-
-        bid=__import__("uuid").UUID(battle_id)
-
-    except ValueError:
-
-        raise HTTPException(status_code=400,detail="Invalid battle id")
-
-    me=await db_fetchrow("""
-
-        SELECT *
-
-        FROM battle_players
-
-        WHERE battle_id=$1 AND user_id=$2
-
-    """,bid,int(user["id"]))
-
-    if not me:
-
-        raise HTTPException(status_code=403,detail="Not a participant")
-
-    opponent=await db_fetchrow("""
-
-        SELECT *
-
-        FROM battle_players
-
-        WHERE battle_id=$1 AND user_id<>$2
-
-        LIMIT 1
-
-    """,bid,int(user["id"]))
-
-    if not opponent:
-
-        return {
-
-            "ok":True,
-
-            "status":"waiting",
-
-            "result":None
-
-        }
-
-    if not me["finished_at"] or not opponent["finished_at"]:
-
-        return {
-
-            "ok":True,
-
-            "status":"waiting",
-
-            "result":None
-
-        }
-
-    if me["score"]>opponent["score"]:
-
-        outcome="win"
-
-    elif me["score"]<opponent["score"]:
-
-        outcome="loss"
-
-    else:
-
-        outcome="draw"
-
-    return {
-
-        "ok":True,
-
-        "status":"finished",
-
-        "result":{
-
-            "outcome":outcome,
-
-            "my_score":me["score"],
-
-            "opponent_score":opponent["score"],
-
-            "my_correct":me["correct_count"],
-
-            "opponent_correct":opponent["correct_count"]
-
-        }
-
-    }
+async def battle_result(battle_id:str,request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    b=await db_fetchrow("SELECT * FROM battles WHERE id=$1::uuid",battle_id)
+    p=await db_fetchrow("SELECT * FROM battle_players WHERE battle_id=$1::uuid AND user_id=$2",battle_id,uid)
+    if not b or not p: raise HTTPException(403,"Forbidden")
+    players=await db_fetch("SELECT user_id,score,finished_at FROM battle_players WHERE battle_id=$1::uuid",battle_id)
+    if len(players)!=2 or not all(x["finished_at"] for x in players):
+        return {"ok":True,"ready":False}
+    a,bp=players
+    if a["score"]==bp["score"]: outcome="draw"
+    else: outcome="win" if p["score"]==max(a["score"],bp["score"]) else "loss"
+    return {"ok":True,"ready":True,"outcome":outcome,"my_score":p["score"],"opponent_score":next(x["score"] for x in players if x["user_id"]!=uid)}
 
 @app.get("/api/referral")
-
-async def api_referral(request:Request):
-
-    user=await require_webapp_user(request)
-
-    user_id=int(user["id"])
-
-    count=await db_fetchval_safe("""
-
-        SELECT COUNT(*)
-
-        FROM referrals
-
-        WHERE referrer_id=$1
-
-    """,user_id)
-
-    return {
-
-        "ok":True,
-
-        "referral_code":str(user_id),
-
-        "link":f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}",
-
-        "count":int(count or 0)
-
-    }
-
-async def db_fetchval_safe(query,*args):
-
-    async with db_pool.acquire() as conn:
-
-        return await conn.fetchval(query,*args)
+async def referral(request:Request):
+    user=await authenticated_user(request); uid=int(user["id"])
+    row=await db_fetchrow("SELECT COUNT(*) c FROM referrals WHERE referrer_id=$1",uid)
+    link=f"https://t.me/{BOT_USERNAME}?start=ref_{uid}"
+    return {"ok":True,"link":link,"count":int(row["c"])}
 
 @app.post("/api/referral/claim")
-
-async def api_referral_claim(request:Request):
-
-    user=await require_webapp_user(request)
-
-    user_id=int(user["id"])
-
-    body=await request.json()
-
-    code=str(body.get("code","")).strip()
-
-    if not code.startswith("ref_"):
-
-        raise HTTPException(status_code=400,detail="Invalid referral code")
-
+async def referral_claim(request:Request):
+    user=await authenticated_user(request); data=await request.json(); uid=int(user["id"]); ref=int(data.get("referrer_id",0))
+    if ref==uid: return json_error("O‘zingizni taklif qila olmaysiz")
+    if not ref or not await db_fetchrow("SELECT 1 FROM users WHERE user_id=$1",ref): return json_error("Referrer topilmadi")
     try:
+        await db_execute("INSERT INTO referrals(referrer_id,referred_id) VALUES($1,$2) ON CONFLICT(referred_id) DO NOTHING",ref,uid)
+    except Exception: logger.exception("Referral claim failed")
+    return {"ok":True}
 
-        referrer_id=int(code[4:])
-
-    except ValueError:
-
-        raise HTTPException(status_code=400,detail="Invalid referral code")
-
-    if referrer_id==user_id:
-
-        raise HTTPException(status_code=400,detail="Self referral is not allowed")
-
-    async with db_pool.acquire() as conn:
-
-        async with conn.transaction():
-
-            referrer=await conn.fetchrow(
-
-                "SELECT user_id FROM users WHERE user_id=$1",
-
-                referrer_id
-
-            )
-
-            if not referrer:
-
-                raise HTTPException(status_code=404,detail="Referrer not found")
-
-            existing=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM referrals
-
-                WHERE referred_id=$1
-
-            """,user_id)
-
-            if existing:
-
-                return {
-
-                    "ok":True,
-
-                    "claimed":False,
-
-                    "message":"Referral already claimed"
-
-                }
-
-            await conn.execute("""
-
-                INSERT INTO referrals(referrer_id,referred_id)
-
-                VALUES($1,$2)
-
-            """,referrer_id,user_id)
-
-    return {
-
-        "ok":True,
-
-        "claimed":True
-
-    }
-
-@dp.message(CommandStart())
-
-async def start_handler(message:types.Message):
-
-    await upsert_user(message.from_user)
-
-    args=(message.text or "").split(maxsplit=1)
-
-    start_param=args[1].strip() if len(args)>1 else ""
-
-    if start_param.startswith("ref_"):
-
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    global db_pool
+    logger.info("Starting application")
+    db_pool=await asyncpg.create_pool(DATABASE_URL,min_size=1,max_size=10,command_timeout=30)
+    await migrate()
+    webhook_url=PUBLIC_BASE_URL.rstrip("/")+"/telegram/webhook"
+    try:
+        await bot.set_webhook(url=webhook_url,secret_token=WEBHOOK_SECRET,drop_pending_updates=True)
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="🧠 IQ TEST BOT", web_app=WebAppInfo(url=WEBAPP_URL + "/app")))
+        info=await bot.get_webhook_info()
+        logger.info("Telegram webhook configured: %s pending=%s",info.url,info.pending_update_count)
+    except Exception:
+        logger.exception("Webhook configuration failed")
+        raise
+    try:
+        yield
+    finally:
+        logger.info("Shutting down")
         try:
-
-            referrer_id=int(start_param[4:])
-
-            if referrer_id!=message.from_user.id:
-
-                async with db_pool.acquire() as conn:
-
-                    await conn.execute("""
-
-                        INSERT INTO referrals(referrer_id,referred_id)
-
-                        SELECT $1,$2
-
-                        WHERE EXISTS(
-
-                            SELECT 1 FROM users WHERE user_id=$1
-
-                        )
-
-                        ON CONFLICT(referred_id) DO NOTHING
-
-                    """,referrer_id,message.from_user.id)
-
-        except ValueError:
-
-            pass
-
-    lang=await get_user_language(message.from_user.id)
-
-    await message.answer(
-
-        t(lang,"welcome",name=message.from_user.first_name or "do‘st"),
-
-        reply_markup=app_inline_keyboard(lang)
-
-    )
-
-    await message.answer(
-
-        "👇",
-
-        reply_markup=main_keyboard(lang)
-
-    )
-
-@dp.message(F.text.in_({
-
-    "🧠 IQ · EQ · PQ testini ishlash",
-
-    "🧠 Пройти IQ · EQ · PQ",
-
-    "🧠 Take IQ · EQ · PQ"
-
-}))
-
-async def old_test_button(message:types.Message):
-
-    lang=await get_user_language(message.from_user.id)
-
-    await message.answer(
-
-        "🧠 Mini App'ni oching:",
-
-        reply_markup=app_inline_keyboard(lang)
-
-    )
-
-@dp.message(F.text.in_({
-
-    "📜 Sertifikatim",
-
-    "📜 Мой сертификат",
-
-    "📜 My certificate"
-
-}))
-
-async def certificate_button(message:types.Message):
-
-    await upsert_user(message.from_user)
-
-    result=await db_fetchrow("""
-
-        SELECT *
-
-        FROM results
-
-        WHERE user_id=$1 AND test_type='IQ'
-
-        ORDER BY created_at DESC
-
-        LIMIT 1
-
-    """,message.from_user.id)
-
-    if not result:
-
-        lang=await get_user_language(message.from_user.id)
-
-        await message.answer(t(lang,"no_cert"))
-
-        return
-
-    cert=await ensure_certificate(
-
-        message.from_user.id,
-
-        int(result["id"])
-
-    )
-
-    if not cert:
-
-        await message.answer("Sertifikat topilmadi.")
-
-        return
-
-    await message.answer(
-
-        f"📜 <b>IQ TEST BOT sertifikati</b>\n\n"
-
-        f"Ism: <b>{cert['full_name']}</b>\n"
-
-        f"IQ: <b>{cert['score']}</b>\n"
-
-        f"Daraja: <b>{cert['level']}</b>\n"
-
-        f"Kod: <code>{cert['verification_code']}</code>\n\n"
-
-        f"Tekshirish:\n{PUBLIC_BASE_URL}/api/certificate/{cert['verification_code']}"
-
-    )
-
-@dp.message(F.text.in_({
-
-    "🏆 Reyting",
-
-    "🏆 Рейтинг",
-
-    "🏆 Ranking"
-
-}))
-
-async def ranking_button(message:types.Message):
-
-    await upsert_user(message.from_user)
-
-    rows=await db_fetch("""
-
-        SELECT
-
-            COALESCE(
-
-                u.full_name,
-
-                NULLIF(TRIM(CONCAT_WS(' ',u.first_name,u.last_name)),''),
-
-                COALESCE(u.username,'Foydalanuvchi')
-
-            ) AS name,
-
-            r.score
-
-        FROM results r
-
-        JOIN users u ON u.user_id=r.user_id
-
-        WHERE r.test_type='IQ'
-
-        ORDER BY r.score DESC,r.created_at ASC
-
-        LIMIT 10
-
-    """)
-
-    if not rows:
-
-        await message.answer("🏆 Hali reyting bo‘sh.")
-
-        return
-
-    text="🏆 <b>IQ TEST BOT — TOP 10</b>\n\n"
-
-    for i,row in enumerate(rows,1):
-
-        text+=f"{i}. {row['name']} — <b>{row['score']}</b>\n"
-
-    await message.answer(text)
-
-@dp.message(F.text.in_({
-
-    "💰 Pul ishlash",
-
-    "💰 Заработать",
-
-    "💰 Earn"
-
-}))
-
-async def earn_button(message:types.Message):
-
-    await upsert_user(message.from_user)
-
-    link=f"https://t.me/{BOT_USERNAME}?start=ref_{message.from_user.id}"
-
-    await message.answer(
-
-        "💰 <b>Referral</b>\n\n"
-
-        "Do‘stlaringizni botga taklif qiling.\n\n"
-
-        f"Sizning havolangiz:\n<code>{link}</code>"
-
-    )
-
-@dp.message(F.text.in_({
-
-    "ℹ️ Narx va yordam",
-
-    "ℹ️ Цена и помощь",
-
-    "ℹ️ Prices & help"
-
-}))
-
-async def help_button(message:types.Message):
-
-    await upsert_user(message.from_user)
-
-    iq=await setting_int("iq_price")
-
-    iq_retry=await setting_int("iq_retry_price")
-
-    eq=await setting_int("eq_price")
-
-    pq=await setting_int("pq_price")
-
-    battle=await setting_int("battle_price")
-
-    await message.answer(
-
-        "ℹ️ <b>IQ TEST BOT</b>\n\n"
-
-        f"🧠 IQ: <b>{iq:,} so‘m</b>\n"
-
-        f"🔄 IQ qayta: <b>{iq_retry:,} so‘m</b>\n"
-
-        f"💭 EQ: <b>{eq:,} so‘m</b>\n"
-
-        f"🎯 PQ: <b>{pq:,} so‘m</b>\n"
-
-        f"⚔️ Battle: <b>{battle:,} so‘m / odam</b>\n\n"
-
-        "Muammo bo‘lsa administratorga murojaat qiling."
-
-    ).replace(",", " ")
-
-@dp.message(F.text.in_({
-
-    "🌐 Til",
-
-    "🌐 Язык",
-
-    "🌐 Language"
-
-}))
-
-async def language_button(message:types.Message):
-
-    kb=InlineKeyboardMarkup(inline_keyboard=[
-
-        [
-
-            InlineKeyboardButton(text="🇺🇿 O‘zbek",callback_data="lang:uz"),
-
-            InlineKeyboardButton(text="🇷🇺 Русский",callback_data="lang:ru"),
-
-            InlineKeyboardButton(text="🇬🇧 English",callback_data="lang:en"),
-
-        ]
-
-    ])
-
-    await message.answer("🌐 Tilni tanlang:",reply_markup=kb)
-
-@dp.callback_query(F.data.startswith("lang:"))
-
-async def language_callback(call:CallbackQuery):
-
-    lang=call.data.split(":",1)[1]
-
-    if lang not in TRANSLATIONS:
-
-        await call.answer()
-
-        return
-
-    await db_execute("""
-
-        UPDATE users
-
-        SET language=$1,updated_at=NOW()
-
-        WHERE user_id=$2
-
-    """,lang,call.from_user.id)
-
-    await call.answer(t(lang,"lang_changed"))
-
-    try:
-
-        await call.message.edit_text(
-
-            t(
-
-                lang,
-
-                "welcome",
-
-                name=call.from_user.first_name or "do‘st"
-
-            ),
-
-            reply_markup=app_inline_keyboard(lang)
-
-        )
-
-    except Exception:
-
-        pass
-
-@dp.callback_query(F.data.startswith("payapprove:"))
-
-async def payment_approve_callback(call:CallbackQuery):
-
-    if not await is_admin(call.from_user.id):
-
-        await call.answer("Ruxsat yo‘q.",show_alert=True)
-
-        return
-
-    try:
-
-        payment_id=int(call.data.split(":",1)[1])
-
-    except ValueError:
-
-        await call.answer("Noto‘g‘ri ID",show_alert=True)
-
-        return
-
-    class DummyRequest:
-
-        async def json(self):
-
-            return {}
-
-    # Reuse the exact endpoint logic directly instead of manufacturing
-
-    # Telegram/WebApp identity.
-
-    async with db_pool.acquire() as conn:
-
-        async with conn.transaction():
-
-            payment=await conn.fetchrow("""
-
-                SELECT *
-
-                FROM payments
-
-                WHERE id=$1
-
-                FOR UPDATE
-
-            """,payment_id)
-
-            if not payment:
-
-                await call.answer("Payment topilmadi.",show_alert=True)
-
-                return
-
-            await conn.execute("""
-
-                UPDATE payments
-
-                SET status='approved',updated_at=NOW()
-
-                WHERE id=$1
-
-            """,payment_id)
-
-            if payment["attempt_id"]:
-
-                attempt=await conn.fetchrow("""
-
-                    SELECT *
-
-                    FROM test_attempts
-
-                    WHERE id=$1
-
-                    FOR UPDATE
-
-                """,payment["attempt_id"])
-
-                if attempt:
-
-                    result=await conn.fetchrow("""
-
-                        INSERT INTO results(
-
-                            user_id,attempt_id,test_type,score,level
-
-                        )
-
-                        VALUES($1,$2,$3,$4,$5)
-
-                        ON CONFLICT(attempt_id) DO UPDATE
-
-                        SET score=EXCLUDED.score,
-
-                            level=EXCLUDED.level
-
-                        RETURNING *
-
-                    """,
-
-                        attempt["user_id"],
-
-                        attempt["id"],
-
-                        attempt["test_type"],
-
-                        attempt["score"],
-
-                        attempt["level"]
-
-                    )
-
-                    await conn.execute("""
-
-                        UPDATE test_attempts
-
-                        SET result_visible=TRUE,
-
-                            payment_status='approved'
-
-                        WHERE id=$1
-
-                    """,attempt["id"])
-
-    await call.answer("✅ To‘lov tasdiqlandi.")
-
-    try:
-
-        await call.message.edit_reply_markup(reply_markup=None)
-
-    except Exception:
-
-        pass
-
-@dp.callback_query(F.data.startswith("payreject:"))
-
-async def payment_reject_callback(call:CallbackQuery):
-
-    if not await is_admin(call.from_user.id):
-
-        await call.answer("Ruxsat yo‘q.",show_alert=True)
-
-        return
-
-    try:
-
-        payment_id=int(call.data.split(":",1)[1])
-
-    except ValueError:
-
-        await call.answer("Noto‘g‘ri ID",show_alert=True)
-
-        return
-
-    await db_execute("""
-
-        UPDATE payments
-
-        SET status='rejected',updated_at=NOW()
-
-        WHERE id=$1
-
-    """,payment_id)
-
-    await call.answer("❌ To‘lov rad etildi.")
-
-    try:
-
-        await call.message.edit_reply_markup(reply_markup=None)
-
-    except Exception:
-
-        pass
-
-@dp.message(Command("admin"))
-
-async def admin_command(message:types.Message):
-
-    if not await is_admin(message.from_user.id):
-
-        await message.answer("Ruxsat yo‘q.")
-
-        return
-
-    await message.answer(
-
-        "🛠 <b>ADMIN PANEL</b>\n\n"
-
-        "/stats — statistika\n"
-
-        "/payments — pending to‘lovlar\n"
-
-        "/cards — kartalar\n"
-
-        "/users — foydalanuvchilar\n"
-
-        "/broadcast matn — xabar yuborish\n"
-
-        "/setlive fake 95114 342 — live"
-
-    )
-
-@dp.message(Command("stats"))
-
-async def admin_stats(message:types.Message):
-
-    if not await is_admin(message.from_user.id):
-
-        await message.answer("Ruxsat yo‘q.")
-
-        return
-
-    users=await db_fetchval_safe("SELECT COUNT(*) FROM users")
-
-    results=await db_fetchval_safe("SELECT COUNT(*) FROM results")
-
-    payments=await db_fetchval_safe(
-
-        "SELECT COUNT(*) FROM payments WHERE status='pending'"
-
-    )
-
-    battles=await db_fetchval_safe("SELECT COUNT(*) FROM battles")
-
-    await message.answer(
-
-        "📊 <b>Statistika</b>\n\n"
-
-        f"👤 Users: <b>{users}</b>\n"
-
-        f"🧠 Results: <b>{results}</b>\n"
-
-        f"💳 Pending payments: <b>{payments}</b>\n"
-
-        f"⚔️ Battles: <b>{battles}</b>"
-
-    )
-
-@dp.message(Command("payments"))
-
-async def admin_payments(message:types.Message):
-
-    if not await is_admin(message.from_user.id):
-
-        await message.answer("Ruxsat yo‘q.")
-
-        return
-
-    rows=await db_fetch("""
-
-        SELECT
-
-            p.id,p.user_id,p.payment_type,p.amount,p.status,
-
-            p.created_at,u.username,u.first_name
-
-        FROM payments p
-
-        JOIN users u ON u.user_id=p.user_id
-
-        WHERE p.status='pending'
-
-        ORDER BY p.id DESC
-
-        LIMIT 30
-
-    """)
-
-    if not rows:
-
-        await message.answer("Pending to‘lovlar yo‘q.")
-
-        return
-
-    text="💳 <b>PENDING PAYMENTS</b>\n\n"
-
-    for row in rows:
-
-        text+=(
-
-            f"#{row['id']} | "
-
-            f"{row['payment_type']} | "
-
-            f"{row['amount']:,} so‘m | "
-
-            f"{row['first_name'] or row['username'] or row['user_id']}\n"
-
-        )
-
-    await message.answer(text.replace(",", " "))
-
-@dp.message(Command("cards"))
-
-async def admin_cards(message:types.Message):
-
-    if not await is_admin(message.from_user.id):
-
-        await message.answer("Ruxsat yo‘q.")
-
-        return
-
-    rows=await db_fetch("""
-
-        SELECT id,card_number,holder,bank,active
-
-        FROM payment_cards
-
-        ORDER BY id
-
-    """)
-
-    if not rows:
-
-        await message.answer("Kartalar yo‘q.")
-
-        return
-
-    text="💳 <b>KARTALAR</b>\n\n"
-
-    for row in rows:
-
-        text+=(
-
-            f"#{row['id']} "
-
-            f"{row['card_number']} "
-
-            f"{row['holder'] or ''} "
-
-            f"{row['bank'] or ''} "
-
-            f"{'✅' if row['active'] else '❌'}\n"
-
-        )
-
-    await message.answer(text)
-
-@dp.message(Command("users"))
-
-async def admin_users(message:types.Message):
-
-    if not await is_admin(message.from_user.id):
-
-        await message.answer("Ruxsat yo‘q.")
-
-        return
-
-    rows=await db_fetch("""
-
-        SELECT user_id,username,first_name,language,last_seen
-
-        FROM users
-
-        ORDER BY last_seen DESC
-
-        LIMIT 30
-
-    """)
-
-    if not rows:
-
-        await message.answer("Users yo‘q.")
-
-        return
-
-    text="👤 <b>USERS</b>\n\n"
-
-    for row in rows:
-
-        text+=(
-
-            f"<code>{row['user_id']}</code> "
-
-            f"@{row['username'] or '—'} "
-
-            f"{row['first_name'] or ''} "
-
-            f"[{row['language']}]\n"
-
-        )
-
-    await message.answer(text)
-
-@dp.message(Command("broadcast"))
-
-async def admin_broadcast(message:types.Message):
-
-    if not await is_admin(message.from_user.id):
-
-        await message.answer("Ruxsat yo‘q.")
-
-        return
-
-    text=(message.text or "").split(maxsplit=1)
-
-    if len(text)<2:
-
-        await message.answer("Format: /broadcast xabar")
-
-        return
-
-    broadcast_text=text[1]
-
-    users=await db_fetch("SELECT user_id FROM users ORDER BY user_id")
-
-    sent=0
-
-    failed=0
-
-    for row in users:
-
-        try:
-
-            await bot.send_message(
-
-                int(row["user_id"]),
-
-                broadcast_text
-
-            )
-
-            sent+=1
-
+            if PUBLIC_BASE_URL:
+                await bot.delete_webhook(drop_pending_updates=False)
         except Exception:
-
-            failed+=1
-
-        await asyncio.sleep(.05)
-
-    await message.answer(
-
-        f"📢 Tugadi.\n\n"
-
-        f"Yuborildi: <b>{sent}</b>\n"
-
-        f"Xato: <b>{failed}</b>"
-
-    )
-
-@dp.message()
-
-async def fallback_message(message:types.Message):
-
-    await upsert_user(message.from_user)
-
-    lang=await get_user_language(message.from_user.id)
-
-    await message.answer(
-
-        t(
-
-            lang,
-
-            "welcome",
-
-            name=message.from_user.first_name or "do‘st"
-
-        ),
-
-        reply_markup=app_inline_keyboard(lang)
-
-    )
-
-@app.get("/api/admin/users")
-
-async def api_admin_users(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    rows=await db_fetch("""
-
-        SELECT
-
-            user_id,username,first_name,last_name,
-
-            language,full_name,gender,age,country,
-
-            last_seen,created_at
-
-        FROM users
-
-        ORDER BY created_at DESC
-
-        LIMIT 500
-
-    """)
-
-    return {
-
-        "ok":True,
-
-        "users":[
-
-            {
-
-                "user_id":r["user_id"],
-
-                "username":r["username"],
-
-                "first_name":r["first_name"],
-
-                "last_name":r["last_name"],
-
-                "language":r["language"],
-
-                "full_name":r["full_name"],
-
-                "gender":r["gender"],
-
-                "age":r["age"],
-
-                "country":r["country"],
-
-                "last_seen":r["last_seen"].isoformat(),
-
-                "created_at":r["created_at"].isoformat()
-
-            }
-
-            for r in rows
-
-        ]
-
-    }
-
-@app.get("/api/admin/payments")
-
-async def api_admin_payments(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    rows=await db_fetch("""
-
-        SELECT
-
-            p.id,p.user_id,p.payment_type,p.amount,
-
-            p.status,p.receipt_file_id,p.created_at,
-
-            u.username,u.first_name,u.last_name
-
-        FROM payments p
-
-        JOIN users u ON u.user_id=p.user_id
-
-        ORDER BY p.id DESC
-
-        LIMIT 500
-
-    """)
-
-    return {
-
-        "ok":True,
-
-        "payments":[
-
-            {
-
-                "id":r["id"],
-
-                "user_id":r["user_id"],
-
-                "payment_type":r["payment_type"],
-
-                "amount":r["amount"],
-
-                "status":r["status"],
-
-                "has_receipt":bool(r["receipt_file_id"]),
-
-                "username":r["username"],
-
-                "first_name":r["first_name"],
-
-                "last_name":r["last_name"],
-
-                "created_at":r["created_at"].isoformat()
-
-            }
-
-            for r in rows
-
-        ]
-
-    }
-
-@app.get("/api/admin/cards")
-
-async def api_admin_cards(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    rows=await db_fetch("""
-
-        SELECT id,card_number,holder,bank,active,created_at
-
-        FROM payment_cards
-
-        ORDER BY id DESC
-
-    """)
-
-    return {
-
-        "ok":True,
-
-        "cards":[
-
-            {
-
-                "id":r["id"],
-
-                "card_number":r["card_number"],
-
-                "holder":r["holder"],
-
-                "bank":r["bank"],
-
-                "active":r["active"],
-
-                "created_at":r["created_at"].isoformat()
-
-            }
-
-            for r in rows
-
-        ]
-
-    }
-
-@app.post("/api/admin/cards")
-
-async def api_admin_add_card(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    body=await request.json()
-
-    card_number="".join(
-
-        ch for ch in str(body.get("card_number",""))
-
-        if ch.isdigit()
-
-    )
-
-    if len(card_number)<12 or len(card_number)>19:
-
-        raise HTTPException(status_code=400,detail="Invalid card number")
-
-    holder=str(body.get("holder") or "").strip()[:100]
-
-    bank=str(body.get("bank") or "").strip()[:100]
-
-    row=await db_fetchrow("""
-
-        INSERT INTO payment_cards(
-
-            card_number,holder,bank,active
-
-        )
-
-        VALUES($1,$2,$3,TRUE)
-
-        RETURNING id
-
-    """,
-
-        card_number,holder,bank
-
-    )
-
-    return {
-
-        "ok":True,
-
-        "id":row["id"]
-
-    }
-
-@app.post("/api/admin/cards/{card_id}/toggle")
-
-async def api_admin_toggle_card(card_id:int,request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    row=await db_fetchrow("""
-
-        UPDATE payment_cards
-
-        SET active=NOT active
-
-        WHERE id=$1
-
-        RETURNING id,active
-
-    """,card_id)
-
-    if not row:
-
-        raise HTTPException(status_code=404,detail="Card not found")
-
-    return {
-
-        "ok":True,
-
-        "id":row["id"],
-
-        "active":row["active"]
-
-    }
-
-@app.get("/api/admin/stats")
-
-async def api_admin_stats(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    users=await db_fetchval_safe("SELECT COUNT(*) FROM users")
-
-    iq_results=await db_fetchval_safe(
-
-        "SELECT COUNT(*) FROM results WHERE test_type='IQ'"
-
-    )
-
-    eq_results=await db_fetchval_safe(
-
-        "SELECT COUNT(*) FROM results WHERE test_type='EQ'"
-
-    )
-
-    pq_results=await db_fetchval_safe(
-
-        "SELECT COUNT(*) FROM results WHERE test_type='PQ'"
-
-    )
-
-    payments=await db_fetchval_safe("SELECT COUNT(*) FROM payments")
-
-    approved=await db_fetchval_safe(
-
-        "SELECT COUNT(*) FROM payments WHERE status='approved'"
-
-    )
-
-    pending=await db_fetchval_safe(
-
-        "SELECT COUNT(*) FROM payments WHERE status='pending'"
-
-    )
-
-    battles=await db_fetchval_safe("SELECT COUNT(*) FROM battles")
-
-    certificates=await db_fetchval_safe("SELECT COUNT(*) FROM certificates")
-
-    return {
-
-        "ok":True,
-
-        "stats":{
-
-            "users":int(users or 0),
-
-            "iq_results":int(iq_results or 0),
-
-            "eq_results":int(eq_results or 0),
-
-            "pq_results":int(pq_results or 0),
-
-            "payments":int(payments or 0),
-
-            "approved_payments":int(approved or 0),
-
-            "pending_payments":int(pending or 0),
-
-            "battles":int(battles or 0),
-
-            "certificates":int(certificates or 0)
-
-        }
-
-    }
-
-@app.post("/api/admin/settings")
-
-async def api_admin_settings(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    body=await request.json()
-
-    allowed={
-
-        "iq_price",
-
-        "iq_retry_price",
-
-        "eq_price",
-
-        "eq_retry_price",
-
-        "pq_price",
-
-        "pq_retry_price",
-
-        "battle_price",
-
-        "live_mode",
-
-        "live_fake_base",
-
-        "live_fake_online",
-
-        "live_fake_delta"
-
-    }
-
-    changed={}
-
-    for key,value in body.items():
-
-        if key not in allowed:
-
-            continue
-
-        if key=="live_mode":
-
-            value=str(value)
-
-            if value not in {"fake","real"}:
-
-                raise HTTPException(
-
-                    status_code=400,
-
-                    detail="Invalid live mode"
-
-                )
-
-        else:
-
-            try:
-
-                value=int(value)
-
-            except (TypeError,ValueError):
-
-                raise HTTPException(
-
-                    status_code=400,
-
-                    detail=f"Invalid value for {key}"
-
-                )
-
-            if value<0:
-
-                raise HTTPException(
-
-                    status_code=400,
-
-                    detail=f"Negative value for {key}"
-
-                )
-
-        await db_execute("""
-
-            INSERT INTO app_settings(key,value)
-
-            VALUES($1,$2)
-
-            ON CONFLICT(key)
-
-            DO UPDATE SET value=EXCLUDED.value
-
-        """,key,str(value))
-
-        changed[key]=value
-
-    return {
-
-        "ok":True,
-
-        "changed":changed
-
-    }
-
-@app.get("/api/admin/settings")
-
-async def api_admin_settings(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    keys=[
-
-        "iq_price",
-
-        "iq_retry_price",
-
-        "eq_price",
-
-        "eq_retry_price",
-
-        "pq_price",
-
-        "pq_retry_price",
-
-        "battle_price",
-
-        "live_mode",
-
-        "live_fake_base",
-
-        "live_fake_online",
-
-        "live_fake_delta"
-
-    ]
-
-    values={}
-
-    for key in keys:
-
-        values[key]=await setting(key)
-
-    return {
-
-        "ok":True,
-
-        "settings":values
-
-    }
-
-@app.get("/api/admin/certificates")
-
-async def api_admin_certificates(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    rows=await db_fetch("""
-
-        SELECT
-
-            c.id,c.certificate_id,c.verification_code,
-
-            c.type,c.full_name,c.score,c.level,c.created_at,
-
-            c.user_id
-
-        FROM certificates c
-
-        ORDER BY c.id DESC
-
-        LIMIT 500
-
-    """)
-
-    return {
-
-        "ok":True,
-
-        "certificates":[
-
-            {
-
-                "id":r["id"],
-
-                "certificate_id":r["certificate_id"],
-
-                "verification_code":r["verification_code"],
-
-                "type":r["type"],
-
-                "full_name":r["full_name"],
-
-                "score":r["score"],
-
-                "level":r["level"],
-
-                "user_id":r["user_id"],
-
-                "created_at":r["created_at"].isoformat()
-
-            }
-
-            for r in rows
-
-        ]
-
-    }
-
-@app.get("/api/admin/battles")
-
-async def api_admin_battles(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    rows=await db_fetch("""
-
-        SELECT
-
-            b.id,b.code,b.status,b.created_by,
-
-            b.created_at,b.ready_at,b.finalized_at,
-
-            COUNT(bp.user_id) AS player_count
-
-        FROM battles b
-
-        LEFT JOIN battle_players bp ON bp.battle_id=b.id
-
-        GROUP BY
-
-            b.id,b.code,b.status,b.created_by,
-
-            b.created_at,b.ready_at,b.finalized_at
-
-        ORDER BY b.created_at DESC
-
-        LIMIT 500
-
-    """)
-
-    return {
-
-        "ok":True,
-
-        "battles":[
-
-            {
-
-                "id":str(r["id"]),
-
-                "code":r["code"],
-
-                "status":r["status"],
-
-                "created_by":r["created_by"],
-
-                "player_count":int(r["player_count"]),
-
-                "created_at":r["created_at"].isoformat(),
-
-                "ready_at":r["ready_at"].isoformat() if r["ready_at"] else None,
-
-                "finalized_at":r["finalized_at"].isoformat() if r["finalized_at"] else None
-
-            }
-
-            for r in rows
-
-        ]
-
-    }
-
-@app.post("/api/admin/broadcast")
-
-async def api_admin_broadcast(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    body=await request.json()
-
-    text=str(body.get("text","")).strip()
-
-    if not text:
-
-        raise HTTPException(status_code=400,detail="Text is required")
-
-    rows=await db_fetch("SELECT user_id FROM users ORDER BY user_id")
-
-    sent=0
-
-    failed=0
-
-    for row in rows:
-
+            logger.exception("Webhook shutdown failed")
         try:
-
-            await bot.send_message(int(row["user_id"]),text)
-
-            sent+=1
-
+            await bot.session.close()
         except Exception:
+            logger.exception("Bot session close failed")
+        try:
+            if db_pool:
+                await db_pool.close()
+        except Exception:
+            logger.exception("Database pool close failed")
 
-            failed+=1
-
-        await asyncio.sleep(.05)
-
-    return {
-
-        "ok":True,
-
-        "sent":sent,
-
-        "failed":failed
-
-    }
-
-@app.get("/api/admin")
-
-async def api_admin_home(request:Request):
-
-    user=await require_webapp_user(request)
-
-    if not await is_admin(int(user["id"])):
-
-        raise HTTPException(status_code=403,detail="Forbidden")
-
-    return {
-
-        "ok":True,
-
-        "admin":True
-
-    }
+app.router.lifespan_context=lifespan
 
 if __name__=="__main__":
-
-    uvicorn.run(
-
-        app,
-
-        host="0.0.0.0",
-
-        port=PORT,
-
-        log_level="info"
-
-    )
+    uvicorn.run(app,host="0.0.0.0",port=PORT,log_level="info")
