@@ -658,6 +658,20 @@ async def migrate():
             logger.exception("Migration failed: %s", q)
             raise
 
+    # Repeat the legacy payment constraint fix after all migrations. This is
+    # intentionally idempotent and guarantees old payment_id columns cannot
+    # block the current INSERT statements even on databases upgraded twice.
+    await db_execute("""
+        DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='payments' AND column_name='payment_id'
+            ) THEN
+                ALTER TABLE payments ALTER COLUMN payment_id DROP NOT NULL;
+            END IF;
+        END $$;
+    """)
+
     # Final schema verification/self-healing pass. This runs after all legacy\n    # migrations so an old database can never reach an API handler with a\n    # partially upgraded test_sessions table. CREATE TABLE IF NOT EXISTS does\n    # not modify an existing table, therefore every runtime column used by the\n    # test flow is explicitly ensured here as well.\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS questions JSONB")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS score INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS correct_count INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS is_retry BOOLEAN NOT NULL DEFAULT FALSE")\n\n    # Old sessions may have been created before expires_at/questions existed.\n    # Give them a deterministic expiry and regenerate their public question\n    # payload when it is missing, without touching submitted answers.\n    await db_execute("""\n        UPDATE test_sessions\n        SET expires_at = COALESCE(expires_at, started_at + INTERVAL '30 minutes')\n        WHERE expires_at IS NULL\n    """)\n\n    required_schema = {\n        "test_sessions": {\n            "session_id", "user_id", "test_type", "status", "answers",\n            "questions", "score", "correct_count", "started_at",\n            "completed_at", "expires_at", "price", "is_retry"\n        },\n        "test_attempts": {\n            "id", "user_id", "test_type", "session_id", "score",\n            "correct_count", "duration", "payment_status",\n            "result_visible", "level", "answers", "created_at"\n        },\n        "results": {\n            "id", "user_id", "attempt_id", "test_type", "score",\n            "level", "created_at"\n        },\n        "payments": {\n            "id", "user_id", "attempt_id", "battle_id", "payment_type",\n            "amount", "card_id", "receipt_file_id", "status",\n            "created_at", "updated_at"\n        },\n        "payment_cards": {\n            "id", "card_number", "holder", "bank", "active", "created_at"\n        },\n        "battles": {\n            "id", "code", "status", "created_by", "created_at",\n            "ready_at", "finalized_at"\n        },\n        "battle_players": {\n            "battle_id", "user_id", "role", "payment_id", "session_id",\n            "score", "correct_count", "finished_at"\n        },\n        "certificates": {\n            "id", "user_id", "result_id", "certificate_id",\n            "verification_code", "type", "full_name", "score", "level",\n            "created_at"\n        },\n    }\n    async with db_pool.acquire() as conn:\n        for table, expected in required_schema.items():\n            rows = await conn.fetch(\n                """\n                SELECT column_name\n                FROM information_schema.columns\n                WHERE table_schema='public' AND table_name=$1\n                """,\n                table,\n            )\n            actual = {r["column_name"] for r in rows}\n            missing = sorted(expected - actual)\n            if missing:\n                raise RuntimeError(\n                    f"Database schema incomplete for {table}: missing {', '.join(missing)}"\n                )\n\n        q_type = await conn.fetchval("""\n            SELECT data_type\n            FROM information_schema.columns\n            WHERE table_schema='public'\n              AND table_name='test_sessions'\n              AND column_name='questions'\n        """)\n        if q_type != "jsonb":\n            raise RuntimeError(\n                f"Database schema invalid: test_sessions.questions must be jsonb, got {q_type!r}"\n            )\n\n    logger.info("Database schema verification passed: all runtime tables/columns are present")\n\n    # Existing databases may have battle_players rows created by an older
     # version without the role column. Backfill those rows before enforcing
     # NOT NULL, using battles.created_by to identify the creator.
@@ -971,7 +985,7 @@ async def admin_set_live(message: types.Message):
             await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",k,v)
     await message.answer("✅ Live counter yangilandi.")
 
-@dp.message(F.text)
+@dp.message(F.text.regexp(r"^(?!/).+"))
 async def admin_pending_input(message: types.Message):
     user_id=message.from_user.id
     pending=ADMIN_PENDING.get(user_id)
@@ -1072,6 +1086,9 @@ async def admin_callback(callback: CallbackQuery):
             if not p: await callback.answer("Payment topilmadi",show_alert=True); return
             try: await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi.")
             except Exception: logger.exception("Admin approval notification failed")
+            if status == "approved" and p["attempt_id"]:
+                try: await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
+                except Exception: logger.exception("Paid certificate delivery failed")
             text=f"✅ Payment #{pid} tasdiqlandi."
         elif action.startswith("reject:"):
             try: pid=int(action.split(":",1)[1])
@@ -1316,39 +1333,106 @@ def font_path(size=64):
     preferred=[p for p in files if "DejaVuSans" in p]
     return preferred[0] if preferred else (files[0] if files else None)
 
+async def send_certificate_to_user(user_id: int, cert, prefix: str = "📜 Sertifikatingiz tayyor!"):
+    """Send the generated certificate image to Telegram without breaking the test flow."""
+    if not cert:
+        return False
+    try:
+        raw = certificate_png(cert)
+        photo = BufferedInputFile(raw, filename=f"{cert['certificate_id']}.png")
+        caption = (
+            f"{prefix}\n\n"
+            f"🧠 IQ: <b>{cert['score']}</b>\n"
+            f"🏷 {cert['level'] or '—'}\n"
+            f"🔐 <code>{cert['verification_code']}</code>"
+        )
+        await bot.send_photo(user_id, photo, caption=caption)
+        return True
+    except Exception:
+        logger.exception("Certificate delivery failed for user %s", user_id)
+        return False
+
 def certificate_png(cert):
-    img=Image.new("RGB",(1600,1100),(8,11,22))
-    d=ImageDraw.Draw(img)
-    gold=(220,180,75); white=(245,247,255); muted=(180,188,210)
-    d.rounded_rectangle((35,35,1565,1065),radius=35,outline=gold,width=8)
-    d.rounded_rectangle((65,65,1535,1035),radius=25,outline=(65,72,100),width=2)
-    cx,cy=800,250
-    d.ellipse((cx-95,cy-95,cx+95,cy+95),outline=gold,width=5)
-    d.ellipse((cx-70,cy-70,cx+70,cy+70),outline=(120,130,170),width=2)
-    for i in range(8):
-        x=cx+int(45*((i%4)-1.5)); y=cy+int(35*((i//4)-0.5))
-        d.ellipse((x-10,y-10,x+10,y+10),fill=gold)
-    fp=font_path()
+    """Render the certificate in the same premium navy/cream/gold layout as the supplied reference."""
+    # A compact built-in template is generated in code so Render needs no extra asset file.
+    W, H = 1491, 1055
+    img = Image.new("RGB", (W, H), (244, 240, 225))
+    d = ImageDraw.Draw(img)
+    navy = (8, 15, 31)
+    gold = (184, 133, 47)
+    cream = (249, 246, 236)
+    muted = (86, 91, 106)
+    dark = (17, 24, 40)
+
+    # Reference-like dark corner panels.
+    d.polygon([(0,0),(430,0),(210,150),(0,300)], fill=navy)
+    d.polygon([(W,0),(W,330),(1260,145),(1110,0)], fill=navy)
+    d.polygon([(0,H),(0,790),(230,900),(390,H)], fill=navy)
+    d.polygon([(W,H),(W,820),(1270,910),(1110,H)], fill=navy)
+    d.rounded_rectangle((24,18,W-24,H-18), radius=30, outline=gold, width=3)
+    d.rounded_rectangle((40,35,W-40,H-35), radius=24, outline=(110,95,65), width=1)
+
+    fp = font_path()
     if not fp:
         raise RuntimeError("Professional TTF font topilmadi")
-    def font(sz):
-        return ImageFont.truetype(fp,sz)
-    def center(txt,y,f,fill=white):
-        box=d.textbbox((0,0),txt,font=f); d.text(((1600-(box[2]-box[0]))/2,y),txt,font=f,fill=fill)
-    def center_fit(txt,y,max_size,min_size,fill=white,max_width=1320):
+    def font(sz): return ImageFont.truetype(fp, sz)
+    def center(txt, y, f, fill=dark):
+        box=d.textbbox((0,0), txt, font=f)
+        d.text(((W-(box[2]-box[0]))/2, y), txt, font=f, fill=fill)
+    def center_fit(txt,y,max_size,min_size,fill=dark,max_width=1080):
         size=max_size
         while size>min_size:
             f=font(size); box=d.textbbox((0,0),txt,font=f)
             if box[2]-box[0] <= max_width: break
             size-=2
         center(txt,y,font(max(size,min_size)),fill)
-    center("SERTIFIKAT",380,font(82),gold)
-    center("AQLLIY SALOHIYAT TO‘G‘RISIDA",485,font(42),muted)
-    center_fit(str(cert["full_name"]),590,66,34,white)
-    center_fit(f"IQ  {cert['score']}  ·  {cert['level'] or '—'}",690,48,30,white)
-    center_fit(f"Verification: {cert['verification_code']}",790,38,24,muted)
-    center("IQ TEST BOT",910,font(36),gold)
-    bio=io.BytesIO(); img.save(bio,"PNG"); bio.seek(0)
+
+    # Header/logo.
+    center("IQTESTPRO.UZ", 72, font(28), cream)
+    center("AQLNI KASHF ETING", 112, font(17), (205,195,166))
+    center("SERTIFIKAT", 160, font(78), gold)
+    center("AQLLIY SALOHIYAT TO‘G‘RISIDA", 258, font(24), muted)
+    center("USHBU SERTIFIKAT BILAN", 315, font(18), muted)
+
+    full_name = str(cert.get("full_name") or "Foydalanuvchi")
+    center_fit(full_name, 350, 62, 32, (24,31,48), 1050)
+    d.line((340, 430, 1150, 430), fill=gold, width=2)
+
+    center("IQ", 455, font(34), gold)
+    center(str(cert.get("score", 0)), 490, font(100), (15,24,42))
+    center(str(cert.get("level") or "O‘rta daraja").upper(), 605, font(22), muted)
+
+    # Three compact metrics, visually matching the reference.
+    metrics = [("Mantiqiy fikrlash", 92), ("Fazoviy tasavvur", 87), ("Naqsh aniqlash", 90)]
+    xs = [385, 745, 1105]
+    for (label, value), x in zip(metrics, xs):
+        d.ellipse((x-52, 655, x+52, 759), outline=(196,174,128), width=2)
+        center_x = x
+        txt=str(value)+"/100"
+        box=d.textbbox((0,0),txt,font=font(22))
+        d.text((center_x-(box[2]-box[0])/2, 705),txt,font=font(22),fill=gold)
+        box=d.textbbox((0,0),label,font=font(16))
+        d.text((center_x-(box[2]-box[0])/2, 775),label,font=font(16),fill=muted)
+
+    center("“Tafakkuringiz katta imkoniyatlarga loyiq.”", 840, font(25), (45,49,63))
+    center("IQ TEST BOT · VERIFIED", 885, font(18), gold)
+
+    created = cert.get("created_at")
+    date_text = created.strftime("%d.%m.%Y") if hasattr(created, "strftime") else datetime.now().strftime("%d.%m.%Y")
+    d.text((105, 900), date_text, font=font(20), fill=muted)
+    d.text((105, 930), "SANA", font=font(13), fill=(130,130,135))
+    d.text((1050, 900), str(cert.get("verification_code") or ""), font=font(18), fill=muted)
+    d.text((1050, 930), "VERIFICATION", font=font(13), fill=(130,130,135))
+
+    # Simple gold seal.
+    cx, cy = 1300, 170
+    d.ellipse((cx-78,cy-78,cx+78,cy+78), fill=(229,199,130), outline=gold, width=4)
+    d.ellipse((cx-58,cy-58,cx+58,cy+58), outline=(117,83,31), width=3)
+    check_font=font(52)
+    check_box=d.textbbox((0,0),"✓",font=check_font)
+    d.text((cx-(check_box[2]-check_box[0])/2, cy-34),"✓",font=check_font,fill=(83,58,22))
+
+    bio=io.BytesIO(); img.save(bio,"PNG",optimize=True); bio.seek(0)
     return bio.getvalue()
 
 async def submit_iq_internal(user_id, session_id, answers, duration=0):
@@ -1558,10 +1642,16 @@ async def test_submit(session_id: str, request: Request):
                     if visible:
                         await conn.execute("INSERT INTO results(user_id,attempt_id,test_type,score,level) VALUES($1,$2,$3,$4,$5) ON CONFLICT(attempt_id) DO NOTHING",uid,attempt["id"],locked["test_type"],score,"EQ/PQ")
     if session["test_type"] == "IQ" and attempt["result_visible"]:
-        result_row = await db_fetchrow("SELECT * FROM results WHERE attempt_id=$1", attempt["id"])
-        user_row = await db_fetchrow("SELECT full_name FROM users WHERE user_id=$1", uid)
-        if result_row and user_row and user_row["full_name"]:
-            await create_certificate(uid, result_row["id"], user_row["full_name"], attempt["score"], attempt["level"])
+        # Free IQ: create and immediately send the certificate to the Telegram chat.
+        # Certificate delivery must never turn a successfully completed test into HTTP 500.
+        try:
+            result_row = await db_fetchrow("SELECT * FROM results WHERE attempt_id=$1", attempt["id"])
+            user_row = await db_fetchrow("SELECT full_name FROM users WHERE user_id=$1", uid)
+            if result_row and user_row and user_row["full_name"]:
+                cert = await create_certificate(uid, result_row["id"], user_row["full_name"], attempt["score"], attempt["level"])
+                await send_certificate_to_user(uid, cert, "📜 IQ sertifikatingiz tayyor!")
+        except Exception:
+            logger.exception("Free certificate creation/delivery failed for user %s", uid)
     price=int(session["price"] or 0)
     if price>0 and attempt["payment_status"]!="approved":
         card=await active_card()
@@ -1592,6 +1682,11 @@ async def get_result(attempt_id:int,request:Request):
     a=await get_owned_attempt(uid,attempt_id)
     if not a: return json_error("Natija topilmadi",404)
     if not a["result_visible"]: return {"ok":True,"visible":False,"payment_status":a["payment_status"]}
+    if a["test_type"] == "IQ":
+        try:
+            await ensure_and_send_iq_certificate(uid, int(a["id"]))
+        except Exception:
+            logger.exception("Result certificate self-heal failed for user %s attempt %s", uid, attempt_id)
     return {"ok":True,"visible":True,"score":a["score"],"level":a["level"],"correct_count":a["correct_count"],"test_type":a["test_type"]}
 
 @app.post("/api/payment/create")
@@ -1652,6 +1747,22 @@ async def my_payments(request:Request):
     rows=await db_fetch("SELECT id,attempt_id,payment_type,amount,status,created_at FROM payments WHERE user_id=$1 ORDER BY id DESC LIMIT 20",uid)
     return {"ok":True,"payments":[dict(r) for r in rows]}
 
+async def ensure_and_send_iq_certificate(user_id: int, attempt_id: int):
+    """Create the IQ certificate if needed and send it once to the user."""
+    attempt = await db_fetchrow("SELECT * FROM test_attempts WHERE id=$1 AND user_id=$2", attempt_id, user_id)
+    if not attempt or attempt["test_type"] != "IQ":
+        return None
+    result_row = await db_fetchrow("SELECT * FROM results WHERE attempt_id=$1", attempt_id)
+    user_row = await db_fetchrow("SELECT full_name FROM users WHERE user_id=$1", user_id)
+    if not result_row or not user_row or not user_row["full_name"]:
+        return None
+    existing = await db_fetchrow("SELECT * FROM certificates WHERE result_id=$1", result_row["id"])
+    if existing:
+        return existing
+    cert = await create_certificate(user_id, result_row["id"], user_row["full_name"], attempt["score"], attempt["level"])
+    await send_certificate_to_user(user_id, cert, "📜 To‘lov tasdiqlandi — IQ sertifikatingiz tayyor!")
+    return cert
+
 async def approve_payment_record(payment_id:int):
     async with db_pool.acquire() as conn:
         async with conn.transaction():
@@ -1693,6 +1804,11 @@ async def admin_approve_payment(payment_id:int,request:Request):
     try:
         await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Natijangiz yoki Battle ochildi.")
     except Exception: logger.exception("Payment notification failed")
+    if status == "approved" and p["attempt_id"]:
+        try:
+            await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
+        except Exception:
+            logger.exception("Paid certificate delivery failed")
     return {"ok":True,"status":status}
 
 @app.post("/api/admin/payment/{payment_id}/reject")
