@@ -8,6 +8,7 @@
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
+  const setText = (sel, value) => { const el = $(sel); if (el) el.textContent = value; return el; };
   const state = {
     user: null, lang: "uz", prices: {}, questions: [],
     sessionId: null, testType: null, mode: "NORMAL",
@@ -78,19 +79,19 @@
     const home = $("#homeScreen");
     if (home) {
       const greet=$("#homeScreen .topbar h1"); if(greet) greet.innerHTML = `${tx("home_greet", {name: state.user?.first_name || (state.lang === "ru" ? "Друг" : state.lang === "en" ? "Friend" : "Do‘st")})}`;
-      $(".hero-copy .pill").textContent = tx("hero_pill");
-      $(".hero-copy h2").textContent = tx("hero_title"); $(".hero-copy p").textContent = tx("hero_text");
-      $(".live-card > div:first-child small").textContent = tx("live_total"); $(".online div small:first-child").textContent = tx("live_now"); $(".online div small:last-child").textContent = tx("live_people");
-      $(".section-title h3").textContent = tx("tests"); $(".section-title span").textContent = tx("sequence");
-      $(".test-card.iq small").textContent = tx("iq_desc"); $("#eqState").textContent = state.user?.hasIQ ? tx("eq_open") : tx("eq_locked"); $("#pqState").textContent = state.user?.hasEQ ? tx("eq_open") : tx("pq_locked");
-      $("#profileCard b").textContent = tx("profile"); $("#profileCard small").textContent = tx("profile_after"); $("#battleCard b").textContent = tx("battle"); $("#battleCard small").textContent = tx("battle_desc");
+      setText(".hero-copy .pill", tx("hero_pill"));
+      setText(".hero-copy h2", tx("hero_title")); setText(".hero-copy p", tx("hero_text"));
+      setText(".live-card > div:first-child small", tx("live_total")); setText(".online div small:first-child", tx("live_now")); setText(".online div small:last-child", tx("live_people"));
+      setText(".section-title h3", tx("tests")); setText(".section-title span", tx("sequence"));
+      setText(".test-card.iq small", tx("iq_desc")); setText("#eqState", state.user?.hasIQ ? tx("eq_open") : tx("eq_locked")); setText("#pqState", state.user?.hasEQ ? tx("eq_open") : tx("pq_locked"));
+      setText("#profileCard b", tx("profile")); setText("#profileCard small", tx("profile_after")); setText("#battleCard b", tx("battle")); setText("#battleCard small", tx("battle_desc"));
       const nav = $$('[data-nav]'); if (nav[0]) nav[0].querySelector('small').textContent=tx('home'); if(nav[1])nav[1].querySelector('small').textContent=tx('ranking'); if(nav[2])nav[2].querySelector('small').textContent=tx('certificate'); if(nav[3])nav[3].querySelector('small').textContent=tx('profile_nav');
     }
     text("#profileScreen .subbar h2", "profile_title"); text("#saveProfile", "save");
     const labels = $("#profileScreen"); if(labels){ const ls=labels.querySelectorAll('label'); if(ls[0])ls[0].firstChild.textContent=tx('name_label'); if(ls[1])ls[1].firstChild.textContent=tx('gender_label'); if(ls[2])ls[2].firstChild.textContent=tx('age_label'); if(ls[3])ls[3].firstChild.textContent=tx('country_label'); $("#fullName").placeholder=tx('name_placeholder'); }
     const g=$("#gender"); if(g){g.options[0].text=tx('select');g.options[1].text=tx('male');g.options[2].text=tx('female');}
     const c=$("#country"); if(c && c.options[0])c.options[0].text=tx('select');
-    text("#paymentScreen .subbar h2","payment"); text("#paymentScreen .payment-card .pill","payment_wait"); $("#paymentScreen .payment-card p").textContent=tx('payment_text'); text("#copyCard","copy"); text("#sharePayment","open_bot"); $("#paymentScreen .file-label").firstChild.textContent=tx('receipt'); text("#sendReceipt","send_receipt");
+    text("#paymentScreen .subbar h2","payment"); text("#paymentScreen .payment-card .pill","payment_wait"); setText("#paymentScreen .payment-card p",tx('payment_text')); text("#copyCard","copy"); text("#sharePayment","open_bot"); const fileLabel=$("#paymentScreen .file-label"); if(fileLabel && fileLabel.firstChild) fileLabel.firstChild.textContent=tx('receipt'); text("#sendReceipt","send_receipt");
     text("#resultScreen .subbar h2","result"); text("#certificateBtn span","certificate_btn"); text("#shareResultBtn span","share"); text("#retryIqBtn","retry");
     const resultStats=$("#resultScreen .result-stats"); if(resultStats){ const sm=resultStats.querySelectorAll('small'); if(sm[0])sm[0].textContent=tx('question_stat');if(sm[1])sm[1].textContent=tx('correct');if(sm[2])sm[2].textContent=tx('time');if(sm[3])sm[3].textContent=tx('per_question'); }
     text("#resultScreen .result-detail-card:first-child small","accuracy"); text("#resultScreen .result-detail-card:nth-child(2) small","rank"); text("#resultScreen .result-summary h3","your_result"); text("#nextStageLabel","next_stage");
@@ -606,7 +607,7 @@
     applyLanguage(state.lang);
     state.prices = d.prices || {};
     state.questions = d.questions || [];
-    $("#userName").textContent = d.user.first_name || "Do‘st";
+    setText("#userName", d.user?.first_name || "Do‘st");
     $("#fullName").value = d.user.full_name || "";
     $("#gender").value = d.user.gender || "";
     $("#age").value = d.user.age || "";
@@ -692,7 +693,7 @@
       state.busy = true;
       await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
       state.user = { ...state.user, ...body };
-      $("#userName").textContent = state.user.first_name || "Do‘st";
+      setText("#userName", state.user?.first_name || "Do‘st");
       renderPersonalProfile();
       toast(tx("saved"));
       const pending = state.pendingType;
@@ -916,6 +917,7 @@
     try {
       await loadHome();
     } catch (e) {
+      console.error("Mini App bootstrap failed", e);
       show("homeScreen");
       toast(e.message || "Mini App yuklanmadi");
     }
