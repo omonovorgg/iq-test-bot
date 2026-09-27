@@ -358,22 +358,48 @@
       };
     } else if (state.paymentAttemptId) {
       box.innerHTML = `<button id="paymentNextBtn" class="primary">📊 Natijani ko‘rish</button>`;
-      $("#paymentNextBtn").onclick = () => showResult(state.paymentAttemptId);
+      $("#paymentNextBtn").onclick = async () => {
+        try { await showResult(state.paymentAttemptId); } catch (e) { toast(e.message); }
+      };
+    } else {
+      box.innerHTML = `<button id="paymentNextBtn" class="primary">🏠 Bosh sahifaga qaytish</button>`;
+      $("#paymentNextBtn").onclick = () => show("homeScreen");
     }
   }
 
+  function renderRejectedPaymentAction() {
+    const box = paymentActions();
+    box.innerHTML = `<button id="paymentHomeBtn" class="secondary">🏠 Bosh sahifaga qaytish</button>
+      <button id="paymentRetryBtn" class="primary" style="margin-top:8px">🔄 Receiptni qayta yuborish</button>`;
+    $("#paymentHomeBtn").onclick = () => show("homeScreen");
+    $("#paymentRetryBtn").onclick = () => {
+      $("#paymentStatus").textContent = "Receiptni qayta yuboring.";
+      $("#receiptFile").disabled = false;
+      $("#sendReceipt").disabled = false;
+      clearPaymentActions();
+    };
+  }
+
   async function renderPayment(d) {
-    state.paymentId = d.payment_id || state.paymentId;
-    state.paymentAttemptId = d.attempt_id || state.paymentAttemptId;
+    state.paymentId = d.payment_id ?? d.id ?? state.paymentId;
+    state.paymentAttemptId = d.attempt_id ?? state.paymentAttemptId;
+    if (d.battle_id !== undefined) state.battleId = d.battle_id || null;
     $("#paymentAmount").textContent = `${Number(d.amount || 0).toLocaleString("uz-UZ")} so‘m`;
     const card = d.card || (state.paymentId ? await getPaymentCard(state.paymentId) : null);
     $("#cardNumber").textContent = card?.card_number || "Faol karta topilmadi";
     $("#cardHolder").textContent = card?.holder || "";
     $("#cardBank").textContent = card?.bank || "";
     clearPaymentActions();
+    $("#receiptFile").disabled = false;
+    $("#sendReceipt").disabled = false;
     if (d.status === "approved") {
-      $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi.";
+      $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.";
+      $("#receiptFile").disabled = true;
+      $("#sendReceipt").disabled = true;
       renderApprovedPaymentAction();
+    } else if (d.status === "rejected") {
+      $("#paymentStatus").textContent = "❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.";
+      renderRejectedPaymentAction();
     } else if (d.receipt_file_id) {
       $("#paymentStatus").textContent = "✅ Receipt yuborilgan. Admin tasdig‘i kutilmoqda.";
     } else {
@@ -389,13 +415,20 @@
       const p = await api("/api/payment/mine");
       const mine = p.payments.find((x) => Number(x.id) === Number(state.paymentId));
       if (!mine) return;
+      if (mine.battle_id !== undefined) state.battleId = mine.battle_id || null;
+      if (mine.attempt_id !== undefined) state.paymentAttemptId = mine.attempt_id;
       if (mine.status === "approved") {
-        $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi.";
+        $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.";
+        $("#receiptFile").disabled = true;
+        $("#sendReceipt").disabled = true;
         clearPaymentActions();
         renderApprovedPaymentAction();
-        if (state.battleId) {
-          await checkBattleReady(true);
-        }
+      } else if (mine.status === "rejected") {
+        $("#paymentStatus").textContent = "❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.";
+        $("#receiptFile").disabled = false;
+        $("#sendReceipt").disabled = false;
+        clearPaymentActions();
+        renderRejectedPaymentAction();
       } else if (mine.receipt_file_id) {
         $("#paymentStatus").textContent = "✅ Receipt yuborilgan. Admin tasdig‘i kutilmoqda.";
       } else {
@@ -414,14 +447,11 @@
       if (file) fd.append("receipt", file, file.name);
       else fd.append("receipt_file_id", legacy);
       const d = await api(`/api/payment/${state.paymentId}/receipt`, { method:"POST", body:fd });
-      $("#paymentStatus").textContent = d.status === "approved" ? "✅ To‘lov tasdiqlandi." : "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
+      clearPaymentActions();
+      $("#paymentStatus").textContent = d.status === "approved" ? "✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi." : "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
       toast(d.status === "approved" ? "To‘lov tasdiqlandi" : "Receipt yuborildi");
-      if (d.status === "approved") {
-        renderApprovedPaymentAction();
-        if (state.battleId) await checkBattleReady(true);
-      } else if (state.battleId) {
-        startBattlePolling();
-      }
+      if (d.status === "approved") renderApprovedPaymentAction();
+      else if (state.battleId) startBattlePolling();
     } catch (e) { toast(e.message); }
   }
 
@@ -449,9 +479,11 @@
       const p = d.pending_payment;
       state.paymentId = p.id;
       state.paymentAttemptId = p.attempt_id;
+      state.battleId = p.battle_id || null;
       await renderPayment({
         payment_id: p.id,
         attempt_id: p.attempt_id,
+        battle_id: p.battle_id || null,
         amount: p.amount,
         status: p.status,
         receipt_file_id: p.receipt_file_id,
