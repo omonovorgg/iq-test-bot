@@ -3974,6 +3974,7 @@ async def lifespan(app: FastAPI):
         logger.info("Shutdown complete")
 
 
+
 app = FastAPI(
     title="IQ TEST BOT",
     version="1.0.0",
