@@ -235,6 +235,113 @@ async def db_fetch(query, *args):
     async with db_pool.acquire() as conn:
         return await conn.fetch(query, *args)
 
+async def migrate_legacy_battle_ids():
+    """Convert legacy integer battle IDs to UUIDs without deleting battle data."""
+    async with db_pool.acquire() as conn:
+        async with conn.transaction():
+            col = await conn.fetchrow("""
+                SELECT data_type, udt_name
+                FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='battles' AND column_name='id'
+            """)
+            if not col or col["udt_name"] == "uuid":
+                return
+            if col["udt_name"] not in ("int2", "int4", "int8"):
+                raise RuntimeError(f"Unsupported legacy battles.id type: {col['data_type']}")
+
+            # Mapping survives the whole transaction and is dropped afterwards.
+            await conn.execute("DROP TABLE IF EXISTS _battle_id_migration_map")
+            await conn.execute("CREATE TEMP TABLE _battle_id_migration_map (old_id BIGINT PRIMARY KEY, new_id UUID NOT NULL)")
+
+            legacy_battles = await conn.fetch("SELECT id FROM battles ORDER BY id")
+            for row in legacy_battles:
+                await conn.execute(
+                    "INSERT INTO _battle_id_migration_map(old_id,new_id) VALUES($1,$2)",
+                    int(row["id"]), uuid4()
+                )
+
+            # Add UUID shadow columns first, then populate all references.
+            await conn.execute("ALTER TABLE battles ADD COLUMN IF NOT EXISTS _id_uuid UUID")
+            await conn.execute("""
+                UPDATE battles b
+                SET _id_uuid=m.new_id
+                FROM _battle_id_migration_map m
+                WHERE b.id=m.old_id
+            """)
+
+            bp_exists = await conn.fetchval("""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='battle_players' AND column_name='battle_id'
+            """)
+            if bp_exists:
+                await conn.execute("ALTER TABLE battle_players ADD COLUMN IF NOT EXISTS _battle_id_uuid UUID")
+                await conn.execute("""
+                    UPDATE battle_players bp
+                    SET _battle_id_uuid=m.new_id
+                    FROM _battle_id_migration_map m
+                    WHERE bp.battle_id=m.old_id
+                """)
+
+            pay_exists = await conn.fetchval("""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='payments' AND column_name='battle_id'
+            """)
+            if pay_exists:
+                await conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS _battle_id_uuid UUID")
+                await conn.execute("""
+                    UPDATE payments p
+                    SET _battle_id_uuid=m.new_id
+                    FROM _battle_id_migration_map m
+                    WHERE p.battle_id=m.old_id
+                """)
+
+            # Remove foreign keys pointing at the old integer PK before replacing it.
+            fk_rows = await conn.fetch("""
+                SELECT conrelid::regclass::text AS table_name, conname
+                FROM pg_constraint
+                WHERE contype='f' AND confrelid='battles'::regclass
+            """)
+            for fk in fk_rows:
+                await conn.execute(f'ALTER TABLE {fk["table_name"]} DROP CONSTRAINT IF EXISTS "{fk["conname"]}"')
+
+            # Replace battle_players' composite PK and battle_id column.
+            if bp_exists:
+                pk = await conn.fetchrow("""
+                    SELECT conname FROM pg_constraint
+                    WHERE conrelid='battle_players'::regclass AND contype='p'
+                """)
+                if pk:
+                    await conn.execute(f'ALTER TABLE battle_players DROP CONSTRAINT IF EXISTS "{pk["conname"]}"')
+                await conn.execute("ALTER TABLE battle_players DROP COLUMN battle_id")
+                await conn.execute("ALTER TABLE battle_players RENAME COLUMN _battle_id_uuid TO battle_id")
+
+            # Replace payments.battle_id while retaining payment history.
+            if pay_exists:
+                await conn.execute("ALTER TABLE payments DROP COLUMN battle_id")
+                await conn.execute("ALTER TABLE payments RENAME COLUMN _battle_id_uuid TO battle_id")
+
+            # Replace battles.id and its primary key.
+            pk = await conn.fetchrow("""
+                SELECT conname FROM pg_constraint
+                WHERE conrelid='battles'::regclass AND contype='p'
+            """)
+            if pk:
+                await conn.execute(f'ALTER TABLE battles DROP CONSTRAINT IF EXISTS "{pk["conname"]}"')
+            await conn.execute("ALTER TABLE battles DROP COLUMN id")
+            await conn.execute("ALTER TABLE battles RENAME COLUMN _id_uuid TO id")
+            await conn.execute("ALTER TABLE battles ADD PRIMARY KEY (id)")
+
+            if bp_exists:
+                await conn.execute("""
+                    ALTER TABLE battle_players
+                    ADD CONSTRAINT battle_players_battle_id_fkey
+                    FOREIGN KEY (battle_id) REFERENCES battles(id) ON DELETE CASCADE
+                """)
+                await conn.execute("ALTER TABLE battle_players ADD PRIMARY KEY (battle_id,user_id)")
+
+            await conn.execute("DROP TABLE _battle_id_migration_map")
+            logger.info("Migrated legacy integer battle IDs to UUIDs")
+
 async def migrate():
     global db_pool
     await db_execute("""
@@ -368,6 +475,12 @@ async def migrate():
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (referrer_id, referred_id)
     )""")
+
+    # Legacy battle schema migration. Earlier versions used INTEGER/BIGINT
+    # battle IDs. The current API uses UUIDs, so an existing database must
+    # migrate the primary/foreign keys instead of relying on CREATE TABLE IF
+    # NOT EXISTS (which never changes an existing column type).
+    await migrate_legacy_battle_ids()
 
     # Safe migrations for existing installations.
     migrations = [
