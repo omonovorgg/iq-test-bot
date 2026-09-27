@@ -617,11 +617,12 @@ async def migrate():
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_id BIGINT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_file_id TEXT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'",
-        # Some production databases were created by an older payment schema
-        # that had a legacy payment_id column with NOT NULL. The current code
-        # uses payments.id as the primary payment identifier, so the legacy
-        # column must not block new payment rows.
-        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=\'payments\' AND column_name=\'payment_id\') THEN ALTER TABLE payments ALTER COLUMN payment_id DROP NOT NULL; END IF; END $$;",
+        # Legacy payment schemas may contain columns such as payment_id or
+        # product that the current application no longer writes. If those old
+        # columns are still NOT NULL, PostgreSQL rejects an otherwise valid
+        # payment INSERT. They must remain nullable; current code uses payments.id
+        # and payment_type instead.
+        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=\'payments\' AND column_name=\'payment_id\') THEN ALTER TABLE payments ALTER COLUMN payment_id DROP NOT NULL; END IF; IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=\'payments\' AND column_name=\'product\') THEN ALTER TABLE payments ALTER COLUMN product DROP NOT NULL; END IF; END $$;",
         # Existing databases may have an older test_sessions schema.
         # CREATE TABLE IF NOT EXISTS does not add columns to an existing table.
         "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT",
@@ -658,17 +659,34 @@ async def migrate():
             logger.exception("Migration failed: %s", q)
             raise
 
-    # Repeat the legacy payment constraint fix after all migrations. This is
-    # intentionally idempotent and guarantees old payment_id columns cannot
-    # block the current INSERT statements even on databases upgraded twice.
+    # Repeat the legacy payment constraint cleanup after all migrations. This
+    # is deliberately idempotent so an old production database can be upgraded
+    # repeatedly without breaking the current payment INSERT.
     await db_execute("""
-        DO $$ BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema='public' AND table_name='payments' AND column_name='payment_id'
-            ) THEN
-                ALTER TABLE payments ALTER COLUMN payment_id DROP NOT NULL;
-            END IF;
+        DO $$
+        DECLARE
+            c RECORD;
+        BEGIN
+            -- Keep NOT NULL on columns that belong to the current payment model.
+            -- Any extra NOT NULL column is necessarily legacy from an older
+            -- version and the current INSERT cannot populate it. Making only
+            -- those extra columns nullable prevents the exact "fix one column,
+            -- next old column fails" migration loop.
+            FOR c IN
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema='public'
+                  AND table_name='payments'
+                  AND is_nullable='NO'
+                  AND column_name NOT IN (
+                      'id','user_id','attempt_id','battle_id','payment_type',
+                      'amount','card_id','receipt_file_id','status',
+                      'created_at','updated_at'
+                  )
+            LOOP
+                EXECUTE format('ALTER TABLE payments ALTER COLUMN %I DROP NOT NULL', c.column_name);
+                RAISE NOTICE 'Relaxed legacy payments.% NOT NULL constraint', c.column_name;
+            END LOOP;
         END $$;
     """)
 
