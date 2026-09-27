@@ -212,7 +212,14 @@ LOCAL_BEHAVIOR_QUESTIONS = {
     },
     "en": {
         "EQ": EQ_QUESTIONS,
-        "PQ": PQ_QUESTIONS,
+        "PQ": [
+            ("You have three tasks today. What is the most practical first step?", ["Do random tasks", "Prioritize them by urgency and impact", "Avoid all tasks", "Start with the easiest one"], 1),
+            ("A large project feels overwhelming. What is most useful?", ["Do not make a plan", "Wait for motivation", "Do everything at once", "Break the project into clear stages and next actions"], 3),
+            ("Your current plan is no longer producing the expected result. What should you do?", ["Repeat it blindly", "Give up on the goal immediately", "Review the evidence, identify what changed, and adapt the plan", "Blame the tool or another person"], 2),
+            ("You keep postponing a difficult task. What is the most practical approach?", ["Make the task even bigger", "Define one small, concrete first step and start", "Ignore the deadline", "Add unrelated work"], 1),
+            ("Your goal conflicts with a new opportunity. What can help you decide?", ["Compare the benefits and trade-offs against your priorities", "Choose randomly", "Let other people decide for you", "Do both without any limits"], 0),
+            ("You have completed an important stage. What will improve the next stage?", ["Never analyze it", "Start everything over", "Record what worked, what did not, and what to change next", "Avoid feedback"], 2),
+        ],
     },
 }
 
