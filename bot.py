@@ -1865,7 +1865,32 @@ async def get_result(attempt_id:int,request:Request):
             await ensure_and_send_iq_certificate(uid, int(a["id"]))
         except Exception:
             logger.exception("Result certificate self-heal failed for user %s attempt %s", uid, attempt_id)
-    return {"ok":True,"visible":True,"score":a["score"],"level":a["level"],"correct_count":a["correct_count"],"test_type":a["test_type"]}
+    question_count = 18 if a["test_type"] == "IQ" else 6
+    correct_count = int(a["correct_count"] or 0)
+    duration = max(0, int(a["duration"] or 0))
+    accuracy = round((correct_count / question_count) * 100) if question_count else 0
+    avg_time = round(duration / question_count, 1) if question_count and duration else 0
+    rank_row = await db_fetchrow("""
+        SELECT
+            COUNT(*) FILTER (WHERE score > $1) + 1 AS position,
+            COUNT(*) AS total
+        FROM results
+        WHERE test_type=$2
+    """, int(a["score"] or 0), a["test_type"])
+    return {
+        "ok":True,
+        "visible":True,
+        "score":a["score"],
+        "level":a["level"],
+        "correct_count":correct_count,
+        "question_count":question_count,
+        "duration":duration,
+        "accuracy":accuracy,
+        "avg_time":avg_time,
+        "ranking_position":int(rank_row["position"]) if rank_row else None,
+        "ranking_total":int(rank_row["total"]) if rank_row else 0,
+        "test_type":a["test_type"]
+    }
 
 @app.post("/api/payment/create")
 async def payment_create(request:Request):
