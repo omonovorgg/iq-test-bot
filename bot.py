@@ -527,6 +527,17 @@ async def migrate():
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_id BIGINT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_file_id TEXT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'",
+        # Existing databases may have an older test_sessions schema.
+        # CREATE TABLE IF NOT EXISTS does not add columns to an existing table.
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS questions JSONB",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS score INTEGER",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS correct_count INTEGER",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ",
+        "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
         "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS is_retry BOOLEAN NOT NULL DEFAULT FALSE",
         # Battle columns are explicitly migrated because CREATE TABLE IF NOT EXISTS
