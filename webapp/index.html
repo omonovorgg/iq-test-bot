@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=20260928-pretest">
 </head>
 <body>
   <div class="bg-orb orb-a"></div><div class="bg-orb orb-b"></div>
@@ -19,6 +19,54 @@
       <div class="loader-ring"></div>
       <h2>IQ TEST BOT</h2><p>Yuklanmoqda…</p>
     </section>
+
+    <div id="preTestOverlay" class="pretest-overlay hidden" aria-hidden="true">
+      <div class="pretest-sheet" role="dialog" aria-modal="true" aria-labelledby="preTestTitle">
+        <button id="preTestClose" class="pretest-close" type="button" aria-label="Close">×</button>
+
+        <div class="pretest-hero-icon">🧠</div>
+        <span class="pill pretest-pill">IQ TEST</span>
+        <h2 id="preTestTitle">Aql darajangizni aniqlang</h2>
+        <p id="preTestSubtitle" class="pretest-subtitle">18 ta tasviriy mantiq savoli orqali diqqat, naqsh va mantiqiy fikrlashingizni sinang.</p>
+
+        <div class="pretest-chips">
+          <span>18 ta savol</span>
+          <span>30 daqiqa</span>
+          <span>Tasviriy mantiq</span>
+          <span>IQ natija</span>
+        </div>
+
+        <div class="pretest-free glass">
+          <div class="pretest-free-head">
+            <div class="pretest-free-icon">🧩</div>
+            <div>
+              <b id="preTestFreeTitle">Bepul jumboq</b>
+              <small id="preTestFreeText">Testdagi savollar qanday ko‘rinishini oldindan sinab ko‘ring.</small>
+            </div>
+          </div>
+          <div class="pretest-puzzle" aria-label="Sample visual puzzle">
+            <div class="sample-cell sample-filled triangle-left"></div>
+            <div class="sample-cell sample-filled triangle-up"></div>
+            <div class="sample-cell sample-filled triangle-right"></div>
+            <div class="sample-cell sample-outline triangle-down"></div>
+            <div class="sample-cell sample-outline triangle-left"></div>
+            <div class="sample-cell sample-outline triangle-up"></div>
+            <div class="sample-cell sample-outline triangle-right"></div>
+            <div class="sample-cell sample-outline triangle-down"></div>
+            <div class="sample-cell sample-question">?</div>
+          </div>
+          <p id="preTestPuzzleHint" class="pretest-puzzle-hint">Qaysi shakl keyingi katakka mos keladi?</p>
+        </div>
+
+        <div class="pretest-note">
+          <span>✓</span>
+          <p id="preTestNote">Savollar bosqichma-bosqich murakkablashadi. Javobni tanlaganingizdan keyin keyingi savolga o‘tasiz.</p>
+        </div>
+
+        <button id="preTestContinue" class="primary pretest-start" type="button">🚀 Testni boshlash</button>
+        <button id="preTestLater" class="pretest-later" type="button">Keyinroq</button>
+      </div>
+    </div>
 
     <section id="homeScreen" class="screen hidden">
       <header class="topbar">
@@ -43,14 +91,15 @@
 
     <section id="profileScreen" class="screen hidden">
       <header class="subbar"><button class="back" data-back>‹</button><h2>Profil</h2><span></span></header>
-      <div class="form-card glass">
+      <div id="personalSummary" class="personal-summary"></div>
+      <div id="profileEditor" class="form-card glass hidden">
+        <div class="editor-heading"><b id="profileEditorTitle">Profil ma’lumotlari</b><small id="profileEditorNote">Bu ma’lumotlar natija va sertifikatda ishlatiladi.</small></div>
         <label>Ism / familiya<input id="fullName" maxlength="120" placeholder="Ismingiz"></label>
         <label>Jins<select id="gender"><option value="">Tanlang</option><option value="male">O‘g‘il</option><option value="female">Qiz</option></select></label>
         <label>Yosh<input id="age" type="number" min="10" max="120" inputmode="numeric" placeholder="20"></label>
         <label>Davlat<select id="country"><option value="">Tanlang</option><option>O‘zbekiston</option><option>Rossiya</option><option>Qozog‘iston</option><option>Qirg‘iziston</option><option>Turkiya</option><option>AQSH</option><option>Buyuk Britaniya</option><option>Germaniya</option><option>Boshqa</option></select></label>
         <button id="saveProfile" class="primary">Saqlash</button>
       </div>
-      <div id="personalSummary" class="personal-summary"></div>
     </section>
 
     <section id="testScreen" class="screen hidden">
@@ -126,7 +175,8 @@
     </section>
 
     <section id="certificateScreen" class="screen hidden">
-      <header class="subbar"><button class="back" data-back>‹</button><h2>Sertifikat</h2><span></span></header><div id="certificateBox" class="certificate-box glass"></div>
+      <header class="subbar"><button class="back" data-back>‹</button><h2>Sertifikat</h2><span></span></header>
+      <div id="certificateBox" class="certificate-box"></div>
     </section>
 
     <section id="battleScreen" class="screen hidden">
@@ -136,6 +186,6 @@
 
     <section id="toast" class="toast" aria-live="polite"></section>
   </main>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=20260928-pretest"></script>
 </body>
 </html>
