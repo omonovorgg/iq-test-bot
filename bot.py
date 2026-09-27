@@ -64,6 +64,9 @@ if not PUBLIC_BASE_URL:
 bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 db_pool: asyncpg.Pool | None = None
+# Short-lived admin input state for Telegram panel edits. Values are discarded
+# immediately after a successful update, and never contain secrets.
+ADMIN_PENDING: dict[int, str] = {}
 
 IQ_QUESTIONS = [
     # Each item is: id, weight, 8 matrix cells + question marker, 4 options, correct.
@@ -482,6 +485,93 @@ async def migrate():
     # NOT EXISTS (which never changes an existing column type).
     await migrate_legacy_battle_ids()
 
+    # Legacy test-session schemas: some older deployments stored session_id as
+    # TEXT/VARCHAR. The current API consistently treats it as UUID and uses
+    # $1::uuid in queries. Convert old valid UUID strings before the API starts.
+    async with db_pool.acquire() as conn:
+        session_type = await conn.fetchval("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='test_sessions'
+              AND column_name='session_id'
+        """)
+        attempt_type = await conn.fetchval("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='test_attempts'
+              AND column_name='session_id'
+        """)
+        battle_player_type = await conn.fetchval("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='battle_players'
+              AND column_name='session_id'
+        """)
+
+        if session_type and session_type != 'uuid':
+            invalid = await conn.fetchval("""
+                SELECT COUNT(*) FROM test_sessions
+                WHERE session_id IS NOT NULL
+                  AND session_id::text <> ''
+                  AND session_id::text !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            """)
+            if invalid:
+                raise RuntimeError(f"Database schema invalid: {invalid} test_sessions.session_id values are not UUIDs")
+
+            await conn.execute("ALTER TABLE test_attempts DROP CONSTRAINT IF EXISTS test_attempts_session_id_fkey")
+            await conn.execute("ALTER TABLE battle_players DROP CONSTRAINT IF EXISTS battle_players_session_id_fkey")
+            await conn.execute("""
+                ALTER TABLE test_sessions
+                ALTER COLUMN session_id TYPE UUID
+                USING NULLIF(session_id::text, '')::uuid
+            """)
+            if attempt_type and attempt_type != 'uuid':
+                await conn.execute("""
+                    ALTER TABLE test_attempts
+                    ALTER COLUMN session_id TYPE UUID
+                    USING NULLIF(session_id::text, '')::uuid
+                """)
+            if battle_player_type and battle_player_type != 'uuid':
+                await conn.execute("""
+                    ALTER TABLE battle_players
+                    ALTER COLUMN session_id TYPE UUID
+                    USING NULLIF(session_id::text, '')::uuid
+                """)
+            await conn.execute("""
+                ALTER TABLE test_attempts
+                ADD CONSTRAINT test_attempts_session_id_fkey
+                FOREIGN KEY (session_id) REFERENCES test_sessions(session_id) ON DELETE SET NULL
+            """)
+            await conn.execute("""
+                ALTER TABLE battle_players
+                ADD CONSTRAINT battle_players_session_id_fkey
+                FOREIGN KEY (session_id) REFERENCES test_sessions(session_id) ON DELETE SET NULL
+            """)
+            logger.info("Migrated legacy test session IDs to UUID")
+        elif attempt_type and attempt_type != 'uuid':
+            await conn.execute("ALTER TABLE test_attempts DROP CONSTRAINT IF EXISTS test_attempts_session_id_fkey")
+            await conn.execute("""
+                ALTER TABLE test_attempts
+                ALTER COLUMN session_id TYPE UUID
+                USING NULLIF(session_id::text, '')::uuid
+            """)
+            await conn.execute("""
+                ALTER TABLE test_attempts
+                ADD CONSTRAINT test_attempts_session_id_fkey
+                FOREIGN KEY (session_id) REFERENCES test_sessions(session_id) ON DELETE SET NULL
+            """)
+            logger.info("Migrated legacy test_attempts.session_id to UUID")
+        elif battle_player_type and battle_player_type != 'uuid':
+            await conn.execute("ALTER TABLE battle_players DROP CONSTRAINT IF EXISTS battle_players_session_id_fkey")
+            await conn.execute("""
+                ALTER TABLE battle_players
+                ALTER COLUMN session_id TYPE UUID
+                USING NULLIF(session_id::text, '')::uuid
+            """)
+            await conn.execute("""
+                ALTER TABLE battle_players
+                ADD CONSTRAINT battle_players_session_id_fkey
+                FOREIGN KEY (session_id) REFERENCES test_sessions(session_id) ON DELETE SET NULL
+            """)
+            logger.info("Migrated legacy battle_players.session_id to UUID")
+
     # Safe migrations for existing installations.
     migrations = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT",
@@ -876,6 +966,49 @@ async def admin_set_live(message: types.Message):
             await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",k,v)
     await message.answer("✅ Live counter yangilandi.")
 
+@dp.message(F.text)
+async def admin_pending_input(message: types.Message):
+    user_id=message.from_user.id
+    pending=ADMIN_PENDING.get(user_id)
+    if not pending:
+        return
+    if not await is_admin(user_id):
+        ADMIN_PENDING.pop(user_id,None)
+        return
+    raw=message.text.strip()
+    try:
+        value=int(raw)
+        if value < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("❌ Faqat 0 yoki undan katta butun son yuboring.")
+        return
+
+    if pending.startswith("price:"):
+        key=pending.split(":",1)[1]
+        allowed={"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}
+        if key not in allowed:
+            ADMIN_PENDING.pop(user_id,None)
+            await message.answer("❌ Noto‘g‘ri narx kaliti.")
+            return
+        await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",key,str(value))
+        ADMIN_PENDING.pop(user_id,None)
+        await message.answer(f"✅ <b>{key}</b> = <b>{value:,}</b> so‘m")
+        return
+
+    if pending.startswith("live:"):
+        field=pending.split(":",1)[1]
+        mapping={"base":"live_fake_base","online":"live_fake_online","delta":"live_fake_delta"}
+        key=mapping.get(field)
+        if not key:
+            ADMIN_PENDING.pop(user_id,None)
+            await message.answer("❌ Noto‘g‘ri live qiymati.")
+            return
+        await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",key,str(value))
+        ADMIN_PENDING.pop(user_id,None)
+        await message.answer(f"✅ <b>{field}</b> = <b>{value:,}</b>")
+        return
+
 @dp.message(Command("broadcast"))
 async def admin_broadcast(message: types.Message):
     if not await is_admin(message.from_user.id):
@@ -960,6 +1093,46 @@ async def admin_callback(callback: CallbackQuery):
             keys=["iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"]
             vals=await asyncio.gather(*(setting(k,"0") for k in keys))
             text="💰 <b>Products</b>\n\n"+"\n".join(f"{k}: {v}" for k,v in zip(keys,vals))
+            keyboard = [
+                [InlineKeyboardButton(text=f"✏️ IQ: {vals[0]}", callback_data="admin:price:iq_price"), InlineKeyboardButton(text=f"✏️ IQ retry: {vals[1]}", callback_data="admin:price:iq_retry_price")],
+                [InlineKeyboardButton(text=f"✏️ EQ: {vals[2]}", callback_data="admin:price:eq_price"), InlineKeyboardButton(text=f"✏️ EQ retry: {vals[3]}", callback_data="admin:price:eq_retry_price")],
+                [InlineKeyboardButton(text=f"✏️ PQ: {vals[4]}", callback_data="admin:price:pq_price"), InlineKeyboardButton(text=f"✏️ PQ retry: {vals[5]}", callback_data="admin:price:pq_retry_price")],
+                [InlineKeyboardButton(text=f"✏️ Battle: {vals[6]}", callback_data="admin:price:battle_price")],
+                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")],
+            ]
+            await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+            await callback.answer()
+            return
+        elif action.startswith("price:"):
+            key=action.split(":",1)[1]
+            if key not in {"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}:
+                await callback.answer("Noto‘g‘ri narx",show_alert=True); return
+            ADMIN_PENDING[callback.from_user.id]=f"price:{key}"
+            await callback.message.answer(f"✏️ <b>{key}</b> uchun yangi narxni faqat son bilan yuboring.\nMasalan: <code>5000</code>")
+            await callback.answer("Yangi narx kutilmoqda")
+            return
+        elif action.startswith("live_mode:"):
+            mode=action.split(":",1)[1]
+            if mode not in ("fake","real"):
+                await callback.answer("Noto‘g‘ri mode",show_alert=True); return
+            await db_execute("INSERT INTO app_settings(key,value) VALUES('live_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",mode)
+            await callback.answer(f"Live: {mode}")
+            vals=await asyncio.gather(setting("live_mode","fake"),setting("live_fake_base","95114"),setting("live_fake_online","342"),setting("live_fake_delta","8"))
+            text=f"🎯 <b>Live Counter</b>\n\nmode={vals[0]}\nbase={vals[1]}\nonline={vals[2]}\ndelta={vals[3]}"
+            keyboard=[[InlineKeyboardButton(text="🟣 FAKE",callback_data="admin:live_mode:fake"),InlineKeyboardButton(text="🟢 REAL",callback_data="admin:live_mode:real")],
+                      [InlineKeyboardButton(text=f"✏️ Base {vals[1]}",callback_data="admin:live_edit:base"),InlineKeyboardButton(text=f"✏️ Online {vals[2]}",callback_data="admin:live_edit:online")],
+                      [InlineKeyboardButton(text=f"✏️ Delta {vals[3]}",callback_data="admin:live_edit:delta")],
+                      [InlineKeyboardButton(text="⬅️ Admin",callback_data="admin:home")]]
+            await callback.message.edit_text(text,reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+            return
+        elif action.startswith("live_edit:"):
+            field=action.split(":",1)[1]
+            if field not in {"base","online","delta"}:
+                await callback.answer("Noto‘g‘ri qiymat",show_alert=True); return
+            ADMIN_PENDING[callback.from_user.id]=f"live:{field}"
+            await callback.message.answer(f"✏️ Live <b>{field}</b> qiymatini faqat son bilan yuboring.")
+            await callback.answer("Yangi qiymat kutilmoqda")
+            return
         elif action == "certs":
             row=await db_fetchrow("SELECT COUNT(*) c FROM certificates")
             text=f"📜 Certificates: <b>{row['c']}</b>"
@@ -973,7 +1146,14 @@ async def admin_callback(callback: CallbackQuery):
             ) if rows else "Kartalar yo‘q."
         elif action == "live":
             vals=await asyncio.gather(setting("live_mode","fake"),setting("live_fake_base","95114"),setting("live_fake_online","342"),setting("live_fake_delta","8"))
-            text=f"🎯 Live\nmode={vals[0]}\nbase={vals[1]}\nonline={vals[2]}\ndelta={vals[3]}"
+            text=f"🎯 <b>Live Counter</b>\n\nmode={vals[0]}\nbase={vals[1]}\nonline={vals[2]}\ndelta={vals[3]}"
+            keyboard=[[InlineKeyboardButton(text="🟣 FAKE",callback_data="admin:live_mode:fake"),InlineKeyboardButton(text="🟢 REAL",callback_data="admin:live_mode:real")],
+                      [InlineKeyboardButton(text=f"✏️ Base {vals[1]}",callback_data="admin:live_edit:base"),InlineKeyboardButton(text=f"✏️ Online {vals[2]}",callback_data="admin:live_edit:online")],
+                      [InlineKeyboardButton(text=f"✏️ Delta {vals[3]}",callback_data="admin:live_edit:delta")],
+                      [InlineKeyboardButton(text="⬅️ Admin",callback_data="admin:home")]]
+            await callback.message.edit_text(text,reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+            await callback.answer()
+            return
         else:
             text="Noma’lum bo‘lim."
         keyboard = payment_buttons + [[InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]
@@ -1098,7 +1278,10 @@ def public_iq_questions():
     return [{k:v for k,v in q.items() if k != "correct"} for q in IQ_QUESTIONS]
 
 def new_session():
-    return uuid4()
+    # Always pass UUIDs to asyncpg as strings. PostgreSQL casts them explicitly
+    # in the test/battle queries, and this also keeps legacy TEXT schemas from
+    # producing "expected str, got UUID" binding errors.
+    return str(uuid4())
 
 async def get_owned_attempt(user_id, attempt_id):
     return await db_fetchrow("SELECT * FROM test_attempts WHERE id=$1 AND user_id=$2", attempt_id, user_id)
@@ -1573,7 +1756,7 @@ async def battle_create(request:Request):
     for _ in range(10):
         code=battle_code()
         try:
-            row=await db_fetchrow("INSERT INTO battles(id,code,created_by,status) VALUES($1,$2,$3,'waiting') RETURNING id,code",uuid4(),code,uid)
+            row=await db_fetchrow("INSERT INTO battles(id,code,created_by,status) VALUES($1,$2,$3,'waiting') RETURNING id,code",str(uuid4()),code,uid)
             break
         except asyncpg.UniqueViolationError:
             continue
