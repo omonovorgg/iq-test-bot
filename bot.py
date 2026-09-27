@@ -1738,6 +1738,8 @@ async def api_bootstrap(request: Request):
         ON CONFLICT(user_id) DO UPDATE SET username=$2,first_name=$3,last_name=$4,last_seen=NOW(),updated_at=NOW()
     """,uid,user.get("username"),user.get("first_name"),user.get("last_name"))
     row=await db_fetchrow("SELECT * FROM users WHERE user_id=$1",uid)
+    await db_execute("UPDATE users SET last_seen=NOW(),updated_at=NOW() WHERE user_id=$1",uid)
+    row=await db_fetchrow("SELECT * FROM users WHERE user_id=$1",uid)
     prices={k:await setting_int(k) for k in ["iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"]}
     iq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='IQ' LIMIT 1",uid))
     eq_done=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type='EQ' LIMIT 1",uid))
@@ -1814,15 +1816,19 @@ async def test_start(request: Request):
     active=await db_fetchrow("SELECT session_id,test_type,questions,answers,started_at,expires_at,price,is_retry FROM test_sessions WHERE user_id=$1 AND test_type=$2 AND status='active' AND expires_at>NOW() ORDER BY started_at DESC LIMIT 1",uid,typ)
     if active:
         active_questions = active["questions"]
-        if not active_questions:
-            if typ == "IQ":
+        # Behavior-test question text is localized at runtime. Older active
+        # sessions may contain English questions from before localization was
+        # added; regenerate only the public text/options while preserving the
+        # already submitted answer indexes. IQ matrices are language-neutral.
+        if typ == "IQ":
+            if not active_questions:
                 active_questions = public_iq_questions()
-            else:
-                active_questions = localized_behavior_questions(typ, lang)
-            await db_execute(
-                "UPDATE test_sessions SET questions=$1 WHERE session_id=$2::uuid",
-                json.dumps(active_questions), str(active["session_id"])
-            )
+        else:
+            active_questions = localized_behavior_questions(typ, lang)
+        await db_execute(
+            "UPDATE test_sessions SET questions=$1 WHERE session_id=$2::uuid",
+            json.dumps(active_questions), str(active["session_id"])
+        )
         return {"ok":True,"session_id":str(active["session_id"]),"test_type":active["test_type"],"questions":active_questions,"answers":active["answers"],"started_at":active["started_at"].isoformat(),"expires_at":active["expires_at"].isoformat(),"price":int(active["price"] or 0),"is_retry":bool(active["is_retry"]),"resumed":True}
     sid=new_session()
     expires=datetime.now(timezone.utc)+timedelta(minutes=30)
@@ -1855,7 +1861,7 @@ async def test_submit(session_id: str, request: Request):
         try: attempt=await submit_iq_internal(uid,session_id,answers,duration)
         except ValueError as exc: return json_error(str(exc),409)
     else:
-        source=EQ_QUESTIONS if session["test_type"]=="EQ" else PQ_QUESTIONS
+        source=LOCAL_BEHAVIOR_QUESTIONS["en"][session["test_type"]]
         async with db_pool.acquire() as conn:
             async with conn.transaction():
                 locked=await conn.fetchrow("SELECT * FROM test_sessions WHERE session_id=$1::uuid AND user_id=$2 FOR UPDATE",session_id,uid)
@@ -2216,6 +2222,10 @@ async def api_ranking(request:Request):
 
 @app.get("/api/stats/live")
 async def stats_live(request:Request):
+    # Keep the current Mini App session alive for REAL mode. The frontend
+    # polls this endpoint every few seconds, so active users remain counted.
+    user=await authenticated_user(request)
+    await db_execute("UPDATE users SET last_seen=NOW(),updated_at=NOW() WHERE user_id=$1", int(user["id"]))
     mode=await setting("live_mode","fake")
     if mode=="real":
         row=await db_fetchrow("SELECT COUNT(*) c FROM users WHERE last_seen > NOW()-INTERVAL '5 minutes'")
@@ -2380,7 +2390,7 @@ async def referral_claim(request:Request):
 async def lifespan(application: FastAPI):
     global db_pool
     logger.info("Starting application")
-    db_pool=await asyncpg.create_pool(DATABASE_URL,min_size=1,max_size=10,command_timeout=30)
+    db_pool=await asyncpg.create_pool(DATABASE_URL,min_size=1,max_size=10,command_timeout=30,statement_cache_size=0)
     await migrate()
     webhook_url = PUBLIC_BASE_URL.rstrip("/") + "/telegram/webhook"
     try:
