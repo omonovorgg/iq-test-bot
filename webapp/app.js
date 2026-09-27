@@ -339,7 +339,13 @@
     $("#cardNumber").textContent = card?.card_number || "Faol karta topilmadi";
     $("#cardHolder").textContent = card?.holder || "";
     $("#cardBank").textContent = card?.bank || "";
-    $("#paymentStatus").textContent = d.status === "approved" ? "To‘lov tasdiqlangan." : card ? "Kartaga to‘lov qiling va receipt yuklang." : "Admin karta qo‘shishini kuting.";
+    if (d.status === "approved") {
+      $("#paymentStatus").textContent = "To‘lov tasdiqlangan.";
+    } else if (d.receipt_file_id) {
+      $("#paymentStatus").textContent = "✅ Receipt yuborilgan. Admin tasdig‘i kutilmoqda.";
+    } else {
+      $("#paymentStatus").textContent = card ? "Kartaga to‘lov qiling va receipt yuklang." : "Admin karta qo‘shishini kuting.";
+    }
     $("#receiptInput").value = "";
     $("#receiptFile").value = "";
   }
@@ -350,10 +356,14 @@
       const p = await api("/api/payment/mine");
       const mine = p.payments.find((x) => Number(x.id) === Number(state.paymentId));
       if (!mine) return;
-      $("#paymentStatus").textContent = `Status: ${mine.status}`;
       if (mine.status === "approved") {
+        $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi.";
         if (state.battleId) await checkBattleReady(true);
         else if (state.paymentAttemptId) await showResult(state.paymentAttemptId);
+      } else if (mine.receipt_file_id) {
+        $("#paymentStatus").textContent = "✅ Receipt yuborilgan. Admin tasdig‘i kutilmoqda.";
+      } else {
+        $("#paymentStatus").textContent = "Receipt kutilmoqda.";
       }
     } catch (_) {}
   }
@@ -391,7 +401,26 @@
     updateLive();
     clearInterval(window.__liveTimer);
     window.__liveTimer = setInterval(updateLive, 5000);
-    await restoreProgress();
+
+    // Payment state must survive closing/reopening the Mini App.
+    // Bootstrap returns the latest pending payment, so the user is placed
+    // straight back on the receipt screen instead of losing the flow.
+    if (d.pending_payment) {
+      const p = d.pending_payment;
+      state.paymentId = p.id;
+      state.paymentAttemptId = p.attempt_id;
+      await renderPayment({
+        payment_id: p.id,
+        attempt_id: p.attempt_id,
+        amount: p.amount,
+        status: p.status,
+        receipt_file_id: p.receipt_file_id,
+        card: p.card
+      });
+      show("paymentScreen");
+    } else {
+      await restoreProgress();
+    }
   }
 
   function updateHomeLocks() {
