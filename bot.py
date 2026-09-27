@@ -617,6 +617,11 @@ async def migrate():
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_id BIGINT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_file_id TEXT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'",
+        # Some production databases were created by an older payment schema
+        # that had a legacy payment_id column with NOT NULL. The current code
+        # uses payments.id as the primary payment identifier, so the legacy
+        # column must not block new payment rows.
+        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=\'payments\' AND column_name=\'payment_id\') THEN ALTER TABLE payments ALTER COLUMN payment_id DROP NOT NULL; END IF; END $$;",
         # Existing databases may have an older test_sessions schema.
         # CREATE TABLE IF NOT EXISTS does not add columns to an existing table.
         "ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT",
