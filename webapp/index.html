@@ -5,10 +5,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#0a0e1a">
   <meta name="color-scheme" content="dark">
+
   <title>IQ TEST BOT</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  >
+
   <link rel="stylesheet" href="/static/style.css">
 </head>
 
@@ -18,21 +26,32 @@
 
   <main id="app" class="app-shell">
 
+    <!-- LOADING -->
     <section id="loadingScreen" class="screen center-screen">
       <div class="loader-ring"></div>
       <h2>IQ TEST BOT</h2>
       <p>Yuklanmoqda…</p>
     </section>
 
+    <!-- HOME -->
     <section id="homeScreen" class="screen hidden">
 
       <header class="topbar">
         <div>
           <span class="eyebrow">IQ TEST BOT</span>
-          <h1>Salom, <span id="userName">Do‘st</span> 👋</h1>
+          <h1>
+            Salom,
+            <span id="userName">Do‘st</span>
+            👋
+          </h1>
         </div>
 
-        <button id="profileTopBtn" class="icon-btn" aria-label="Profile">
+        <button
+          id="profileTopBtn"
+          class="icon-btn"
+          aria-label="Profile"
+          type="button"
+        >
           ◎
         </button>
       </header>
@@ -58,6 +77,7 @@
         </div>
       </div>
 
+      <!-- LIVE COUNTER -->
       <div class="live-card glass">
 
         <div>
@@ -77,6 +97,7 @@
 
       </div>
 
+      <!-- TESTS -->
       <div class="section-title">
         <h3>Testlar</h3>
         <span>ketma-ket ochiladi</span>
@@ -84,7 +105,11 @@
 
       <div class="test-grid">
 
-        <button class="test-card iq" data-test="IQ">
+        <button
+          class="test-card iq"
+          data-test="IQ"
+          type="button"
+        >
           <span class="card-icon">🧠</span>
 
           <span>
@@ -95,33 +120,49 @@
           <em>›</em>
         </button>
 
-        <button class="test-card locked" data-test="EQ">
+        <button
+          class="test-card locked"
+          data-test="EQ"
+          type="button"
+        >
           <span class="card-icon">🎭</span>
 
           <span>
             <b>EQ</b>
-            <small id="eqState">IQdan keyin ochiladi</small>
+            <small id="eqState">
+              IQdan keyin ochiladi
+            </small>
           </span>
 
           <em>›</em>
         </button>
 
-        <button class="test-card locked" data-test="PQ">
+        <button
+          class="test-card locked"
+          data-test="PQ"
+          type="button"
+        >
           <span class="card-icon">⏳</span>
 
           <span>
             <b>PQ</b>
-            <small id="pqState">EQdan keyin ochiladi</small>
+            <small id="pqState">
+              EQdan keyin ochiladi
+            </small>
           </span>
 
           <em>›</em>
         </button>
 
-        <button id="profileCard" class="test-card locked">
+        <button
+          id="profileCard"
+          class="test-card locked"
+          type="button"
+        >
           <span class="card-icon">⭐</span>
 
           <span>
-            <b>Siz qanday insonsiz</b>
+            <b>Shaxsiy profil</b>
             <small>IQ + EQ + PQdan keyin</small>
           </span>
 
@@ -130,47 +171,78 @@
 
       </div>
 
-      <button id="battleCard" class="battle-card">
+      <!-- BATTLE -->
+      <button
+        id="battleCard"
+        class="battle-card"
+        type="button"
+      >
         <span>⚔️</span>
 
         <div>
           <b>Battle</b>
-          <small>Do‘stingiz bilan asynchronous duel</small>
+          <small>
+            Do‘stingiz bilan asynchronous duel
+          </small>
         </div>
 
         <em>›</em>
       </button>
 
+      <!-- BOTTOM NAV -->
       <nav class="bottom-nav">
-        <button class="active" data-nav="home">
+
+        <button
+          class="active"
+          data-nav="home"
+          type="button"
+        >
           ⌂
           <small>Home</small>
         </button>
 
-        <button data-nav="ranking">
+        <button
+          data-nav="ranking"
+          type="button"
+        >
           ♛
           <small>Reyting</small>
         </button>
 
-        <button data-nav="certificate">
+        <button
+          data-nav="certificate"
+          type="button"
+        >
           ▣
           <small>Sertifikat</small>
         </button>
 
-        <button data-nav="profile">
+        <button
+          data-nav="profile"
+          type="button"
+        >
           ◎
           <small>Profil</small>
         </button>
+
       </nav>
 
     </section>
 
-
+    <!-- PROFILE -->
     <section id="profileScreen" class="screen hidden">
 
       <header class="subbar">
-        <button class="back" data-back>‹</button>
+        <button
+          class="back"
+          data-back
+          type="button"
+        >
+          ‹
+        </button>
+
         <h2>Profil</h2>
+
         <span></span>
       </header>
 
@@ -178,15 +250,18 @@
 
         <label>
           Ism / familiya
+
           <input
             id="fullName"
             maxlength="120"
             placeholder="Ismingiz"
+            autocomplete="name"
           >
         </label>
 
         <label>
           Jins
+
           <select id="gender">
             <option value="">Tanlang</option>
             <option value="male">O‘g‘il</option>
@@ -196,6 +271,7 @@
 
         <label>
           Yosh
+
           <input
             id="age"
             type="number"
@@ -208,31 +284,48 @@
 
         <label>
           Davlat
+
           <select id="country">
             <option value="">Tanlang</option>
             <option>O‘zbekiston</option>
             <option>Rossiya</option>
-            <option>English</option>
             <option>Qozog‘iston</option>
             <option>Qirg‘iziston</option>
             <option>Turkiya</option>
+            <option>AQSH</option>
+            <option>Buyuk Britaniya</option>
+            <option>Germaniya</option>
+            <option>Boshqa</option>
           </select>
         </label>
 
-        <button id="saveProfile" class="primary">
+        <button
+          id="saveProfile"
+          class="primary"
+          type="button"
+        >
           Saqlash
         </button>
 
       </div>
 
+      <div
+        id="personalSummary"
+        class="personal-summary"
+      ></div>
+
     </section>
 
-
+    <!-- TEST -->
     <section id="testScreen" class="screen hidden">
 
       <header class="subbar">
 
-        <button id="testBack" class="back">
+        <button
+          id="testBack"
+          class="back"
+          type="button"
+        >
           ‹
         </button>
 
@@ -248,13 +341,19 @@
 
       </header>
 
-      <div id="celebration" class="celebration hidden">
+      <div
+        id="celebration"
+        class="celebration hidden"
+      >
         ✨ Ajoyib! Keyingi bosqichga o‘tdingiz.
       </div>
 
       <div class="question-head">
 
-        <span id="difficulty" class="pill">
+        <span
+          id="difficulty"
+          class="pill"
+        >
           EASY
         </span>
 
@@ -264,24 +363,36 @@
 
       </div>
 
-      <div id="matrix" class="matrix glass"></div>
+      <div
+        id="matrix"
+        class="matrix glass"
+      ></div>
 
-      <div id="options" class="options"></div>
+      <div
+        id="options"
+        class="options"
+      ></div>
 
-      <button id="nextQuestion" class="primary" disabled>
+      <button
+        id="nextQuestion"
+        class="primary"
+        type="button"
+        disabled
+      >
         Davom etish
       </button>
 
     </section>
 
-
-    <section id="loadingResult" class="screen hidden center-screen">
+    <!-- RESULT LOADING -->
+    <section
+      id="loadingResult"
+      class="screen hidden center-screen"
+    >
 
       <div class="loader-ring"></div>
 
-      <h2>
-        Natija tayyorlanmoqda
-      </h2>
+      <h2>Natija tayyorlanmoqda</h2>
 
       <div class="check-list">
         <span>✓ Javoblar tekshirildi</span>
@@ -295,13 +406,23 @@
 
     </section>
 
-
+    <!-- PAYMENT -->
     <section id="paymentScreen" class="screen hidden">
 
       <header class="subbar">
-        <button class="back" data-back>‹</button>
+
+        <button
+          class="back"
+          data-back
+          type="button"
+        >
+          ‹
+        </button>
+
         <h2>To‘lov</h2>
+
         <span></span>
+
       </header>
 
       <div class="payment-card glass">
@@ -315,7 +436,8 @@
         </h1>
 
         <p>
-          Quyidagi kartaga to‘lov qiling va receipt yuboring.
+          Quyidagi kartaga to‘lov qiling va
+          receipt rasmini shu yerga yuklang.
         </p>
 
         <div class="bank-box">
@@ -324,58 +446,101 @@
             Karta topilmadi
           </b>
 
-          <button id="copyCard" class="small-btn">
+          <button
+            id="copyCard"
+            class="small-btn"
+            type="button"
+          >
             Nusxa
           </button>
 
           <span id="cardHolder"></span>
+
           <span id="cardBank"></span>
 
         </div>
 
-        <button id="sharePayment" class="secondary">
-          Telegramga o‘tish
+        <button
+          id="sharePayment"
+          class="secondary"
+          type="button"
+        >
+          Telegram botini ochish
         </button>
 
         <label class="file-label">
-          Receipt file_id
+          To‘lov cheki
 
           <input
-            id="receiptInput"
-            placeholder="Telegram file_id"
+            id="receiptFile"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
           >
         </label>
 
-        <button id="sendReceipt" class="primary">
+        <input
+          id="receiptInput"
+          class="hidden"
+          autocomplete="off"
+        >
+
+        <button
+          id="sendReceipt"
+          class="primary"
+          type="button"
+        >
           Receipt yuborish
         </button>
 
-        <div id="paymentStatus" class="inline-status"></div>
+        <div
+          id="paymentStatus"
+          class="inline-status"
+        ></div>
 
       </div>
 
     </section>
 
-
+    <!-- RESULT -->
     <section id="resultScreen" class="screen hidden">
 
       <div class="result-glow"></div>
 
       <header class="subbar">
-        <button class="back" data-back>‹</button>
+
+        <button
+          class="back"
+          data-back
+          type="button"
+        >
+          ‹
+        </button>
+
         <h2>Natija</h2>
+
         <span></span>
+
       </header>
 
       <div class="result-card glass">
 
-        <span class="pill">
+        <span
+          id="resultBadge"
+          class="pill"
+        >
           IQ RESULT
         </span>
 
         <div class="score-ring">
-          <strong id="resultScore">—</strong>
-          <small>IQ</small>
+
+          <strong id="resultScore">
+            —
+          </strong>
+
+          <small id="resultUnit">
+            IQ
+          </small>
+
         </div>
 
         <h2 id="resultLevel">
@@ -386,7 +551,11 @@
           —
         </p>
 
-        <button id="certificateBtn" class="primary">
+        <button
+          id="certificateBtn"
+          class="primary"
+          type="button"
+        >
           📜 Sertifikatni olish
         </button>
 
@@ -394,52 +563,94 @@
 
     </section>
 
-
+    <!-- RANKING -->
     <section id="rankingScreen" class="screen hidden">
 
       <header class="subbar">
-        <button class="back" data-back>‹</button>
+
+        <button
+          class="back"
+          data-back
+          type="button"
+        >
+          ‹
+        </button>
+
         <h2>Reyting</h2>
+
         <span></span>
+
       </header>
 
-      <div id="rankingList" class="ranking-list"></div>
+      <div
+        id="rankingList"
+        class="ranking-list"
+      ></div>
 
     </section>
 
-
-    <section id="certificateScreen" class="screen hidden">
+    <!-- CERTIFICATE -->
+    <section
+      id="certificateScreen"
+      class="screen hidden"
+    >
 
       <header class="subbar">
-        <button class="back" data-back>‹</button>
+
+        <button
+          class="back"
+          data-back
+          type="button"
+        >
+          ‹
+        </button>
+
         <h2>Sertifikat</h2>
+
         <span></span>
+
       </header>
 
-      <div id="certificateBox" class="certificate-box glass"></div>
+      <div
+        id="certificateBox"
+        class="certificate-box glass"
+      ></div>
 
     </section>
 
-
+    <!-- BATTLE -->
     <section id="battleScreen" class="screen hidden">
 
       <header class="subbar">
-        <button class="back" data-back>‹</button>
+
+        <button
+          class="back"
+          data-back
+          type="button"
+        >
+          ‹
+        </button>
+
         <h2>Battle</h2>
+
         <span></span>
+
       </header>
 
       <div class="battle-panel glass">
 
-        <h2>
-          ⚔️ Asynchronous duel
-        </h2>
+        <h2>⚔️ Asynchronous duel</h2>
 
         <p>
-          4 belgili kod yarating yoki do‘stingiz kodini kiriting.
+          4 belgili kod yarating yoki
+          do‘stingiz kodini kiriting.
         </p>
 
-        <button id="createBattle" class="primary">
+        <button
+          id="createBattle"
+          class="primary"
+          type="button"
+        >
           Battle yaratish
         </button>
 
@@ -451,9 +662,15 @@
           id="battleCode"
           maxlength="4"
           placeholder="AB12"
+          autocomplete="off"
+          autocapitalize="characters"
         >
 
-        <button id="joinBattle" class="secondary">
+        <button
+          id="joinBattle"
+          class="secondary"
+          type="button"
+        >
           Kod bilan kirish
         </button>
 
@@ -463,13 +680,15 @@
 
     </section>
 
-
-    <section id="toast" class="toast" aria-live="polite"></section>
+    <!-- TOAST -->
+    <section
+      id="toast"
+      class="toast"
+      aria-live="polite"
+    ></section>
 
   </main>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/static/app.js"></script>
-
 </body>
 </html>
