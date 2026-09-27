@@ -1,2307 +1,2482 @@
 (() => {
-"use strict";
+  "use strict";
 
-const tg = window.Telegram?.WebApp;
+  const tg = window.Telegram?.WebApp || null;
 
-if (tg) {
-  try {
-    tg.ready();
-    tg.expand();
-    tg.setHeaderColor("#0a0e1a");
-    tg.setBackgroundColor("#0a0e1a");
-  } catch (e) {}
-}
+  if (tg) {
+    try {
+      tg.ready();
+      tg.expand();
+      tg.enableClosingConfirmation?.();
+    } catch (_) {}
+  }
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const state = {
-  user: null,
-  prices: {},
-  questions: [],
-  sessionId: null,
-  testType: null,
-  index: 0,
-  answers: {},
-  selected: null,
-  startedAt: 0,
-  attemptId: null,
-  paymentId: null,
-  battleId: null,
-  localKey: null,
-  battlePoll: null,
-  battleReady: false
-};
+  const state = {
+    user: null,
+    prices: {},
+    questions: [],
 
-const screens = [
-  "loadingScreen",
-  "homeScreen",
-  "profileScreen",
-  "testScreen",
-  "loadingResult",
-  "paymentScreen",
-  "resultScreen",
-  "rankingScreen",
-  "certificateScreen",
-  "battleScreen"
-];
+    sessionId: null,
+    testType: null,
+    mode: "NORMAL",
 
-function show(id) {
-  screens.forEach((x) => {
-    const el = document.getElementById(x);
-    if (el) {
-      el.classList.toggle("hidden", x !== id);
+    index: 0,
+    answers: {},
+    selected: null,
+    startedAt: 0,
+
+    attemptId: null,
+    paymentId: null,
+    paymentAttemptId: null,
+
+    battleId: null,
+    battlePolling: null,
+
+    pendingType: null,
+    busy: false
+  };
+
+  const screens = [
+    "loadingScreen",
+    "homeScreen",
+    "profileScreen",
+    "testScreen",
+    "loadingResult",
+    "paymentScreen",
+    "resultScreen",
+    "rankingScreen",
+    "certificateScreen",
+    "battleScreen"
+  ];
+
+  function show(id) {
+    screens.forEach((screenId) => {
+      document
+        .getElementById(screenId)
+        ?.classList.toggle("hidden", screenId !== id);
+    });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "instant"
+    });
+  }
+
+  function toast(message) {
+    const element = $("#toast");
+
+    if (!element) return;
+
+    element.textContent = String(message || "");
+    element.classList.add("show");
+
+    clearTimeout(window.__toastTimer);
+
+    window.__toastTimer = setTimeout(() => {
+      element.classList.remove("show");
+    }, 2800);
+  }
+
+  function initData() {
+    return tg?.initData || "";
+  }
+
+  async function api(path, options = {}) {
+    const method = String(options.method || "GET").toUpperCase();
+
+    const headers = new Headers(options.headers || {});
+    const rawInitData = initData();
+
+    if (rawInitData) {
+      headers.set("X-Telegram-Init-Data", rawInitData);
     }
-  });
 
-  window.scrollTo({
-    top: 0,
-    behavior: "instant"
-  });
-}
+    if (
+      method !== "GET" &&
+      !(options.body instanceof FormData) &&
+      options.body !== undefined
+    ) {
+      headers.set("Content-Type", "application/json");
+    }
 
-function toast(msg) {
-  const el = $("#toast");
+    const controller = new AbortController();
 
-  if (!el) return;
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 18000);
 
-  el.textContent = msg;
-  el.classList.add("show");
-
-  clearTimeout(window.__toast);
-
-  window.__toast = setTimeout(() => {
-    el.classList.remove("show");
-  }, 2600);
-}
-
-function initData() {
-  return tg?.initData || "";
-}
-
-async function api(path, options = {}) {
-  const method =
-    (options.method || "GET").toUpperCase();
-
-  const headers =
-    new Headers(options.headers || {});
-
-  const raw = initData();
-
-  if (raw) {
-    headers.set(
-      "X-Telegram-Init-Data",
-      raw
-    );
-  }
-
-  if (
-    method === "POST" &&
-    !(options.body instanceof FormData) &&
-    options.body !== undefined
-  ) {
-    headers.set(
-      "Content-Type",
-      "application/json"
-    );
-  }
-
-  const controller =
-    new AbortController();
-
-  const timeout =
-    setTimeout(
-      () => controller.abort(),
-      15000
-    );
-
-  try {
-    const res = await fetch(
-      path,
-      {
+    try {
+      const response = await fetch(path, {
         ...options,
         method,
         headers,
         signal: controller.signal
-      }
-    );
-
-    const text = await res.text();
-
-    let data = {};
-
-    try {
-      data = text
-        ? JSON.parse(text)
-        : {};
-    } catch {
-      data = {
-        ok: false,
-        error:
-          text ||
-          "Server javobi noto‘g‘ri"
-      };
-    }
-
-    if (!res.ok) {
-      throw new Error(
-        data.error ||
-        data.detail ||
-        `HTTP ${res.status}`
-      );
-    }
-
-    return data;
-
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-
-/* =========================
-   LOCAL PROGRESS
-========================= */
-
-function saveProgress() {
-  if (!state.sessionId) return;
-
-  try {
-    localStorage.setItem(
-      "iq_progress",
-      JSON.stringify({
-        sessionId: state.sessionId,
-        testType: state.testType,
-        index: state.index,
-        answers: state.answers,
-        startedAt: state.startedAt
-      })
-    );
-  } catch (e) {}
-}
-
-function clearProgress() {
-  try {
-    localStorage.removeItem(
-      "iq_progress"
-    );
-  } catch (e) {}
-}
-
-
-/* =========================
-   SVG QUESTION RENDERER
-========================= */
-
-function svgFor(cell) {
-  const ns =
-    "http://www.w3.org/2000/svg";
-
-  const svg =
-    document.createElementNS(
-      ns,
-      "svg"
-    );
-
-  svg.setAttribute(
-    "viewBox",
-    "0 0 44 44"
-  );
-
-  const add = (
-    tag,
-    attrs
-  ) => {
-    const e =
-      document.createElementNS(
-        ns,
-        tag
-      );
-
-    Object.entries(attrs)
-      .forEach(([k, v]) => {
-        e.setAttribute(k, v);
       });
 
-    svg.appendChild(e);
+      const text = await response.text();
 
-    return e;
-  };
+      let data = {};
 
-  if (!cell) {
-    return svg;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (_) {
+        data = {
+          ok: false,
+          error: text || "Server javobi noto‘g‘ri."
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+          data.detail ||
+          `HTTP ${response.status}`
+        );
+      }
+
+      return data;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("Server javobi juda uzoq davom etdi.");
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  if (cell.type === "num") {
-    const t = add(
-      "text",
-      {
-        x: "22",
-        y: "28",
-        "text-anchor": "middle",
-        fill: "#f5f7ff",
-        "font-size": "18",
-        "font-weight": "800"
-      }
+  async function apiBlob(path) {
+    const headers = new Headers();
+    const rawInitData = initData();
+
+    if (rawInitData) {
+      headers.set(
+        "X-Telegram-Init-Data",
+        rawInitData
+      );
+    }
+
+    const response = await fetch(path, {
+      headers
+    });
+
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+
+      try {
+        const data = await response.json();
+
+        message =
+          data.error ||
+          data.detail ||
+          message;
+      } catch (_) {}
+
+      throw new Error(message);
+    }
+
+    return response.blob();
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(
+      /[&<>"']/g,
+      (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[character])
+    );
+  }
+
+  function saveProgress() {
+    if (
+      !state.sessionId ||
+      state.mode !== "NORMAL"
+    ) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        "iq_test_progress",
+        JSON.stringify({
+          sessionId: state.sessionId,
+          testType: state.testType,
+          index: state.index,
+          answers: state.answers,
+          startedAt: state.startedAt
+        })
+      );
+    } catch (_) {}
+  }
+
+  function clearProgress() {
+    try {
+      localStorage.removeItem(
+        "iq_test_progress"
+      );
+    } catch (_) {}
+  }
+
+  function difficulty(index) {
+    if (index < 6) return "EASY";
+    if (index < 12) return "MEDIUM";
+    return "HARD";
+  }
+
+  function svgFor(cell) {
+    if (!cell || typeof cell !== "object") {
+      return null;
+    }
+
+    const namespace =
+      "http://www.w3.org/2000/svg";
+
+    const svg =
+      document.createElementNS(
+        namespace,
+        "svg"
+      );
+
+    svg.setAttribute(
+      "viewBox",
+      "0 0 44 44"
     );
 
-    t.textContent =
-      String(cell.val ?? "");
+    svg.setAttribute(
+      "aria-hidden",
+      "true"
+    );
 
-    return svg;
-  }
+    const add = (tag, attributes) => {
+      const element =
+        document.createElementNS(
+          namespace,
+          tag
+        );
 
-  if (cell.type === "dot") {
-    const n =
-      Math.min(
+      Object.entries(attributes).forEach(
+        ([key, value]) => {
+          element.setAttribute(
+            key,
+            value
+          );
+        }
+      );
+
+      svg.appendChild(element);
+
+      return element;
+    };
+
+    if (cell.type === "num") {
+      const text = add(
+        "text",
+        {
+          x: "22",
+          y: "28",
+          "text-anchor": "middle",
+          fill: "#f5f7ff",
+          "font-size": "18",
+          "font-weight": "800"
+        }
+      );
+
+      text.textContent =
+        String(cell.val ?? "");
+
+      return svg;
+    }
+
+    if (cell.type === "dot") {
+      const count = Math.min(
         9,
         Math.max(
           1,
-          Number(cell.count || 1)
+          Number(cell.count) || 1
         )
       );
 
-    for (let i = 0; i < n; i++) {
-      let x =
-        10 + (i % 3) * 12;
+      const positions = [
+        [10, 10],
+        [22, 10],
+        [34, 10],
+        [10, 22],
+        [22, 22],
+        [34, 22],
+        [10, 34],
+        [22, 34],
+        [34, 34]
+      ];
 
-      let y =
-        10 +
-        Math.floor(i / 3) * 12;
+      positions
+        .slice(0, count)
+        .forEach(([cx, cy]) => {
+          add(
+            "circle",
+            {
+              cx,
+              cy,
+              r: "3",
+              fill: "#a78bfa"
+            }
+          );
+        });
 
-      if (n === 4) {
-        x =
-          [10, 34, 10, 34][i];
+      return svg;
+    }
 
-        y =
-          [10, 10, 34, 34][i];
+    if (cell.type === "grid") {
+      const position = Math.max(
+        0,
+        Math.min(
+          8,
+          Number(cell.pos) || 0
+        )
+      );
+
+      for (let index = 0; index < 9; index += 1) {
+        add(
+          "rect",
+          {
+            x:
+              5 +
+              (index % 3) * 11,
+            y:
+              5 +
+              Math.floor(index / 3) * 11,
+            width: "8",
+            height: "8",
+            rx: "2",
+            fill:
+              index === position
+                ? "#a78bfa"
+                : "#202a40",
+            stroke:
+              index === position
+                ? "#c9baff"
+                : "none"
+          }
+        );
       }
 
-      add(
-        "circle",
-        {
-          cx: x,
-          cy: y,
-          r: "3",
-          fill: "#a78bfa"
-        }
-      );
+      return svg;
     }
 
-    return svg;
-  }
+    const drawShape = (
+      name,
+      cx,
+      cy,
+      size,
+      fillMode
+    ) => {
+      const fill =
+        fillMode === "empty"
+          ? "none"
+          : fillMode === "half"
+            ? "#a78bfa88"
+            : "#a78bfa";
 
-  const shape = (
-    name,
-    cx,
-    cy,
-    size,
-    fill
-  ) => {
-    let e;
+      const stroke = "#c9baff";
 
-    const f =
-      fill === "empty"
-        ? "none"
-        : "#a78bfa";
-
-    if (name === "circle") {
-      e = add(
-        "circle",
-        {
-          cx,
-          cy,
-          r: size,
-          fill: f,
-          stroke: "#c9baff",
-          "stroke-width": "2"
-        }
-      );
-
-    } else if (
-      name === "square"
-    ) {
-      e = add(
-        "rect",
-        {
-          x: cx - size,
-          y: cy - size,
-          width: size * 2,
-          height: size * 2,
-          rx: "2",
-          fill: f,
-          stroke: "#c9baff",
-          "stroke-width": "2"
-        }
-      );
-
-    } else if (
-      name === "triangle"
-    ) {
-      e = add(
-        "polygon",
-        {
-          points:
-            `${cx},${cy - size} ` +
-            `${cx + size},${cy + size} ` +
-            `${cx - size},${cy + size}`,
-          fill: f,
-          stroke: "#c9baff",
-          "stroke-width": "2"
-        }
-      );
-
-    } else {
-      e = add(
-        "polygon",
-        {
-          points:
-            `${cx},${cy - size} ` +
-            `${cx + size},${cy} ` +
-            `${cx},${cy + size} ` +
-            `${cx - size},${cy}`,
-          fill: f,
-          stroke: "#c9baff",
-          "stroke-width": "2"
-        }
-      );
-    }
-
-    if (fill === "half") {
-      e.setAttribute(
-        "fill",
-        "#a78bfa55"
-      );
-    }
-
-    return e;
-  };
-
-
-  if (cell.type === "grid") {
-    for (let i = 0; i < 9; i++) {
-      add(
-        "rect",
-        {
-          x:
-            5 +
-            (i % 3) * 11,
-
-          y:
-            5 +
-            Math.floor(i / 3) * 11,
-
-          width: "8",
-          height: "8",
-          rx: "2",
-
-          fill:
-            i === Number(cell.pos)
-              ? "#a78bfa"
-              : "#202a40",
-
-          stroke:
-            i === Number(cell.pos)
-              ? "#c9baff"
-              : "none"
-        }
-      );
-    }
-
-    return svg;
-  }
-
-
-  if (cell.type === "shape") {
-    shape(
-      cell.shape,
-      22,
-      22,
-      11,
-      cell.fill
-    );
-
-    return svg;
-  }
-
-
-  if (cell.type === "combo") {
-    const names =
-      Array.isArray(cell.shapes)
-        ? cell.shapes
-        : [];
-
-    const spots = [
-      [14, 22],
-      [30, 22],
-      [22, 12],
-      [22, 32]
-    ];
-
-    names
-      .slice(0, 4)
-      .forEach((s, i) => {
-        shape(
-          s,
-          spots[i][0],
-          spots[i][1],
-          i ? 6 : 7,
-          cell.fill
+      if (name === "circle") {
+        add(
+          "circle",
+          {
+            cx,
+            cy,
+            r: size,
+            fill,
+            stroke,
+            "stroke-width": "2"
+          }
         );
-      });
+      } else if (name === "square") {
+        add(
+          "rect",
+          {
+            x: cx - size,
+            y: cy - size,
+            width: size * 2,
+            height: size * 2,
+            rx: "2",
+            fill,
+            stroke,
+            "stroke-width": "2"
+          }
+        );
+      } else if (name === "triangle") {
+        add(
+          "polygon",
+          {
+            points:
+              `${cx},${cy - size} ` +
+              `${cx + size},${cy + size} ` +
+              `${cx - size},${cy + size}`,
+            fill,
+            stroke,
+            "stroke-width": "2"
+          }
+        );
+      } else {
+        add(
+          "polygon",
+          {
+            points:
+              `${cx},${cy - size} ` +
+              `${cx + size},${cy} ` +
+              `${cx},${cy + size} ` +
+              `${cx - size},${cy}`,
+            fill,
+            stroke,
+            "stroke-width": "2"
+          }
+        );
+      }
+    };
 
-    return svg;
-  }
-
-  if (cell.type === "rotate") {
-    const angle =
-      Number(cell.angle || 0);
-
-    const e =
-      shape(
-        "diamond",
+    if (cell.type === "shape") {
+      drawShape(
+        cell.shape,
         22,
         22,
         11,
         cell.fill
       );
 
-    e.setAttribute(
-      "transform",
-      `rotate(${angle} 22 22)`
-    );
-
-    return svg;
-  }
-
-  if (cell.type === "size") {
-    const sizes = {
-      small: 6,
-      medium: 10,
-      large: 15
-    };
-
-    add(
-      "circle",
-      {
-        cx: "22",
-        cy: "22",
-        r:
-          sizes[cell.size] || 10,
-        fill: "#a78bfa",
-        stroke: "#c9baff",
-        "stroke-width": "2"
-      }
-    );
-
-    return svg;
-  }
-
-  return svg;
-}
-
-
-function renderCell(cell) {
-  const div =
-    document.createElement("div");
-
-  div.className =
-    "matrix-cell";
-
-  if (
-    cell &&
-    cell.type === "question"
-  ) {
-    div.classList.add("question");
-    div.textContent = "?";
-  } else {
-    div.appendChild(
-      svgFor(cell)
-    );
-  }
-
-  return div;
-}
-
-
-function renderOption(opt, i) {
-  const b =
-    document.createElement("button");
-
-  b.className =
-    "option";
-
-  b.dataset.i = i;
-
-  b.innerHTML =
-    `<span class="letter">
-      ${"ABCD"[i]}
-    </span>`;
-
-  b.appendChild(
-    svgFor(opt)
-  );
-
-  b.onclick = () => {
-    state.selected = i;
-
-    $$(".option")
-      .forEach((x) => {
-        x.classList.remove(
-          "selected"
-        );
-      });
-
-    b.classList.add(
-      "selected"
-    );
-
-    $("#nextQuestion").disabled =
-      false;
-  };
-
-  return b;
-}
-
-
-function difficulty(i) {
-  return i < 6
-    ? "EASY"
-    : i < 12
-      ? "MEDIUM"
-      : "HARD";
-}
-
-
-/* =========================
-   QUESTION
-========================= */
-
-function renderQuestion() {
-  const q =
-    state.questions[state.index];
-
-  if (!q) return;
-
-  state.selected =
-    state.answers[
-      String(state.index + 1)
-    ] ?? null;
-
-  $("#nextQuestion").disabled =
-    state.selected === null;
-
-  $("#questionLabel").textContent =
-    `Q${state.index + 1}/${state.questions.length}`;
-
-  $("#difficulty").textContent =
-    difficulty(state.index);
-
-  $("#progressBar").style.width =
-    `${((state.index + 1) /
-      state.questions.length) * 100}%`;
-
-  $("#questionText").textContent =
-    state.testType === "IQ" ||
-    state.testType === "BATTLE"
-      ? "Qaysi variant matritsani to‘ldiradi?"
-      : q.text;
-
-  const matrix =
-    $("#matrix");
-
-  matrix.innerHTML = "";
-
-  if (
-    state.testType === "IQ" ||
-    state.testType === "BATTLE"
-  ) {
-    matrix.classList.remove(
-      "hidden"
-    );
-
-    if (
-      Array.isArray(q.matrix)
-    ) {
-      q.matrix.forEach((c) => {
-        matrix.appendChild(
-          renderCell(c)
-        );
-      });
+      return svg;
     }
-  } else {
-    matrix.classList.add(
-      "hidden"
-    );
-  }
 
-  const opts =
-    $("#options");
+    if (cell.type === "combo") {
+      const shapes =
+        Array.isArray(cell.shapes)
+          ? cell.shapes.slice(0, 4)
+          : [];
 
-  opts.innerHTML = "";
-
-  if (
-    Array.isArray(q.options)
-  ) {
-    q.options.forEach(
-      (o, i) => {
-        opts.appendChild(
-          renderOption(o, i)
-        );
-      }
-    );
-  }
-
-  if (
-    state.selected !== null
-  ) {
-    const selected =
-      opts.children[
-        state.selected
+      const spots = [
+        [14, 22],
+        [30, 22],
+        [22, 12],
+        [22, 32]
       ];
 
-    selected?.classList.add(
-      "selected"
-    );
-
-    $("#nextQuestion").disabled =
-      false;
-  }
-
-  $("#nextQuestion").textContent =
-    state.index ===
-    state.questions.length - 1
-      ? "Natijani ko‘rish"
-      : "Davom etish";
-
-  if (
-    state.index === 6 ||
-    state.index === 12
-  ) {
-    $("#celebration")
-      .classList.remove(
-        "hidden"
-      );
-
-    setTimeout(() => {
-      $("#celebration")
-        ?.classList.add(
-          "hidden"
+      shapes.forEach((shape, index) => {
+        drawShape(
+          shape,
+          spots[index][0],
+          spots[index][1],
+          index ? 6 : 7,
+          cell.fill
         );
-    }, 1800);
+      });
 
-  } else {
-    $("#celebration")
-      ?.classList.add(
-        "hidden"
-      );
+      return svg;
+    }
+
+    return svg;
   }
-}
 
+  function renderCell(cell) {
+    const element =
+      document.createElement("div");
 
-/* =========================
-   NORMAL TEST
-========================= */
+    element.className =
+      "matrix-cell";
 
-async function startTest(type) {
-  const profile =
-    state.user;
+    if (cell?.type === "question") {
+      element.classList.add("question");
+      element.textContent = "?";
+    } else {
+      const svg = svgFor(cell);
 
-  if (
-    !profile.full_name ||
-    !profile.gender ||
-    !profile.age ||
-    !profile.country
+      if (svg) {
+        element.appendChild(svg);
+      }
+    }
+
+    return element;
+  }
+
+  function renderOption(
+    option,
+    index
   ) {
-    state.pendingType =
-      type;
+    const button =
+      document.createElement("button");
 
-    show(
-      "profileScreen"
+    button.type = "button";
+    button.className = "option";
+    button.dataset.i =
+      String(index);
+
+    const letter =
+      document.createElement("span");
+
+    letter.className = "letter";
+    letter.textContent =
+      "ABCD"[index];
+
+    button.appendChild(letter);
+
+    if (typeof option === "string") {
+      const text =
+        document.createElement("span");
+
+      text.className =
+        "text-option";
+
+      text.textContent =
+        option;
+
+      button.appendChild(text);
+    } else {
+      const svg = svgFor(option);
+
+      if (svg) {
+        button.appendChild(svg);
+      }
+    }
+
+    button.addEventListener(
+      "click",
+      () => {
+        if (state.busy) return;
+
+        state.selected = index;
+
+        $$(".option").forEach(
+          (element) => {
+            element.classList.remove(
+              "selected"
+            );
+          }
+        );
+
+        button.classList.add(
+          "selected"
+        );
+
+        const nextButton =
+          $("#nextQuestion");
+
+        if (nextButton) {
+          nextButton.disabled =
+            false;
+        }
+      }
     );
 
-    toast(
-      "Avval profilingizni to‘ldiring"
-    );
-
-    return;
+    return button;
   }
 
-  if (
-    type === "EQ" &&
-    !state.user.hasIQ
-  ) {
-    toast(
-      "Avval IQ testni yakunlang"
+  function renderQuestion() {
+    const question =
+      state.questions[state.index];
+
+    if (!question) return;
+
+    state.selected = null;
+
+    const nextButton =
+      $("#nextQuestion");
+
+    if (nextButton) {
+      nextButton.disabled = true;
+    }
+
+    $("#questionLabel").textContent =
+      `Q${state.index + 1}/${state.questions.length}`;
+
+    $("#difficulty").textContent =
+      state.mode === "BATTLE"
+        ? "BATTLE"
+        : state.testType === "IQ"
+          ? difficulty(state.index)
+          : state.testType;
+
+    $("#progressBar").style.width =
+      `${
+        ((state.index) /
+          Math.max(
+            1,
+            state.questions.length
+          )) *
+        100
+      }%`;
+
+    $("#questionText").textContent =
+      state.testType === "IQ"
+        ? "Qaysi variant matritsani to‘ldiradi?"
+        : question.text ||
+          "Savol";
+
+    const matrix = $("#matrix");
+
+    matrix.innerHTML = "";
+
+    matrix.classList.toggle(
+      "hidden",
+      state.testType !== "IQ"
     );
 
-    return;
-  }
+    if (state.testType === "IQ") {
+      (question.matrix || [])
+        .forEach((cell) => {
+          matrix.appendChild(
+            renderCell(cell)
+          );
+        });
+    }
 
-  if (
-    type === "PQ" &&
-    !state.user.hasEQ
-  ) {
-    toast(
-      "Avval EQ testni yakunlang"
-    );
+    const options =
+      $("#options");
 
-    return;
-  }
+    options.innerHTML = "";
 
-  try {
-    const d =
-      await api(
-        "/api/test/start",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            test_type: type
-          })
+    (question.options || [])
+      .forEach(
+        (option, index) => {
+          options.appendChild(
+            renderOption(
+              option,
+              index
+            )
+          );
         }
       );
 
-    state.testType =
-      type;
+    if (nextButton) {
+      nextButton.textContent =
+        state.index ===
+        state.questions.length - 1
+          ? "Natijani ko‘rish"
+          : "Davom etish";
+    }
 
-    state.questions =
-      d.questions || [];
+    $("#celebration")
+      ?.classList.toggle(
+        "hidden",
+        !(
+          state.testType === "IQ" &&
+          (
+            state.index === 6 ||
+            state.index === 12
+          )
+        )
+      );
+  }
 
-    state.sessionId =
-      d.session_id;
+  function startTimer() {
+    clearInterval(
+      window.__testTimer
+    );
 
-    state.index = 0;
-    state.answers = {};
-    state.selected = null;
-    state.startedAt =
+    const started =
+      state.startedAt ||
       Date.now();
 
-    state.localKey =
-      "iq_progress";
+    const end =
+      started +
+      30 * 60 * 1000;
 
-    saveProgress();
-
-    show("testScreen");
-
-    renderQuestion();
-
-    startTimer();
-
-  } catch (e) {
-    toast(
-      e.message ||
-      "Testni boshlashda xatolik"
-    );
-  }
-}
-
-
-/* =========================
-   TIMER
-========================= */
-
-let timerHandle = null;
-
-function startTimer() {
-  clearInterval(
-    timerHandle
-  );
-
-  const end =
-    Date.now() +
-    30 * 60 * 1000;
-
-  timerHandle =
-    setInterval(() => {
-
-      const sec =
+    const tick = () => {
+      const seconds =
         Math.max(
           0,
           Math.floor(
             (end - Date.now()) /
-            1000
+              1000
           )
         );
 
-      $("#timer").textContent =
-        `${String(
-          Math.floor(sec / 60)
-        ).padStart(2, "0")}:${String(
-          sec % 60
-        ).padStart(2, "0")}`;
+      const timer =
+        $("#timer");
 
-      if (sec <= 0) {
+      if (timer) {
+        timer.textContent =
+          `${String(
+            Math.floor(
+              seconds / 60
+            )
+          ).padStart(2, "0")}:${String(
+            seconds % 60
+          ).padStart(2, "0")}`;
+      }
+
+      if (seconds <= 0) {
         clearInterval(
-          timerHandle
+          window.__testTimer
         );
 
         finishTest();
       }
+    };
 
-    }, 500);
-}
+    tick();
 
-
-/* =========================
-   NORMAL TEST SUBMIT
-========================= */
-
-async function finishTest() {
-  clearInterval(
-    timerHandle
-  );
-
-  if (
-    state.selected !== null
-  ) {
-    state.answers[
-      String(state.index + 1)
-    ] =
-      state.selected;
+    window.__testTimer =
+      setInterval(
+        tick,
+        500
+      );
   }
 
-  saveProgress();
+  async function startTest(type) {
+    if (state.busy) return;
 
-  show(
-    "loadingResult"
-  );
+    const profile =
+      state.user || {};
 
-  try {
+    if (
+      !profile.full_name ||
+      !profile.gender ||
+      !profile.age ||
+      !profile.country
+    ) {
+      state.pendingType = type;
 
-    const d =
+      show("profileScreen");
+
+      toast(
+        "Avval profilingizni to‘ldiring."
+      );
+
+      return;
+    }
+
+    if (
+      type === "EQ" &&
+      !state.user.hasIQ
+    ) {
+      toast(
+        "Avval IQ testini yakunlang."
+      );
+
+      return;
+    }
+
+    if (
+      type === "PQ" &&
+      !state.user.hasEQ
+    ) {
+      toast(
+        "Avval EQ testini yakunlang."
+      );
+
+      return;
+    }
+
+    try {
+      state.busy = true;
+
+      const data =
+        await api(
+          "/api/test/start",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              test_type: type
+            })
+          }
+        );
+
+      state.mode = "NORMAL";
+      state.testType = type;
+      state.questions =
+        data.questions || [];
+
+      state.sessionId =
+        data.session_id;
+
+      state.answers =
+        data.resumed
+          ? (data.answers || {})
+          : {};
+
+      state.index =
+        data.resumed
+          ? Math.min(
+              Object.keys(
+                state.answers
+              ).length,
+              Math.max(
+                0,
+                state.questions.length -
+                  1
+              )
+            )
+          : 0;
+
+      state.startedAt =
+        data.resumed &&
+        data.started_at
+          ? Date.parse(
+              data.started_at
+            )
+          : Date.now();
+
+      saveProgress();
+
+      show("testScreen");
+
+      renderQuestion();
+
+      startTimer();
+    } catch (error) {
+      toast(
+        error.message ||
+        "Testni boshlashda xato."
+      );
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  async function finishTest() {
+    if (
+      state.busy ||
+      !state.questions.length
+    ) {
+      return;
+    }
+
+    clearInterval(
+      window.__testTimer
+    );
+
+    if (
+      state.selected !== null
+    ) {
+      state.answers[
+        String(
+          state.index + 1
+        )
+      ] = state.selected;
+    }
+
+    saveProgress();
+
+    show("loadingResult");
+
+    try {
+      state.busy = true;
+
+      if (
+        state.mode === "BATTLE"
+      ) {
+        const data =
+          await api(
+            `/api/battle/${encodeURIComponent(
+              state.battleId
+            )}/submit`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                answers:
+                  state.answers
+              })
+            }
+          );
+
+        if (
+          data.already_finished ||
+          data.status === "finished" ||
+          data.status ===
+            "waiting_opponent"
+        ) {
+          await waitBattleResult();
+        }
+
+        return;
+      }
+
+      const data =
+        await api(
+          `/api/test/${encodeURIComponent(
+            state.sessionId
+          )}/submit`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              answers:
+                state.answers,
+              duration:
+                Math.floor(
+                  (
+                    Date.now() -
+                    state.startedAt
+                  ) / 1000
+                )
+            })
+          }
+        );
+
+      clearProgress();
+
+      state.attemptId =
+        data.attempt_id;
+
+      state.paymentAttemptId =
+        data.attempt_id;
+
+      if (
+        data.payment_required
+      ) {
+        await renderPayment({
+          ...data,
+          payment_id:
+            data.payment_id
+        });
+
+        show("paymentScreen");
+      } else {
+        await showResult(
+          data.attempt_id
+        );
+      }
+    } catch (error) {
+      show("testScreen");
+
+      toast(
+        error.message ||
+        "Natijani yuborishda xato."
+      );
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  async function showResult(
+    attemptId
+  ) {
+    const data =
       await api(
-        `/api/test/${state.sessionId}/submit`,
+        `/api/result/${encodeURIComponent(
+          attemptId
+        )}`
+      );
+
+    if (!data.visible) {
+      state.attemptId =
+        attemptId;
+
+      const payments =
+        await api(
+          "/api/payment/mine"
+        );
+
+      const mine =
+        (payments.payments || [])
+          .find(
+            (payment) =>
+              Number(
+                payment.attempt_id
+              ) ===
+              Number(attemptId)
+          );
+
+      if (mine) {
+        state.paymentId =
+          mine.id;
+
+        state.paymentAttemptId =
+          attemptId;
+
+        const card =
+          await getPaymentCard(
+            mine.id
+          );
+
+        await renderPayment({
+          amount: mine.amount,
+          payment_id: mine.id,
+          card,
+          status: mine.status
+        });
+
+        show("paymentScreen");
+      } else {
+        toast(
+          "Natija hali yopiq."
+        );
+      }
+
+      return;
+    }
+
+    state.testType =
+      data.test_type ||
+      state.testType ||
+      "IQ";
+
+    $("#resultBadge").textContent =
+      `${state.testType} RESULT`;
+
+    $("#resultUnit").textContent =
+      state.testType === "IQ"
+        ? "IQ"
+        : "%";
+
+    $("#resultScore").textContent =
+      data.score ?? "—";
+
+    $("#resultLevel").textContent =
+      data.level ||
+      (
+        state.testType === "IQ"
+          ? "—"
+          : "Natija"
+      );
+
+    $("#resultCorrect").textContent =
+      `${data.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
+
+    show("resultScreen");
+  }
+
+  async function getPaymentCard(
+    paymentId
+  ) {
+    try {
+      const data =
+        await api(
+          `/api/payment/${encodeURIComponent(
+            paymentId
+          )}/card`
+        );
+
+      return data.card || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function renderPayment(
+    data
+  ) {
+    state.paymentId =
+      data.payment_id ||
+      state.paymentId;
+
+    state.paymentAttemptId =
+      data.attempt_id ||
+      state.paymentAttemptId;
+
+    $("#paymentAmount").textContent =
+      `${Number(
+        data.amount || 0
+      ).toLocaleString(
+        "uz-UZ"
+      )} so‘m`;
+
+    const card =
+      data.card ||
+      (
+        state.paymentId
+          ? await getPaymentCard(
+              state.paymentId
+            )
+          : null
+      );
+
+    $("#cardNumber").textContent =
+      card?.card_number ||
+      "Faol karta topilmadi";
+
+    $("#cardHolder").textContent =
+      card?.holder || "";
+
+    $("#cardBank").textContent =
+      card?.bank || "";
+
+    $("#paymentStatus").textContent =
+      data.status === "approved"
+        ? "To‘lov tasdiqlangan."
+        : card
+          ? "Kartaga to‘lov qiling va receipt yuklang."
+          : "Admin karta qo‘shishini kuting.";
+
+    if ($("#receiptInput")) {
+      $("#receiptInput").value = "";
+    }
+
+    if ($("#receiptFile")) {
+      $("#receiptFile").value = "";
+    }
+  }
+
+  async function refreshPayment() {
+    if (!state.paymentId) {
+      return;
+    }
+
+    try {
+      const data =
+        await api(
+          "/api/payment/mine"
+        );
+
+      const mine =
+        (data.payments || [])
+          .find(
+            (payment) =>
+              Number(payment.id) ===
+              Number(state.paymentId)
+          );
+
+      if (!mine) {
+        return;
+      }
+
+      $("#paymentStatus").textContent =
+        `Status: ${mine.status}`;
+
+      if (
+        mine.status === "approved"
+      ) {
+        if (state.battleId) {
+          await checkBattleReady(
+            true
+          );
+        } else if (
+          state.paymentAttemptId
+        ) {
+          await showResult(
+            state.paymentAttemptId
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  async function sendReceipt() {
+    if (!state.paymentId) {
+      toast("Payment topilmadi.");
+      return;
+    }
+
+    const file =
+      $("#receiptFile")
+        ?.files?.[0];
+
+    const legacy =
+      $("#receiptInput")
+        ?.value
+        .trim();
+
+    if (!file && !legacy) {
+      toast(
+        "Receipt rasmini tanlang."
+      );
+
+      return;
+    }
+
+    try {
+      state.busy = true;
+
+      const formData =
+        new FormData();
+
+      if (file) {
+        formData.append(
+          "receipt",
+          file,
+          file.name
+        );
+      } else {
+        formData.append(
+          "receipt_file_id",
+          legacy
+        );
+      }
+
+      const data =
+        await api(
+          `/api/payment/${encodeURIComponent(
+            state.paymentId
+          )}/receipt`,
+          {
+            method: "POST",
+            body: formData
+          }
+        );
+
+      $("#paymentStatus").textContent =
+        "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
+
+      toast(
+        "Receipt yuborildi."
+      );
+
+      if (state.battleId) {
+        startBattlePolling();
+      } else if (
+        data.status === "approved" &&
+        state.paymentAttemptId
+      ) {
+        await showResult(
+          state.paymentAttemptId
+        );
+      }
+    } catch (error) {
+      toast(
+        error.message ||
+        "Receipt yuborilmadi."
+      );
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  async function loadHome() {
+    const data =
+      await api(
+        "/api/bootstrap"
+      );
+
+    state.user =
+      data.user || {};
+
+    state.prices =
+      data.prices || {};
+
+    state.questions =
+      data.questions || [];
+
+    $("#userName").textContent =
+      data.user?.first_name ||
+      "Do‘st";
+
+    $("#fullName").value =
+      data.user?.full_name ||
+      "";
+
+    $("#gender").value =
+      data.user?.gender ||
+      "";
+
+    $("#age").value =
+      data.user?.age ||
+      "";
+
+    $("#country").value =
+      data.user?.country ||
+      "";
+
+    updateHomeLocks();
+
+    renderPersonalProfile();
+
+    show("homeScreen");
+
+    updateLive();
+
+    clearInterval(
+      window.__liveTimer
+    );
+
+    window.__liveTimer =
+      setInterval(
+        updateLive,
+        5000
+      );
+
+    await restoreProgress();
+  }
+
+  function updateHomeLocks() {
+    const hasIQ =
+      Boolean(state.user?.hasIQ);
+
+    const hasEQ =
+      Boolean(state.user?.hasEQ);
+
+    $("#eqState").textContent =
+      hasIQ
+        ? "Ochilgan"
+        : "IQdan keyin ochiladi";
+
+    $("#pqState").textContent =
+      hasEQ
+        ? "Ochilgan"
+        : "EQdan keyin ochiladi";
+
+    $(
+      ".test-card[data-test='EQ']"
+    )?.classList.toggle(
+      "locked",
+      !hasIQ
+    );
+
+    $(
+      ".test-card[data-test='PQ']"
+    )?.classList.toggle(
+      "locked",
+      !hasEQ
+    );
+
+    $("#profileCard")
+      ?.classList.toggle(
+        "locked",
+        !(
+          hasIQ &&
+          hasEQ &&
+          Boolean(state.user?.hasPQ)
+        )
+      );
+  }
+
+  async function restoreProgress() {
+    let saved = null;
+
+    try {
+      saved =
+        JSON.parse(
+          localStorage.getItem(
+            "iq_test_progress"
+          ) || "null"
+        );
+    } catch (_) {
+      saved = null;
+    }
+
+    if (!saved?.sessionId) {
+      return;
+    }
+
+    try {
+      const data =
+        await api(
+          `/api/test/${encodeURIComponent(
+            saved.sessionId
+          )}/resume`
+        );
+
+      if (
+        data.status === "completed" ||
+        data.status === "expired"
+      ) {
+        clearProgress();
+        return;
+      }
+
+      state.mode = "NORMAL";
+
+      state.sessionId =
+        saved.sessionId;
+
+      state.testType =
+        data.test_type;
+
+      state.questions =
+        data.questions || [];
+
+      state.answers =
+        saved.answers ||
+        data.answers ||
+        {};
+
+      state.index =
+        Math.max(
+          0,
+          Math.min(
+            Number(saved.index) || 0,
+            Math.max(
+              0,
+              state.questions.length - 1
+            )
+          )
+        );
+
+      state.startedAt =
+        Number(saved.startedAt) ||
+        Date.now();
+
+      show("testScreen");
+
+      renderQuestion();
+
+      startTimer();
+
+      toast(
+        "Testingiz saqlangan joyidan davom etdi."
+      );
+    } catch (_) {
+      clearProgress();
+    }
+  }
+
+  async function updateLive() {
+    try {
+      const data =
+        await api(
+          "/api/stats/live"
+        );
+
+      animateNumber(
+        $("#liveTotal"),
+        data.total
+      );
+
+      animateNumber(
+        $("#liveOnline"),
+        data.online
+      );
+    } catch (_) {}
+  }
+
+  function animateNumber(
+    element,
+    number
+  ) {
+    if (!element) return;
+
+    element.textContent =
+      Number(number || 0)
+        .toLocaleString(
+          "uz-UZ"
+        );
+  }
+
+  async function saveProfile() {
+    const age =
+      Number(
+        $("#age").value
+      );
+
+    const body = {
+      full_name:
+        $("#fullName")
+          .value
+          .trim(),
+
+      gender:
+        $("#gender").value,
+
+      age,
+
+      country:
+        $("#country").value
+    };
+
+    if (
+      !body.full_name ||
+      !body.gender ||
+      !body.country ||
+      !Number.isInteger(age) ||
+      age < 10 ||
+      age > 120
+    ) {
+      toast(
+        "Profil ma’lumotlarini to‘liq kiriting."
+      );
+
+      return;
+    }
+
+    try {
+      state.busy = true;
+
+      await api(
+        "/api/profile/save",
         {
           method: "POST",
-          body: JSON.stringify({
-            answers:
-              state.answers,
-
-            duration:
-              Math.floor(
-                (
-                  Date.now() -
-                  state.startedAt
-                ) / 1000
-              )
-          })
+          body:
+            JSON.stringify(body)
         }
       );
 
-    state.attemptId =
-      d.attempt_id;
+      state.user = {
+        ...state.user,
+        ...body
+      };
 
-    clearProgress();
+      $("#userName").textContent =
+        state.user.first_name ||
+        "Do‘st";
 
-    if (
-      d.payment_required
-    ) {
-      state.paymentData =
-        d;
+      renderPersonalProfile();
 
-      await renderPayment(
-        d
-      );
+      updateHomeLocks();
 
-      show(
-        "paymentScreen"
-      );
-
-    } else {
-      await showResult(
-        d.attempt_id
-      );
-    }
-
-  } catch (e) {
-
-    show(
-      "testScreen"
-    );
-
-    toast(
-      e.message ||
-      "Natijani yuborishda xatolik"
-    );
-  }
-}
-
-
-/* =========================
-   RESULT
-========================= */
-
-async function showResult(
-  attemptId
-) {
-  const d =
-    await api(
-      `/api/result/${attemptId}`
-    );
-
-  if (!d.visible) {
-
-    state.attemptId =
-      attemptId;
-
-    const p =
-      await api(
-        "/api/payment/mine"
-      );
-
-    const mine =
-      p.payments.find(
-        (x) =>
-          x.attempt_id ===
-          attemptId
-      );
-
-    if (mine) {
-      state.paymentId =
-        mine.id;
-
-      await renderPayment({
-        amount:
-          mine.amount,
-        payment_id:
-          mine.id,
-        card: null
-      });
-
-      show(
-        "paymentScreen"
-      );
-
-    } else {
       toast(
-        "Natija hali yopiq"
-      );
-    }
-
-    return;
-  }
-
-  $("#resultScore")
-    .textContent =
-    d.score;
-
-  $("#resultLevel")
-    .textContent =
-    d.level || "—";
-
-  $("#resultCorrect")
-    .textContent =
-    `${d.correct_count || 0}/${state.questions.length} to‘g‘ri`;
-
-  show(
-    "resultScreen"
-  );
-}
-
-
-/* =========================
-   PAYMENT
-========================= */
-
-async function renderPayment(d) {
-  $("#paymentAmount")
-    .textContent =
-    `${Number(
-      d.amount || 0
-    ).toLocaleString(
-      "uz-UZ"
-    )} so‘m`;
-
-  state.paymentId =
-    d.payment_id ||
-    state.paymentId;
-
-  const card =
-    d.card;
-
-  $("#cardNumber")
-    .textContent =
-    card?.card_number ||
-    "Faol karta topilmadi";
-
-  $("#cardHolder")
-    .textContent =
-    card?.holder || "";
-
-  $("#cardBank")
-    .textContent =
-    card?.bank || "";
-
-  $("#paymentStatus")
-    .textContent =
-    card
-      ? "Kartaga to‘lov qiling."
-      : "Admin karta qo‘shishini kuting.";
-}
-
-
-async function refreshPayment() {
-  if (!state.paymentId)
-    return;
-
-  try {
-
-    const p =
-      await api(
-        "/api/payment/mine"
+        "Profil saqlandi."
       );
 
-    const mine =
-      p.payments.find(
-        (x) =>
-          x.id ===
-          state.paymentId
-      );
-
-    if (!mine)
-      return;
-
-    $("#paymentStatus")
-      .textContent =
-      `Status: ${mine.status}`;
-
-    if (
-      mine.status ===
-      "approved"
-    ) {
-
-      if (
-        state.testType ===
-        "BATTLE"
-      ) {
-        await checkBattle();
-      } else {
-        await showResult(
-          state.attemptId
-        );
-      }
-    }
-
-  } catch (e) {}
-}
-
-
-/* =========================
-   HOME
-========================= */
-
-async function loadHome() {
-  const d =
-    await api(
-      "/api/bootstrap"
-    );
-
-  state.user =
-    d.user;
-
-  state.prices =
-    d.prices;
-
-  state.questions =
-    d.questions || [];
-
-  $("#userName")
-    .textContent =
-    d.user.first_name ||
-    "Do‘st";
-
-  $("#fullName")
-    .value =
-    d.user.full_name ||
-    "";
-
-  $("#gender")
-    .value =
-    d.user.gender ||
-    "";
-
-  $("#age")
-    .value =
-    d.user.age ||
-    "";
-
-  $("#country")
-    .value =
-    d.user.country ||
-    "";
-
-  $("#eqState")
-    .textContent =
-    state.user.hasIQ
-      ? "Ochilgan"
-      : "IQdan keyin ochiladi";
-
-  $("#pqState")
-    .textContent =
-    state.user.hasEQ
-      ? "Ochilgan"
-      : "EQdan keyin ochiladi";
-
-  $(".test-card[data-test=EQ]")
-    ?.classList.toggle(
-      "locked",
-      !state.user.hasIQ
-    );
-
-  $(".test-card[data-test=PQ]")
-    ?.classList.toggle(
-      "locked",
-      !state.user.hasEQ
-    );
-
-  show(
-    "homeScreen"
-  );
-
-  updateLive();
-
-  setInterval(
-    updateLive,
-    5000
-  );
-}
-
-
-async function updateLive() {
-  try {
-
-    const d =
-      await api(
-        "/api/stats/live"
-      );
-
-    animateNumber(
-      $("#liveTotal"),
-      d.total
-    );
-
-    animateNumber(
-      $("#liveOnline"),
-      d.online
-    );
-
-  } catch (e) {}
-}
-
-
-function animateNumber(
-  el,
-  n
-) {
-  if (!el) return;
-
-  el.textContent =
-    Number(
-      n || 0
-    ).toLocaleString(
-      "uz-UZ"
-    );
-}
-
-
-/* =========================
-   PROFILE
-========================= */
-
-async function saveProfile() {
-  const body = {
-    full_name:
-      $("#fullName")
-        .value
-        .trim(),
-
-    gender:
-      $("#gender")
-        .value,
-
-    age:
-      Number(
-        $("#age")
-          .value
-      ),
-
-    country:
-      $("#country")
-        .value
-  };
-
-  try {
-
-    await api(
-      "/api/profile/save",
-      {
-        method: "POST",
-        body:
-          JSON.stringify(body)
-      }
-    );
-
-    state.user = {
-      ...state.user,
-      ...body
-    };
-
-    toast(
-      "Profil saqlandi"
-    );
-
-    const pending =
-      state.pendingType;
-
-    if (pending) {
+      const pending =
+        state.pendingType;
 
       delete state.pendingType;
 
-      setTimeout(
-        () => startTest(
-          pending
-        ),
-        300
+      if (pending) {
+        setTimeout(
+          () => startTest(pending),
+          250
+        );
+      } else {
+        show("homeScreen");
+      }
+    } catch (error) {
+      toast(
+        error.message ||
+        "Profilni saqlab bo‘lmadi."
       );
+    } finally {
+      state.busy = false;
+    }
+  }
 
-    } else {
-      show(
-        "homeScreen"
-      );
+  function renderPersonalProfile() {
+    const box =
+      $("#personalSummary");
+
+    if (
+      !box ||
+      !state.user
+    ) {
+      return;
     }
 
-  } catch (e) {
+    const ready =
+      Boolean(state.user.hasIQ) &&
+      Boolean(state.user.hasEQ) &&
+      Boolean(state.user.hasPQ);
 
-    toast(
-      e.message ||
-      "Profil saqlanmadi"
-    );
+    if (!ready) {
+      box.innerHTML = `
+        <div class="empty-state">
+          <b>Shaxsiy profil</b>
+          <span>
+            IQ + EQ + PQ testlarini
+            yakunlaganingizdan keyin
+            tahlil shu yerda ochiladi.
+          </span>
+        </div>
+      `;
+
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="summary-grid">
+        <div>
+          <small>IQ</small>
+          <b>Yakunlangan</b>
+        </div>
+
+        <div>
+          <small>EQ</small>
+          <b>Yakunlangan</b>
+        </div>
+
+        <div>
+          <small>PQ</small>
+          <b>Yakunlangan</b>
+        </div>
+      </div>
+
+      <div class="insight">
+        <b>Kuchli tomonlar</b>
+        <p>
+          Muammolarni tahlil qilish,
+          hissiy vaziyatni anglash va
+          vazifalarni rejalashtirish
+          bo‘yicha test javoblaringiz
+          mavjud.
+        </p>
+      </div>
+
+      <div class="insight">
+        <b>Rivojlanish nuqtalari</b>
+        <p>
+          Natijalarni muntazam qayta
+          ko‘rib chiqish va real
+          hayotdagi qarorlar bilan
+          solishtirish foydali.
+        </p>
+      </div>
+    `;
   }
-}
 
+  async function loadRanking() {
+    try {
+      const data =
+        await api(
+          "/api/ranking"
+        );
 
-/* =========================
-   RANKING
-========================= */
+      const box =
+        $("#rankingList");
 
-async function loadRanking() {
-  try {
+      const ranking =
+        Array.isArray(
+          data.ranking
+        )
+          ? data.ranking
+          : [];
 
-    const d =
-      await api(
-        "/api/ranking"
-      );
-
-    const box =
-      $("#rankingList");
-
-    box.innerHTML =
-      d.ranking.length
-
-        ? d.ranking
+      if (!ranking.length) {
+        box.innerHTML = `
+          <div class="form-card glass empty-state">
+            <b>Hali natijalar yo‘q.</b>
+          </div>
+        `;
+      } else {
+        box.innerHTML =
+          ranking
             .map(
-              (r) => `
+              (item) => `
                 <div class="rank-row">
-
                   <span class="rank-pos">
-                    #${r.position}
+                    #${escapeHtml(
+                      item.position
+                    )}
                   </span>
 
                   <span>
                     <b>
                       ${escapeHtml(
-                        r.name
+                        item.name
                       )}
                     </b>
 
                     <small>
                       ${escapeHtml(
-                        r.level || ""
+                        item.level || ""
                       )}
                     </small>
                   </span>
 
                   <strong>
-                    ${r.score}
+                    ${escapeHtml(
+                      item.score
+                    )}
                   </strong>
-
                 </div>
               `
             )
-            .join("")
+            .join("");
+      }
 
-        : `
-          <div class="form-card glass">
-            Hali natijalar yo‘q.
+      show("rankingScreen");
+    } catch (error) {
+      toast(
+        error.message ||
+        "Reytingni yuklab bo‘lmadi."
+      );
+    }
+  }
+
+  async function loadCertificate() {
+    try {
+      const data =
+        await api(
+          "/api/certificate/mine"
+        );
+
+      const certificate =
+        data.certificate;
+
+      const box =
+        $("#certificateBox");
+
+      if (!certificate) {
+        box.innerHTML = `
+          <div class="empty-state">
+            <b>Sertifikat yo‘q</b>
+
+            <span>
+              IQ testini yakunlang va
+              natija ochilgach sertifikat
+              yaratiladi.
+            </span>
           </div>
         `;
 
-    show(
-      "rankingScreen"
-    );
+        show(
+          "certificateScreen"
+        );
 
-  } catch (e) {
+        return;
+      }
 
-    toast(
-      e.message ||
-      "Reyting yuklanmadi"
-    );
-  }
-}
+      box.innerHTML = `
+        <span class="pill">
+          VERIFIED
+        </span>
 
+        <h2>
+          ${escapeHtml(
+            certificate.full_name
+          )}
+        </h2>
 
-/* =========================
-   CERTIFICATE
-========================= */
-
-async function loadCertificate() {
-  try {
-
-    const d =
-      await api(
-        "/api/certificate/mine"
-      );
-
-    const c =
-      d.certificate;
-
-    $("#certificateBox")
-      .innerHTML =
-
-      c
-
-        ? `
-          <span class="pill">
-            VERIFIED
-          </span>
-
-          <h2>
+        <div class="score-ring">
+          <strong>
             ${escapeHtml(
-              c.full_name
+              certificate.score
             )}
-          </h2>
+          </strong>
 
-          <div class="score-ring">
-
-            <strong>
-              ${c.score}
-            </strong>
-
-            <small>
-              IQ
-            </small>
-
-          </div>
-
-          <p>
-            ${escapeHtml(
-              c.level || ""
-            )}
-          </p>
-
-          <div class="cert-code">
-            ${escapeHtml(
-              c.verification_code
-            )}
-          </div>
-
-          <p>
-            IQ TEST BOT
-          </p>
-
-          <button
-            id="certDownload"
-            class="primary"
-          >
-            PNG ochish
-          </button>
-        `
-
-        : `
-          <p>
-            Hali sertifikatingiz yo‘q.
-          </p>
-        `;
-
-    $("#certDownload")
-      ?.addEventListener(
-        "click",
-        () => {
-          window.open(
-            `/api/certificate/${encodeURIComponent(
-              c.certificate_id
-            )}/png`,
-            "_blank"
-          );
-        }
-      );
-
-    show(
-      "certificateScreen"
-    );
-
-  } catch (e) {
-
-    toast(
-      e.message ||
-      "Sertifikat yuklanmadi"
-    );
-  }
-}
-
-
-/* =========================
-   BATTLE
-========================= */
-
-async function createBattle() {
-  try {
-
-    const d =
-      await api(
-        "/api/battle/create",
-        {
-          method: "POST",
-          body: "{}"
-        }
-      );
-
-    state.battleId =
-      d.battle_id;
-
-    state.battleReady =
-      false;
-
-    $("#battleInfo")
-      .innerHTML = `
-        <div class="cert-code">
-          ${escapeHtml(d.code)}
+          <small>IQ</small>
         </div>
 
         <p>
-          Do‘stingizga shu kodni yuboring.
+          ${escapeHtml(
+            certificate.level || ""
+          )}
+        </p>
+
+        <div class="cert-code">
+          ${escapeHtml(
+            certificate.verification_code
+          )}
+        </div>
+
+        <p>IQ TEST BOT</p>
+
+        <button
+          id="certDownload"
+          class="primary"
+          type="button"
+        >
+          PNG ochish
+        </button>
+      `;
+
+      $("#certDownload")
+        ?.addEventListener(
+          "click",
+          async () => {
+            try {
+              const blob =
+                await apiBlob(
+                  `/api/certificate/${encodeURIComponent(
+                    certificate.certificate_id
+                  )}/png`
+                );
+
+              const url =
+                URL.createObjectURL(
+                  blob
+                );
+
+              if (
+                tg?.openLink
+              ) {
+                tg.openLink(url);
+              } else {
+                window.open(
+                  url,
+                  "_blank"
+                );
+              }
+
+              setTimeout(
+                () =>
+                  URL.revokeObjectURL(
+                    url
+                  ),
+                30000
+              );
+            } catch (error) {
+              toast(
+                error.message ||
+                "Sertifikatni ochib bo‘lmadi."
+              );
+            }
+          }
+        );
+
+      show(
+        "certificateScreen"
+      );
+    } catch (error) {
+      toast(
+        error.message ||
+        "Sertifikatni yuklab bo‘lmadi."
+      );
+    }
+  }
+
+  function setBattleInfo(html) {
+    const element =
+      $("#battleInfo");
+
+    if (element) {
+      element.innerHTML =
+        html;
+    }
+  }
+
+  async function createBattle() {
+    if (state.busy) return;
+
+    try {
+      state.busy = true;
+
+      const data =
+        await api(
+          "/api/battle/create",
+          {
+            method: "POST",
+            body: "{}"
+          }
+        );
+
+      state.battleId =
+        data.battle_id;
+
+      state.paymentAttemptId =
+        null;
+
+      setBattleInfo(`
+        <div class="cert-code battle-code">
+          ${escapeHtml(
+            data.code
+          )}
+        </div>
+
+        <p>
+          Do‘stingizga 4 belgili
+          kodni yuboring.
+          Ikkalangiz ham to‘lovni
+          tasdiqlatgach battle ochiladi.
         </p>
 
         <button
           id="battlePay"
           class="primary"
+          type="button"
         >
-          To‘lovni boshlash
+          To‘lovni boshlash ·
+          ${Number(
+            data.price || 0
+          ).toLocaleString(
+            "uz-UZ"
+          )}
+          so‘m
         </button>
 
-        <p id="battleStatus">
-          Raqib kutilmoqda...
-        </p>
-      `;
+        <div
+          id="battleStatus"
+          class="inline-status"
+        >
+          Opponent kutilmoqda…
+        </div>
+      `);
 
-    $("#battlePay")
-      ?.addEventListener(
-        "click",
-        async () => {
+      $("#battlePay").onclick =
+        () => startBattlePayment();
 
-          try {
-
-            const p =
-              await api(
-                `/api/battle/${state.battleId}/payment`,
-                {
-                  method: "POST",
-                  body: "{}"
-                }
-              );
-
-            await renderPayment(
-              p
-            );
-
-            show(
-              "paymentScreen"
-            );
-
-          } catch (e) {
-
-            toast(
-              e.message ||
-              "Battle to‘lovi ochilmadi"
-            );
-          }
-        }
-      );
-
-    startBattlePolling();
-
-  } catch (e) {
-
-    toast(
-      e.message ||
-      "Battle yaratilmadi"
-    );
-  }
-}
-
-
-async function joinBattle() {
-  const code =
-    $("#battleCode")
-      .value
-      .trim()
-      .toUpperCase();
-
-  if (
-    !/^[A-Z0-9]{4}$/.test(
-      code
-    )
-  ) {
-    toast(
-      "4 belgili battle kodini kiriting"
-    );
-
-    return;
-  }
-
-  try {
-
-    const d =
-      await api(
-        "/api/battle/join",
-        {
-          method: "POST",
-          body:
-            JSON.stringify({
-              code
-            })
-        }
-      );
-
-    state.battleId =
-      d.battle_id;
-
-    state.battleReady =
-      false;
-
-    const p =
-      await api(
-        `/api/battle/${state.battleId}/payment`,
-        {
-          method: "POST",
-          body: "{}"
-        }
-      );
-
-    await renderPayment(
-      p
-    );
-
-    show(
-      "paymentScreen"
-    );
-
-    startBattlePolling();
-
-  } catch (e) {
-
-    toast(
-      e.message ||
-      "Battlega qo‘shilib bo‘lmadi"
-    );
-  }
-}
-
-
-function startBattlePolling() {
-  clearInterval(
-    state.battlePoll
-  );
-
-  if (!state.battleId)
-    return;
-
-  state.battlePoll =
-    setInterval(
-      checkBattle,
-      5000
-    );
-
-  checkBattle();
-}
-
-
-async function checkBattle() {
-  if (!state.battleId)
-    return;
-
-  try {
-
-    const d =
-      await api(
-        `/api/battle/${state.battleId}`
-      );
-
-    const battle =
-      d.battle;
-
-    if (!battle)
-      return;
-
-    const status =
-      battle.status;
-
-    const statusEl =
-      $("#battleStatus");
-
-    if (statusEl) {
-
-      if (status === "waiting") {
-        statusEl.textContent =
-          "Raqib kutilmoqda...";
-      }
-
-      else if (
-        status === "payments"
-      ) {
-        statusEl.textContent =
-          "Ikkinchi ishtirokchi to‘lovi kutilmoqda...";
-      }
-
-      else if (
-        status === "ready"
-      ) {
-        statusEl.textContent =
-          "✅ Battle tayyor.";
-      }
-
-      else if (
-        status === "finished"
-      ) {
-        statusEl.textContent =
-          "Battle yakunlangan.";
-      }
-    }
-
-    if (
-      status === "ready" &&
-      !state.battleReady
-    ) {
-
-      state.battleReady =
-        true;
-
-      clearInterval(
-        state.battlePoll
-      );
-
-      renderBattleReady();
-    }
-
-    if (
-      status === "finished"
-    ) {
-      clearInterval(
-        state.battlePoll
-      );
-    }
-
-  } catch (e) {}
-}
-
-
-function renderBattleReady() {
-  const info =
-    $("#battleInfo");
-
-  if (!info)
-    return;
-
-  info.innerHTML += `
-    <button
-      id="startBattleTest"
-      class="primary"
-      style="margin-top:12px"
-    >
-      ⚔️ Battle testini boshlash
-    </button>
-  `;
-
-  $("#startBattleTest")
-    ?.addEventListener(
-      "click",
-      startBattleTest
-    );
-
-  toast(
-    "Battle tayyor. Testni boshlashingiz mumkin."
-  );
-}
-
-
-async function startBattleTest() {
-  if (!state.battleId) {
-    toast(
-      "Battle topilmadi"
-    );
-
-    return;
-  }
-
-  try {
-
-    const d =
-      await api(
-        `/api/battle/${state.battleId}`
-      );
-
-    if (
-      d.battle?.status !==
-      "ready"
-    ) {
+      startBattlePolling();
+    } catch (error) {
       toast(
-        "Hali battle tayyor emas"
+        error.message ||
+        "Battle yaratilmadi."
+      );
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  async function joinBattle() {
+    if (state.busy) return;
+
+    const code =
+      $("#battleCode")
+        .value
+        .trim()
+        .toUpperCase();
+
+    if (code.length !== 4) {
+      toast(
+        "4 belgili kod kiriting."
       );
 
       return;
     }
 
-    if (
-      !state.questions.length
-    ) {
-      const boot =
+    try {
+      state.busy = true;
+
+      const data =
         await api(
-          "/api/bootstrap"
+          "/api/battle/join",
+          {
+            method: "POST",
+            body:
+              JSON.stringify({
+                code
+              })
+          }
         );
 
-      state.questions =
-        boot.questions || [];
-    }
+      state.battleId =
+        data.battle_id;
 
-    if (
-      !state.questions.length
-    ) {
+      state.paymentAttemptId =
+        null;
+
+      setBattleInfo(`
+        <div class="cert-code battle-code">
+          ${escapeHtml(code)}
+        </div>
+
+        <p>
+          Battle topildi.
+          Endi o‘z to‘lovingizni yuboring.
+        </p>
+
+        <button
+          id="battlePay"
+          class="primary"
+          type="button"
+        >
+          To‘lovni boshlash ·
+          ${Number(
+            data.price || 0
+          ).toLocaleString(
+            "uz-UZ"
+          )}
+          so‘m
+        </button>
+
+        <div
+          id="battleStatus"
+          class="inline-status"
+        >
+          To‘lov kutilmoqda…
+        </div>
+      `);
+
+      $("#battlePay").onclick =
+        () => startBattlePayment();
+
+      startBattlePolling();
+    } catch (error) {
       toast(
-        "Battle savollari topilmadi"
+        error.message ||
+        "Battle'ga kirib bo‘lmadi."
       );
+    } finally {
+      state.busy = false;
+    }
+  }
 
+  async function startBattlePayment() {
+    if (!state.battleId) {
       return;
     }
 
-    state.testType =
-      "BATTLE";
+    state.paymentAttemptId =
+      null;
 
-    state.index = 0;
-    state.answers = {};
-    state.selected = null;
-    state.startedAt =
-      Date.now();
+    try {
+      state.busy = true;
 
-    show(
-      "testScreen"
-    );
+      const data =
+        await api(
+          `/api/battle/${encodeURIComponent(
+            state.battleId
+          )}/payment`,
+          {
+            method: "POST",
+            body: "{}"
+          }
+        );
 
-    renderQuestion();
+      await renderPayment({
+        ...data,
+        payment_id:
+          data.payment_id
+      });
 
-    startTimer();
+      state.paymentId =
+        data.payment_id;
 
-  } catch (e) {
+      show("paymentScreen");
 
-    toast(
-      e.message ||
-      "Battle boshlanmadi"
-    );
-  }
-}
-
-
-async function finishBattle() {
-  clearInterval(
-    timerHandle
-  );
-
-  if (
-    state.selected !== null
-  ) {
-    state.answers[
-      String(state.index + 1)
-    ] =
-      state.selected;
+      startBattlePolling();
+    } catch (error) {
+      toast(
+        error.message ||
+        "Battle to‘lovi yaratilmadi."
+      );
+    } finally {
+      state.busy = false;
+    }
   }
 
-  show(
-    "loadingResult"
-  );
+  function startBattlePolling() {
+    clearInterval(
+      state.battlePolling
+    );
 
-  try {
-
-    const d =
-      await api(
-        `/api/battle/${state.battleId}/submit`,
-        {
-          method: "POST",
-          body:
-            JSON.stringify({
-              answers:
-                state.answers
-            })
-        }
+    state.battlePolling =
+      setInterval(
+        () => {
+          checkBattleReady(false);
+        },
+        3000
       );
 
-    $("#resultScore")
-      .textContent =
-      d.score ??
-      "—";
-
-    $("#resultLevel")
-      .textContent =
-      d.status === "finished"
-        ? "Battle yakunlandi"
-        : "Javoblaringiz qabul qilindi";
-
-    $("#resultCorrect")
-      .textContent =
-      "Raqib natijasi ikkalangiz ham tugatgandan keyin ochiladi.";
-
-    show(
-      "resultScreen"
-    );
-
-    startBattleResultPolling();
-
-  } catch (e) {
-
-    show(
-      "testScreen"
-    );
-
-    toast(
-      e.message ||
-      "Battle natijasini yuborib bo‘lmadi"
-    );
+    checkBattleReady(false);
   }
-}
 
+  async function checkBattleReady(
+    showToastOnReady
+  ) {
+    if (!state.battleId) {
+      return false;
+    }
 
-function startBattleResultPolling() {
-  clearInterval(
-    state.battlePoll
-  );
+    try {
+      const data =
+        await api(
+          `/api/battle/${encodeURIComponent(
+            state.battleId
+          )}/start`
+        );
 
-  state.battlePoll =
-    setInterval(
-      async () => {
+      const status =
+        $("#battleStatus");
 
-        try {
+      if (status) {
+        status.textContent =
+          data.ready
+            ? "Battle tayyor. Test boshlanmoqda…"
+            : `Holat: ${
+                data.status ||
+                "kutilmoqda"
+              }`;
+      }
 
-          const d =
-            await api(
-              `/api/battle/${state.battleId}/result`
-            );
+      if (data.ready) {
+        clearInterval(
+          state.battlePolling
+        );
 
-          if (!d.ready)
-            return;
+        state.questions =
+          data.questions || [];
 
-          clearInterval(
-            state.battlePoll
+        state.mode =
+          "BATTLE";
+
+        state.testType =
+          "IQ";
+
+        state.index = 0;
+        state.answers = {};
+        state.selected = null;
+        state.startedAt =
+          Date.now();
+
+        show("testScreen");
+
+        renderQuestion();
+
+        startTimer();
+
+        if (showToastOnReady) {
+          toast(
+            "Battle to‘lovi tasdiqlandi."
+          );
+        }
+
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  async function waitBattleResult() {
+    show("loadingResult");
+
+    clearInterval(
+      window.__testTimer
+    );
+
+    for (
+      let attempt = 0;
+      attempt < 40;
+      attempt += 1
+    ) {
+      try {
+        const data =
+          await api(
+            `/api/battle/${encodeURIComponent(
+              state.battleId
+            )}/result`
           );
 
-          $("#resultLevel")
-            .textContent =
-            d.outcome === "win"
-              ? "🏆 G‘alaba"
-              : d.outcome === "loss"
-                ? "Battle yakunlandi"
-                : "🤝 Durrang";
+        if (data.ready) {
+          $("#resultBadge").textContent =
+            "BATTLE RESULT";
 
-          $("#resultCorrect")
-            .textContent =
-            `Siz: ${d.my_score} · Raqib: ${d.opponent_score}`;
+          $("#resultUnit").textContent =
+            "IQ";
 
-        } catch (e) {}
+          $("#resultScore").textContent =
+            data.my_score ?? "—";
 
+          $("#resultLevel").textContent =
+            data.outcome === "win"
+              ? "G‘ALABA"
+              : data.outcome === "loss"
+                ? "MAG‘LUBIYAT"
+                : "DURANG";
+
+          $("#resultCorrect").textContent =
+            `Opponent: ${
+              data.opponent_score ?? "—"
+            }`;
+
+          show("resultScreen");
+
+          return;
+        }
+      } catch (_) {}
+
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            2500
+          )
+      );
+    }
+
+    show("battleScreen");
+
+    toast(
+      "Opponent natijasini kutish davom etmoqda."
+    );
+  }
+
+  $("#nextQuestion")
+    ?.addEventListener(
+      "click",
+      () => {
+        if (
+          state.selected === null ||
+          state.busy
+        ) {
+          return;
+        }
+
+        state.answers[
+          String(
+            state.index + 1
+          )
+        ] = state.selected;
+
+        saveProgress();
+
+        if (
+          state.index <
+          state.questions.length - 1
+        ) {
+          state.index += 1;
+
+          renderQuestion();
+        } else {
+          finishTest();
+        }
+      }
+    );
+
+  $("#saveProfile")
+    ?.addEventListener(
+      "click",
+      saveProfile
+    );
+
+  $("#copyCard")
+    ?.addEventListener(
+      "click",
+      async () => {
+        try {
+          const number =
+            $("#cardNumber")
+              ?.textContent
+              ?.trim();
+
+          if (!number) {
+            throw new Error();
+          }
+
+          await navigator.clipboard.writeText(
+            number
+          );
+
+          toast(
+            "Karta nusxalandi."
+          );
+        } catch (_) {
+          toast(
+            "Nusxalash imkoni bo‘lmadi."
+          );
+        }
+      }
+    );
+
+  $("#sendReceipt")
+    ?.addEventListener(
+      "click",
+      sendReceipt
+    );
+
+  $("#sharePayment")
+    ?.addEventListener(
+      "click",
+      () => {
+        const username =
+          "iqtest_ubot";
+
+        const url =
+          `https://t.me/${username}`;
+
+        if (
+          tg?.openTelegramLink
+        ) {
+          tg.openTelegramLink(
+            url
+          );
+        } else {
+          window.open(
+            url,
+            "_blank",
+            "noopener,noreferrer"
+          );
+        }
+      }
+    );
+
+  $("#certificateBtn")
+    ?.addEventListener(
+      "click",
+      loadCertificate
+    );
+
+  $("#createBattle")
+    ?.addEventListener(
+      "click",
+      createBattle
+    );
+
+  $("#joinBattle")
+    ?.addEventListener(
+      "click",
+      joinBattle
+    );
+
+  $("#profileTopBtn")
+    ?.addEventListener(
+      "click",
+      () => {
+        show("profileScreen");
+      }
+    );
+
+  $("#battleCard")
+    ?.addEventListener(
+      "click",
+      () => {
+        show("battleScreen");
+      }
+    );
+
+  $("#profileCard")
+    ?.addEventListener(
+      "click",
+      () => {
+        renderPersonalProfile();
+
+        show("profileScreen");
+
+        $("#personalSummary")
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+      }
+    );
+
+  $("#testBack")
+    ?.addEventListener(
+      "click",
+      () => {
+        clearInterval(
+          window.__testTimer
+        );
+
+        if (
+          state.mode === "NORMAL"
+        ) {
+          saveProgress();
+        }
+
+        show("homeScreen");
+      }
+    );
+
+  $$("[data-back]")
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            show("homeScreen");
+          }
+        );
+      }
+    );
+
+  $$(".test-card[data-test]")
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            startTest(
+              button.dataset.test
+            );
+          }
+        );
+      }
+    );
+
+  $$("[data-nav]")
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            const navigation =
+              button.dataset.nav;
+
+            if (
+              navigation === "home"
+            ) {
+              show("homeScreen");
+            }
+
+            if (
+              navigation === "ranking"
+            ) {
+              loadRanking();
+            }
+
+            if (
+              navigation === "certificate"
+            ) {
+              loadCertificate();
+            }
+
+            if (
+              navigation === "profile"
+            ) {
+              renderPersonalProfile();
+              show("profileScreen");
+            }
+
+            $$(".bottom-nav button")
+              .forEach(
+                (item) => {
+                  item.classList.toggle(
+                    "active",
+                    item === button
+                  );
+                }
+              );
+          }
+        );
+      }
+    );
+
+  if ($("#battleCode")) {
+    $("#battleCode")
+      .addEventListener(
+        "input",
+        (event) => {
+          event.target.value =
+            event.target.value
+              .replace(
+                /[^A-Z0-9]/gi,
+                ""
+              )
+              .toUpperCase()
+              .slice(0, 4);
+        }
+      );
+  }
+
+  const paymentRefreshTimer =
+    setInterval(
+      () => {
+        if (
+          state.paymentId &&
+          !$("#paymentScreen")
+            ?.classList.contains(
+              "hidden"
+            )
+        ) {
+          refreshPayment();
+        }
       },
       5000
     );
-}
 
+  window.addEventListener(
+    "beforeunload",
+    () => {
+      clearInterval(
+        paymentRefreshTimer
+      );
 
-/* =========================
-   HELPERS
-========================= */
+      clearInterval(
+        window.__liveTimer
+      );
 
-function escapeHtml(s) {
-  return String(
-    s ?? ""
-  ).replace(
-    /[&<>"']/g,
-    (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-      }[m])
-  );
-}
+      clearInterval(
+        window.__testTimer
+      );
 
-
-/* =========================
-   EVENTS
-========================= */
-
-$$(".test-card")
-  .forEach((b) => {
-
-    b.addEventListener(
-      "click",
-      () => {
-        startTest(
-          b.dataset.test
-        );
-      }
-    );
-
-  });
-
-
-$("#nextQuestion")
-  .onclick = () => {
-
-    if (
-      state.selected === null
-    ) {
-      return;
-    }
-
-    state.answers[
-      String(state.index + 1)
-    ] =
-      state.selected;
-
-    saveProgress();
-
-    if (
-      state.index <
-      state.questions.length - 1
-    ) {
-
-      state.index++;
-
-      renderQuestion();
-
-    } else {
+      clearInterval(
+        state.battlePolling
+      );
 
       if (
-        state.testType ===
-        "BATTLE"
+        state.mode === "NORMAL" &&
+        state.sessionId
       ) {
-        finishBattle();
-      } else {
-        finishTest();
+        saveProgress();
       }
-    }
-  };
-
-
-$("#saveProfile")
-  .onclick =
-  saveProfile;
-
-
-$("#copyCard")
-  .onclick =
-  async () => {
-
-    try {
-
-      await navigator.clipboard
-        .writeText(
-          $("#cardNumber")
-            .textContent
-        );
-
-      toast(
-        "Karta nusxalandi"
-      );
-
-    } catch {
-
-      toast(
-        "Nusxalash imkoni bo‘lmadi"
-      );
-    }
-  };
-
-
-$("#sendReceipt")
-  .onclick =
-  async () => {
-
-    try {
-
-      if (!state.paymentId) {
-        toast(
-          "Payment topilmadi"
-        );
-
-        return;
-      }
-
-      const receipt =
-        $("#receiptInput")
-          .value
-          .trim();
-
-      if (!receipt) {
-        toast(
-          "Receipt file_id kiriting"
-        );
-
-        return;
-      }
-
-      const fd =
-        new FormData();
-
-      fd.append(
-        "receipt_file_id",
-        receipt
-      );
-
-      await api(
-        `/api/payment/${state.paymentId}/receipt`,
-        {
-          method: "POST",
-          body: fd
-        }
-      );
-
-      $("#paymentStatus")
-        .textContent =
-        "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
-
-      toast(
-        "Receipt yuborildi"
-      );
-
-    } catch (e) {
-
-      toast(
-        e.message ||
-        "Receipt yuborilmadi"
-      );
-    }
-  };
-
-
-$("#sharePayment")
-  .onclick =
-  () => {
-
-    toast(
-      "To‘lov kartasi ma’lumotlari yuqorida ko‘rsatilgan"
-    );
-  };
-
-
-$("#certificateBtn")
-  .onclick =
-  loadCertificate;
-
-
-$("#createBattle")
-  .onclick =
-  createBattle;
-
-
-$("#joinBattle")
-  .onclick =
-  joinBattle;
-
-
-$$("[data-nav]")
-  .forEach((b) => {
-
-    b.addEventListener(
-      "click",
-      () => {
-
-        const n =
-          b.dataset.nav;
-
-        if (
-          n === "home"
-        ) {
-          show(
-            "homeScreen"
-          );
-        }
-
-        if (
-          n === "ranking"
-        ) {
-          loadRanking();
-        }
-
-        if (
-          n === "certificate"
-        ) {
-          loadCertificate();
-        }
-
-        if (
-          n === "profile"
-        ) {
-          show(
-            "profileScreen"
-          );
-        }
-      }
-    );
-
-  });
-
-
-$$("[data-back]")
-  .forEach((b) => {
-
-    b.addEventListener(
-      "click",
-      () => {
-        show(
-          "homeScreen"
-        );
-      }
-    );
-
-  });
-
-
-$("#testBack")
-  .onclick =
-  () => {
-
-    clearInterval(
-      timerHandle
-    );
-
-    if (
-      state.testType ===
-      "BATTLE"
-    ) {
-      show(
-        "battleScreen"
-      );
-    } else {
-      show(
-        "homeScreen"
-      );
-    }
-  };
-
-
-$("#profileTopBtn")
-  .onclick =
-  () => {
-    show(
-      "profileScreen"
-    );
-  };
-
-
-$("#battleCard")
-  .onclick =
-  () => {
-
-    show(
-      "battleScreen"
-    );
-
-    if (
-      state.battleId
-    ) {
-      startBattlePolling();
-    }
-  };
-
-
-$("#profileCard")
-  .onclick =
-  () => {
-
-    if (
-      state.user?.hasIQ &&
-      state.user?.hasEQ &&
-      state.user?.hasPQ
-    ) {
-      show(
-        "profileScreen"
-      );
-    } else {
-      toast(
-        "IQ + EQ + PQ natijalari kerak"
-      );
-    }
-  };
-
-
-$("#battleCode")
-  ?.addEventListener(
-    "input",
-    (e) => {
-
-      e.target.value =
-        e.target.value
-          .toUpperCase()
-          .replace(
-            /[^A-Z0-9]/g,
-            ""
-          )
-          .slice(0, 4);
     }
   );
 
+  (async () => {
+    show("loadingScreen");
 
-setInterval(
-  () => {
+    try {
+      await loadHome();
+    } catch (error) {
+      show("homeScreen");
 
-    if (
-      state.paymentId &&
-      !$("#paymentScreen")
-        .classList
-        .contains("hidden")
-    ) {
-      refreshPayment();
+      toast(
+        error.message ||
+        "Mini App yuklanmadi."
+      );
     }
-
-  },
-  5000
-);
-
-
-/* =========================
-   START
-========================= */
-
-(async () => {
-
-  try {
-
-    show(
-      "loadingScreen"
-    );
-
-    await loadHome();
-
-  } catch (e) {
-
-    show(
-      "homeScreen"
-    );
-
-    toast(
-      e.message ||
-      "Mini App yuklanmadi"
-    );
-  }
-
-})();
-
+  })();
 })();
