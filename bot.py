@@ -172,14 +172,56 @@ EQ_QUESTIONS = [
     ("Two people strongly disagree in a discussion. What is most likely to improve the conversation?", ["Choose a side immediately", "Raise your voice so your point wins", "Clarify each person's viewpoint and the point of disagreement", "End the discussion without hearing either side"], 2),
     ("You receive a stressful message late at night. What is usually the most constructive approach?", ["Reply immediately while angry", "Forward it to several people", "Delete the sender", "Pause, regulate your reaction, and respond when you can think clearly"], 3),
 ]
-PQ_QUESTIONS = [
-    ("You have three tasks due today. What is the most practical first step?", ["Do random tasks", "Prioritize them by urgency and impact", "Avoid all tasks", "Start with whichever looks easiest"], 1),
-    ("A long project feels overwhelming. What is most useful?", ["Never plan", "Wait until motivation appears", "Do everything at once", "Break the project into concrete milestones and next actions"], 3),
-    ("Your current plan stops producing the expected result. What should you do?", ["Repeat it blindly", "Abandon the goal immediately", "Review the evidence, identify what changed, and adjust the plan", "Blame the tool"], 2),
-    ("You keep delaying a difficult task. Which approach is most actionable?", ["Make the task larger", "Define a small concrete first action and start it", "Ignore the deadline", "Add unrelated tasks"], 1),
-    ("A goal conflicts with a new opportunity. What helps you decide?", ["Compare the trade-offs against your priorities", "Choose randomly", "Ask everyone else to decide for you", "Do both without limits"], 0),
-    ("You finish an important milestone. What improves the next phase?", ["Never review it", "Reset everything", "Record what worked, what failed, and what to change next", "Avoid feedback"], 2),
-]
+
+LOCAL_BEHAVIOR_QUESTIONS = {
+    "uz": {
+        "EQ": [
+            ("Muhim vazifa ustida ishlayotganingizda kimdir sizni bo‘lib yubordi. Eng to‘g‘ri birinchi qadam qaysi?", ["Jahl bilan javob berish", "To‘xtab, vaziyatni aniqlab, keyingi javobni ongli tanlash", "Hamma gapni e’tiborsiz qoldirish", "Vazifani tashlab ketish"], 1),
+            ("Do‘stingiz ishingizni boshqalar oldida tanqid qildi. Eng konstruktiv javob qaysi?", ["Qarshi hujum qilish", "Mavzuni o‘zgartirish", "Tinglash, nimani yaxshilash mumkinligini so‘rash va xotirjam muhokama qilish", "Hech narsa bo‘lmagandek tutish"], 2),
+            ("Jamoadoshingiz odatdagidan ancha jim. Eng foydali munosabat qaysi?", ["Uni gapirishga majburlash", "Yolg‘iz holatda holidan xabar olish va javob berishiga imkon berish", "Bu haqda g‘iybat qilish", "Uni chetlatish"], 1),
+            ("Siz boshqalarga ta’sir qilgan xato qildingiz. Keyin nima qilishingiz kerak?", ["Xatoni tan olish, qisqa tushuntirish va oqibatini tuzatishga yordam berish", "Kimdir sezguncha yashirish", "Boshqani ayblash", "Jim kutish"], 0),
+            ("Ikki kishi muhokamada keskin kelishmayapti. Suhbatni nima yaxshilaydi?", ["Darhol bir tomonni tanlash", "Fikringiz yutishi uchun ovozni balandlatish", "Har bir tomonning nuqtai nazari va kelishmovchilik sababini aniqlash", "Ikkalasini ham eshitmasdan suhbatni tugatish"], 2),
+            ("Kechasi stressli xabar oldingiz. Odatda eng konstruktiv yondashuv qaysi?", ["Jahl bilan darhol javob berish", "Uni bir necha kishiga yuborish", "Yuboruvchini o‘chirib tashlash", "Reaksiyani bosib, xotirjam fikrlay olganingizda javob berish"], 3),
+        ],
+        "PQ": [
+            ("Bugun uchta vazifangiz bor. Eng amaliy birinchi qadam qaysi?", ["Tasodifiy vazifalarni qilish", "Ularni shoshilinchligi va ta’siriga qarab ustuvorlashtirish", "Barcha vazifalardan qochish", "Eng oson ko‘ringanidan boshlash"], 1),
+            ("Katta loyiha sizni bosib ketgandek tuyulmoqda. Nima foydali?", ["Reja tuzmaslik", "Motivatsiya kelishini kutish", "Hammasini birdan qilish", "Loyihani aniq bosqichlar va keyingi harakatlarga bo‘lish"], 3),
+            ("Hozirgi rejangiz kutilgan natijani bermayapti. Nima qilish kerak?", ["Uni ko‘r-ko‘rona takrorlash", "Maqsaddan darhol voz kechish", "Dalillarni ko‘rib, nima o‘zgarganini aniqlash va rejani moslashtirish", "Vosita yoki odamni ayblash"], 2),
+            ("Qiyin vazifani doim ortga suryapsiz. Eng amaliy yondashuv qaysi?", ["Vazifani yanada kattalashtirish", "Kichik, aniq birinchi qadamni belgilab boshlash", "Muddatni e’tiborsiz qoldirish", "Bog‘liq bo‘lmagan ishlarni qo‘shish"], 1),
+            ("Maqsadingiz yangi imkoniyat bilan to‘qnashdi. Qaror qabul qilishga nima yordam beradi?", ["Ustuvorliklaringizga nisbatan foyda va zararlarni solishtirish", "Tasodifiy tanlash", "Boshqalarga siz uchun qaror qildirish", "Chegarasiz ikkisini ham qilish"], 0),
+            ("Muhim bosqichni tugatdingiz. Keyingi bosqichni nima yaxshilaydi?", ["Hech qachon tahlil qilmaslik", "Hammasini qaytadan boshlash", "Nima ishlaganini, nima ishlamaganini va keyin nimani o‘zgartirishni yozib olish", "Fikr-mulohazadan qochish"], 2),
+        ],
+    },
+    "ru": {
+        "EQ": [
+            ("Вас прервали во время важной задачи. Какой первый шаг наиболее конструктивен?", ["Ответить раздражённо", "Остановиться, уточнить ситуацию и осознанно выбрать реакцию", "Игнорировать всех", "Бросить задачу"], 1),
+            ("Друг критикует вашу работу при других. Как ответить конструктивнее всего?", ["Атаковать в ответ", "Сменить тему", "Выслушать, спросить, что можно улучшить, и спокойно обсудить", "Сделать вид, что ничего не произошло"], 2),
+            ("Вы заметили, что коллега необычно тихий. Что полезнее всего?", ["Заставить его говорить", "Лично узнать, всё ли в порядке, и дать пространство для ответа", "Сплетничать об этом", "Исключить его из команды"], 1),
+            ("Вы допустили ошибку, которая повлияла на других. Что делать дальше?", ["Признать ошибку, кратко объяснить и помочь исправить последствия", "Скрывать её до обнаружения", "Обвинить другого", "Молча ждать"], 0),
+            ("Два человека резко не согласны в обсуждении. Что скорее улучшит разговор?", ["Сразу выбрать сторону", "Говорить громче, чтобы победить", "Прояснить позицию каждого и причину разногласий", "Закончить разговор, не выслушав никого"], 2),
+            ("Вы получили стрессовое сообщение поздно вечером. Как обычно конструктивнее поступить?", ["Сразу ответить в гневе", "Переслать его нескольким людям", "Удалить отправителя", "Сначала успокоить реакцию и ответить, когда сможете ясно мыслить"], 3),
+        ],
+        "PQ": [
+            ("Сегодня у вас три задачи. Какой первый шаг наиболее практичен?", ["Делать случайные задачи", "Расставить приоритеты по срочности и влиянию", "Избегать всех задач", "Начать с самой лёгкой"], 1),
+            ("Большой проект кажется непосильным. Что полезнее?", ["Не планировать", "Ждать мотивации", "Делать всё одновременно", "Разбить проект на конкретные этапы и следующие действия"], 3),
+            ("Текущий план перестал давать ожидаемый результат. Что делать?", ["Слепо повторять его", "Сразу отказаться от цели", "Проверить данные, понять, что изменилось, и скорректировать план", "Обвинить инструмент"], 2),
+            ("Вы постоянно откладываете сложную задачу. Что наиболее практично?", ["Сделать задачу ещё больше", "Определить маленькое конкретное первое действие и начать", "Игнорировать срок", "Добавить несвязанные задачи"], 1),
+            ("Цель конфликтует с новой возможностью. Что поможет решить?", ["Сравнить компромиссы с вашими приоритетами", "Выбрать случайно", "Пусть все решат за вас", "Делать оба варианта без ограничений"], 0),
+            ("Вы завершили важный этап. Что улучшит следующий?", ["Никогда не анализировать", "Сбросить всё", "Записать, что сработало, что нет и что изменить дальше", "Избегать обратной связи"], 2),
+        ],
+    },
+    "en": {
+        "EQ": EQ_QUESTIONS,
+        "PQ": PQ_QUESTIONS,
+    },
+}
+
+
+def localized_behavior_questions(test_type: str, lang: str):
+    source = LOCAL_BEHAVIOR_QUESTIONS.get(lang, LOCAL_BEHAVIOR_QUESTIONS["uz"]).get(test_type)
+    if not source:
+        source = LOCAL_BEHAVIOR_QUESTIONS["en"][test_type]
+    return [{"id": i + 1, "text": q, "options": opts} for i, (q, opts, _) in enumerate(source)]
 
 TRANSLATIONS = {
     "uz": {
@@ -595,6 +637,7 @@ async def migrate():
         "ALTER TABLE payment_cards ADD COLUMN IF NOT EXISTS bank TEXT",
         "ALTER TABLE payment_cards ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE payment_cards ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS language_selected BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS battle_id UUID",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS attempt_id BIGINT",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
@@ -804,8 +847,8 @@ async def setting_int(key, default=0):
 
 async def upsert_user(tg_user: types.User):
     await db_execute("""
-        INSERT INTO users(user_id,username,first_name,last_name,last_seen,updated_at)
-        VALUES($1,$2,$3,$4,NOW(),NOW())
+        INSERT INTO users(user_id,username,first_name,last_name,last_seen,updated_at,language_selected)
+        VALUES($1,$2,$3,$4,NOW(),NOW(),FALSE)
         ON CONFLICT(user_id) DO UPDATE SET
           username=EXCLUDED.username,
           first_name=EXCLUDED.first_name,
@@ -813,6 +856,10 @@ async def upsert_user(tg_user: types.User):
           last_seen=NOW(),
           updated_at=NOW()
     """, tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name)
+
+async def get_user_language(user_id: int) -> str:
+    row = await db_fetchrow("SELECT language FROM users WHERE user_id=$1", user_id)
+    return row["language"] if row and row["language"] in TRANSLATIONS else "uz"
 
 async def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_USER_ID or bool(
@@ -858,9 +905,9 @@ async def cmd_start(message: types.Message):
                     )
             except (ValueError, asyncpg.PostgresError):
                 logger.info("Invalid referral start parameter")
-        row = await db_fetchrow("SELECT language FROM users WHERE user_id=$1", message.from_user.id)
-        lang = row["language"] if row else "uz"
-        if not row or row["language"] not in TRANSLATIONS:
+        row = await db_fetchrow("SELECT language,language_selected FROM users WHERE user_id=$1", message.from_user.id)
+        lang = row["language"] if row and row["language"] in TRANSLATIONS else "uz"
+        if not row or not bool(row["language_selected"]):
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🇺🇿 O‘zbekcha", callback_data="lang:uz"),
                  InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru"),
@@ -886,7 +933,7 @@ async def lang_callback(callback: CallbackQuery):
     if lang not in TRANSLATIONS:
         await callback.answer("Invalid language", show_alert=True)
         return
-    await db_execute("UPDATE users SET language=$1,updated_at=NOW() WHERE user_id=$2", lang, callback.from_user.id)
+    await db_execute("UPDATE users SET language=$1,language_selected=TRUE,updated_at=NOW() WHERE user_id=$2", lang, callback.from_user.id)
     await callback.answer(t(lang,"lang_changed"))
     try:
         await callback.message.edit_text(t(lang,"lang_changed"))
@@ -897,7 +944,7 @@ async def lang_callback(callback: CallbackQuery):
         reply_markup=app_inline_keyboard(lang)
     )
     await callback.message.answer(
-        "⬇️ Quyidagi tugma orqali Mini App'ni oching.",
+        {"uz":"⬇️ Quyidagi tugma orqali Mini App'ni oching.","ru":"⬇️ Откройте Mini App кнопкой ниже.","en":"⬇️ Open the Mini App using the button below."}[lang],
         reply_markup=main_keyboard(lang)
     )
 
@@ -1178,7 +1225,9 @@ async def admin_callback(callback: CallbackQuery):
                     await callback.message.edit_caption(caption=f"✅ <b>Payment #{pid} allaqachon tasdiqlangan.</b>",reply_markup=None)
                     return
                 try:
-                    await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.")
+                    lang = await get_user_language(int(p["user_id"]))
+                    msg = {"uz":"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.","ru":"✅ Оплата подтверждена. Следующий этап открыт в Mini App.","en":"✅ Payment approved. The next step is open in the Mini App."}[lang]
+                    await bot.send_message(p["user_id"], msg)
                 except Exception:
                     logger.exception("Admin approval notification failed")
                 if p["attempt_id"]:
@@ -1219,10 +1268,9 @@ async def admin_callback(callback: CallbackQuery):
             if p["attempt_id"]:
                 await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1",p["attempt_id"])
             try:
-                await bot.send_message(
-                    p["user_id"],
-                    "❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin."
-                )
+                lang = await get_user_language(int(p["user_id"]))
+                msg = {"uz":"❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin.","ru":"❌ Оплата не подтверждена. Чек отклонён. Вернитесь на главную в Mini App.","en":"❌ Payment was not approved. The receipt was rejected. You can return to Home in the Mini App."}[lang]
+                await bot.send_message(p["user_id"], msg)
             except Exception:
                 logger.exception("Admin rejection notification failed")
             try:
@@ -1693,7 +1741,7 @@ async def api_bootstrap(request: Request):
                c.card_number, c.holder, c.bank
         FROM payments p
         LEFT JOIN payment_cards c ON c.id=p.card_id
-        WHERE p.user_id=$1 AND p.status IN ('pending','approved','rejected')
+        WHERE p.user_id=$1 AND p.status='pending'
         ORDER BY p.id DESC LIMIT 1
     """, uid)
     pending_payload = None
@@ -1704,7 +1752,7 @@ async def api_bootstrap(request: Request):
             "holder": pending_payment["holder"],
             "bank": pending_payment["bank"],
         } if pending_payment["card_number"] else None
-    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions(),"pending_payment":pending_payload}
+    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"language_selected":bool(row["language_selected"]),"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions(),"pending_payment":pending_payload}
 
 @app.post("/api/profile/save")
 async def profile_save(request: Request):
@@ -1741,6 +1789,8 @@ async def test_start(request: Request):
     data=await request.json()
     uid=int(user["id"])
     typ=str(data.get("test_type","IQ")).upper()
+    lang_row=await db_fetchrow("SELECT language FROM users WHERE user_id=$1", uid)
+    lang=(lang_row["language"] if lang_row and lang_row["language"] in TRANSLATIONS else "uz")
     if typ not in ("IQ","EQ","PQ"):
         return json_error("Noto‘g‘ri test")
     if typ=="EQ":
@@ -1761,8 +1811,7 @@ async def test_start(request: Request):
             if typ == "IQ":
                 active_questions = public_iq_questions()
             else:
-                source = EQ_QUESTIONS if typ == "EQ" else PQ_QUESTIONS
-                active_questions = [{"id":i+1,"text":q,"options":opts} for i,(q,opts,_) in enumerate(source)]
+                active_questions = localized_behavior_questions(typ, lang)
             await db_execute(
                 "UPDATE test_sessions SET questions=$1 WHERE session_id=$2::uuid",
                 json.dumps(active_questions), str(active["session_id"])
@@ -1773,8 +1822,7 @@ async def test_start(request: Request):
     if typ=="IQ":
         questions=public_iq_questions()
     else:
-        source=EQ_QUESTIONS if typ=="EQ" else PQ_QUESTIONS
-        questions=[{"id":i+1,"text":q,"options":opts} for i,(q,opts,_) in enumerate(source)]
+        questions=localized_behavior_questions(typ, lang)
     await db_execute(
         "INSERT INTO test_sessions(session_id,user_id,test_type,status,questions,expires_at,price,is_retry) VALUES($1,$2,$3,'active',$4,$5,$6,$7)",
         sid,uid,typ,json.dumps(questions),expires,price,has_previous
@@ -2085,7 +2133,9 @@ async def admin_approve_payment(payment_id:int,request:Request):
     if status == "rejected": return json_error("Payment avval rad etilgan",409)
     if status == "already": return {"ok":True,"status":"already"}
     try:
-        await bot.send_message(p["user_id"],"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.")
+        lang = await get_user_language(int(p["user_id"]))
+        msg = {"uz":"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.","ru":"✅ Оплата подтверждена. Следующий этап открыт в Mini App.","en":"✅ Payment approved. The next step is open in the Mini App."}[lang]
+        await bot.send_message(p["user_id"], msg)
     except Exception: logger.exception("Payment notification failed")
     if p["attempt_id"]:
         try:
@@ -2104,7 +2154,10 @@ async def admin_reject_payment(payment_id:int,request:Request):
     await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",payment_id)
     if p["attempt_id"]:
         await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1",p["attempt_id"])
-    try: await bot.send_message(p["user_id"],"❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin.")
+    try:
+        lang = await get_user_language(int(p["user_id"]))
+        msg = {"uz":"❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin.","ru":"❌ Оплата не подтверждена. Чек отклонён. Вернитесь на главную в Mini App.","en":"❌ Payment was not approved. The receipt was rejected. You can return to Home in the Mini App."}[lang]
+        await bot.send_message(p["user_id"], msg)
     except Exception: logger.exception("Payment rejection notification failed")
     return {"ok":True,"status":"rejected"}
 
