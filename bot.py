@@ -530,6 +530,14 @@ async def migrate():
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (referrer_id, referred_id)
     )""")
+    await db_execute("""
+    CREATE TABLE IF NOT EXISTS fake_ranking (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        score INTEGER NOT NULL,
+        level TEXT NOT NULL DEFAULT 'Yaxshi',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )""")
 
     # Legacy battle schema migration. Earlier versions used INTEGER/BIGINT
     # battle IDs. The current API uses UUIDs, so an existing database must
@@ -1242,6 +1250,24 @@ async def admin_pending_input(message: types.Message):
         await message.answer("❌ Faqat 0 yoki undan katta butun son yuboring.")
         return
 
+    if pending == "fake:add":
+        if value < 1 or value > 100:
+            await message.answer("❌ 1 dan 100 gacha son yuboring.")
+            return
+        await add_fake_ranking_rows(value)
+        ADMIN_PENDING.pop(user_id,None)
+        await message.answer(f"✅ {value} ta soxta reyting natijasi qo‘shildi.")
+        return
+
+    if pending == "fake:delete":
+        if value < 1:
+            await message.answer("❌ ID musbat bo‘lishi kerak.")
+            return
+        await db_execute("DELETE FROM fake_ranking WHERE id=$1", value)
+        ADMIN_PENDING.pop(user_id,None)
+        await message.answer(f"🗑 Fake ranking #{value} o‘chirildi.")
+        return
+
     if pending.startswith("price:"):
         key=pending.split(":",1)[1]
         allowed={"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}
@@ -1266,6 +1292,78 @@ async def admin_pending_input(message: types.Message):
         ADMIN_PENDING.pop(user_id,None)
         await message.answer(f"✅ <b>{field}</b> = <b>{value:,}</b>")
         return
+
+@dp.message(Command("fakeranking"))
+async def admin_fake_ranking_command(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q.")
+        return
+    rows = await db_fetch("SELECT id,name,score,level FROM fake_ranking ORDER BY id DESC LIMIT 30")
+    if not rows:
+        await message.answer("🎭 Soxta reyting natijalari hozircha yo‘q.")
+        return
+    text = "🎭 <b>Soxta reyting natijalari</b>\n\n" + "\n".join(
+        f"#{r['id']} · {r['name']} · <b>{r['score']}</b> · {r['level']}" for r in rows
+    )
+    await message.answer(text)
+
+@dp.message(Command("addfake"))
+async def admin_add_fake_command(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q.")
+        return
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer("Format: /addfake 5")
+        return
+    try:
+        count = int(parts[1])
+    except ValueError:
+        await message.answer("Soni butun son bo‘lsin.")
+        return
+    await add_fake_ranking_rows(count)
+    await message.answer(f"✅ {max(0, min(count, 100))} ta soxta reyting natijasi qo‘shildi.")
+
+async def add_fake_ranking_rows(count: int):
+    count = max(0, min(int(count), 100))
+    if not count:
+        return
+    first_names = [
+        "Aziz","Bekzod","Diyor","Javohir","Sardor","Muhammad","Abdulloh","Islom",
+        "Temur","Shahzod","Akmal","Bobur","Oybek","Samandar","Rustam","Asadbek",
+        "Madina","Malika","Zarina","Sevinch","Dilnoza","Shahnoza","Nilufar","Mohira",
+        "Diyora","Sabina","Gulnoza","Rayhona","Munisa","Feruza"
+    ]
+    last_names = [
+        "Karimov","Aliyev","Tursunov","Rahimov","Abdullayev","Yusupov","Ergashev",
+        "Qodirov","Saidov","Nazarov","Ismoilov","Hamidov","Sobirov","Rasulov",
+        "Mamatqulov","Usmonov","Omonov","Jabborov","Yoqubov","Sattorov"
+    ]
+    for _ in range(count):
+        name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        score = random.randint(86, 128)
+        await db_execute(
+            "INSERT INTO fake_ranking(name,score,level) VALUES($1,$2,$3)",
+            name, score, level_for_score(score)
+        )
+
+@dp.message(Command("delfake"))
+async def admin_delete_fake_command(message: types.Message):
+    if not await is_admin(message.from_user.id):
+        await message.answer("Ruxsat yo‘q.")
+        return
+    payload = message.text.partition(" ")[2].strip()
+    if payload.lower() == "all":
+        await db_execute("DELETE FROM fake_ranking")
+        await message.answer("🗑 Barcha soxta reyting natijalari o‘chirildi.")
+        return
+    try:
+        fake_id = int(payload)
+    except ValueError:
+        await message.answer("Format: /delfake ID yoki /delfake all")
+        return
+    await db_execute("DELETE FROM fake_ranking WHERE id=$1", fake_id)
+    await message.answer(f"🗑 #{fake_id} o‘chirildi.")
 
 @dp.message(Command("broadcast"))
 async def admin_broadcast(message: types.Message):
@@ -1299,8 +1397,9 @@ async def send_admin_panel(target):
          InlineKeyboardButton(text="💰 Products", callback_data="admin:products")],
         [InlineKeyboardButton(text="📜 Certificates", callback_data="admin:certs"),
          InlineKeyboardButton(text="⚔️ Battles", callback_data="admin:battles")],
-        [InlineKeyboardButton(text="💳 Cards", callback_data="admin:cards"),
-         InlineKeyboardButton(text="🎯 Live Counter", callback_data="admin:live")],
+        [InlineKeyboardButton(text="🎭 Fake Ranking", callback_data="admin:fake_ranking"),
+         InlineKeyboardButton(text="💳 Cards", callback_data="admin:cards")],
+        [InlineKeyboardButton(text="🎯 Live Counter", callback_data="admin:live")],
     ])
     await target.answer("⚙️ <b>ADMIN PANEL</b>", reply_markup=kb)
 
@@ -1446,6 +1545,41 @@ async def admin_callback(callback: CallbackQuery):
             await callback.message.answer(f"✏️ Live <b>{field}</b> qiymatini faqat son bilan yuboring.")
             await callback.answer("Yangi qiymat kutilmoqda")
             return
+        elif action == "fake_ranking":
+            rows = await db_fetch("SELECT id,name,score,level FROM fake_ranking ORDER BY id DESC LIMIT 30")
+            text = "🎭 <b>Fake Ranking</b>\n\n"
+            text += "\n".join(
+                f"#{r['id']} · {r['name']} · <b>{r['score']}</b> · {r['level']}" for r in rows
+            ) if rows else "Hozircha soxta natija yo‘q."
+            keyboard = [
+                [InlineKeyboardButton(text="➕ Avtomatik qo‘shish", callback_data="admin:fake_add"),
+                 InlineKeyboardButton(text="🗑 ID o‘chirish", callback_data="admin:fake_delete")],
+                [InlineKeyboardButton(text="🧹 Hammasini o‘chirish", callback_data="admin:fake_clear")],
+                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]
+            ]
+            await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+            await callback.answer()
+            return
+        elif action == "fake_add":
+            ADMIN_PENDING[callback.from_user.id] = "fake:add"
+            await callback.message.answer("➕ Nechta soxta reyting natijasi qo‘shilsin? 1–100 oralig‘ida son yuboring.")
+            await callback.answer()
+            return
+        elif action == "fake_delete":
+            ADMIN_PENDING[callback.from_user.id] = "fake:delete"
+            await callback.message.answer("🗑 O‘chiriladigan soxta natija ID sini yuboring. Masalan: <code>12</code>")
+            await callback.answer()
+            return
+        elif action == "fake_clear":
+            await db_execute("DELETE FROM fake_ranking")
+            await callback.message.edit_text(
+                "🧹 <b>Fake Ranking</b>\n\nBarcha soxta reyting natijalari o‘chirildi.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="⬅️ Fake Ranking", callback_data="admin:fake_ranking")]
+                ])
+            )
+            await callback.answer()
+            return
         elif action == "certs":
             row=await db_fetchrow("SELECT COUNT(*) c FROM certificates")
             text=f"📜 Certificates: <b>{row['c']}</b>"
@@ -1587,14 +1721,22 @@ def level_for_score(score):
     return "Juda yuqori"
 
 def calculate_iq(answers):
-    total=0
-    max_total=sum(q["weight"] for q in IQ_QUESTIONS)
+    # Score uses weighted difficulty, but correct_count means the literal
+    # number of correct questions (0..18), never the weighted score sum.
+    weighted_total = 0
+    correct_count = 0
+    max_total = sum(q["weight"] for q in IQ_QUESTIONS)
     for q in IQ_QUESTIONS:
-        ans=answers.get(str(q["id"]))
-        if ans == q["correct"]:
-            total += q["weight"]
-    score = round(70 + 60 * total / max_total)
-    return max(70,min(130,score)), total, max_total
+        ans = answers.get(str(q["id"]))
+        try:
+            is_correct = int(ans) == int(q["correct"])
+        except (TypeError, ValueError):
+            is_correct = False
+        if is_correct:
+            correct_count += 1
+            weighted_total += q["weight"]
+    score = round(70 + 60 * weighted_total / max_total)
+    return max(70, min(130, score)), correct_count, max_total
 
 def public_iq_questions():
     return [{k:v for k,v in q.items() if k != "correct"} for q in IQ_QUESTIONS]
@@ -2159,7 +2301,20 @@ async def get_result(attempt_id:int,request:Request):
         except Exception:
             logger.exception("Result certificate self-heal failed for user %s attempt %s", uid, attempt_id)
     question_count = 18 if a["test_type"] == "IQ" else 6
-    correct_count = int(a["correct_count"] or 0)
+    if a["test_type"] == "IQ":
+        stored_answers = a["answers"] if isinstance(a["answers"], dict) else {}
+        correct_count = 0
+        for q in IQ_QUESTIONS:
+            try:
+                if int(stored_answers.get(str(q["id"]))) == int(q["correct"]):
+                    correct_count += 1
+            except (TypeError, ValueError):
+                pass
+        # Repair legacy attempts that stored the weighted score as correct_count.
+        if int(a["correct_count"] or 0) != correct_count:
+            await db_execute("UPDATE test_attempts SET correct_count=$1 WHERE id=$2", correct_count, int(a["id"]))
+    else:
+        correct_count = max(0, min(question_count, int(a["correct_count"] or 0)))
     duration = max(0, int(a["duration"] or 0))
     accuracy = round((correct_count / question_count) * 100) if question_count else 0
     avg_time = round(duration / question_count, 1) if question_count and duration else 0
@@ -2462,28 +2617,46 @@ async def certificate_png_endpoint(certificate_id:str,request:Request):
 
 @app.get("/api/ranking")
 async def api_ranking(request:Request):
-    user=await authenticated_user(request); uid=int(user["id"])
+    user=await authenticated_user(request)
+    uid=int(user["id"])
     rows=await db_fetch("""
-        SELECT u.full_name,b.score,b.level
-        FROM (
-          SELECT DISTINCT ON (user_id) user_id,score,level,created_at
-          FROM results
-          WHERE test_type='IQ'
-          ORDER BY user_id,score DESC,created_at ASC
-        ) b
-        JOIN users u ON u.user_id=b.user_id
-        ORDER BY b.score DESC,b.created_at ASC
+        SELECT name,score,level,created_at FROM (
+            SELECT DISTINCT ON (r.user_id)
+                COALESCE(u.full_name, 'Foydalanuvchi') AS name,
+                r.score, r.level, r.created_at
+            FROM results r
+            LEFT JOIN users u ON u.user_id=r.user_id
+            WHERE r.test_type='IQ'
+            ORDER BY r.user_id,r.score DESC,r.created_at ASC
+        ) real_rows
+        UNION ALL
+        SELECT name,score,level,created_at
+        FROM fake_ranking
+        ORDER BY score DESC,created_at ASC
         LIMIT 100
     """)
-    items=[{"position":i+1,"name":r["full_name"] or "Foydalanuvchi","score":r["score"],"level":r["level"]} for i,r in enumerate(rows)]
-    pos=next((x["position"] for x in items if x["name"] and False),None)
-    mine=await db_fetchrow("""
-        SELECT COUNT(*)+1 AS position FROM (
-          SELECT user_id, MAX(score) AS best_score FROM results WHERE test_type='IQ' GROUP BY user_id
-        ) ranked
-        WHERE best_score > COALESCE((SELECT MAX(score) FROM results WHERE user_id=$1 AND test_type='IQ'),-1)
-    """,uid)
-    return {"ok":True,"ranking":items,"my_position":mine["position"] if mine else None}
+    items=[{
+        "position":i+1,
+        "name":r["name"] or "Foydalanuvchi",
+        "score":int(r["score"] or 0),
+        "level":r["level"] or ""
+    } for i,r in enumerate(rows)]
+    my_best=await db_fetchrow(
+        "SELECT MAX(score) AS score FROM results WHERE user_id=$1 AND test_type='IQ'",
+        uid
+    )
+    my_position=None
+    if my_best and my_best["score"] is not None:
+        higher=await db_fetchrow("""
+            SELECT COUNT(*) AS c FROM (
+                SELECT MAX(score) AS score FROM results WHERE test_type='IQ' GROUP BY user_id
+                UNION ALL
+                SELECT score FROM fake_ranking
+            ) all_scores
+            WHERE score > $1
+        """, int(my_best["score"]))
+        my_position=int(higher["c"] or 0)+1 if higher else None
+    return {"ok":True,"ranking":items,"my_position":my_position}
 
 @app.get("/api/stats/live")
 async def stats_live(request:Request):
