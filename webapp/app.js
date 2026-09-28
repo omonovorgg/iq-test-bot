@@ -8,9 +8,8 @@
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
-  const setText = (sel, value) => { const el = $(sel); if (el) el.textContent = value; return el; };
   const state = {
-    user: null, lang: "uz", prices: {}, questions: [],
+    user: null, prices: {}, questions: [],
     sessionId: null, testType: null, mode: "NORMAL",
     index: 0, answers: {}, selected: null, startedAt: 0,
     attemptId: null, paymentId: null, paymentAttemptId: null,
@@ -18,97 +17,6 @@
   };
 
   const screens = ["loadingScreen","homeScreen","profileScreen","testScreen","loadingResult","paymentScreen","resultScreen","rankingScreen","certificateScreen","battleScreen"];
-  const I18N = {
-    uz: {
-      home_greet:"Salom, {name} 👋", hero_pill:"18 TA MANTIQIY PUZZLE", hero_title:"IQ darajangizni sinab ko‘ring", hero_text:"Diqqat, naqsh va mantiq asosidagi test.", iq_info_pill:"IQ TEST", iq_info_title:"Aql darajangizni aniqlang", iq_info_subtitle:"18 ta tasviriy mantiq savoli orqali diqqat, naqsh va mantiqiy fikrlashingizni sinang.", iq_info_count:"18 ta savol", iq_info_count_label:"Savollar", iq_info_time:"30 daqiqa", iq_info_time_label:"Vaqt", iq_info_visual:"Tasviriy mantiq", iq_info_visual_label:"Format", iq_info_result:"IQ natija", iq_info_result_label:"Natija", iq_info_note:"Savollar bosqichma-bosqich murakkablashadi. Har bir javobdan keyin keyingi savolga o‘tasiz.", live_total:"Botga qo‘shilganlar", live_now:"Hozir", live_people:"kishi onlayn", tests:"Testlar", sequence:"ketma-ket ochiladi", iq_desc:"18 mantiqiy puzzle", eq_locked:"IQdan keyin ochiladi", eq_open:"Ochilgan", pq_locked:"EQdan keyin ochiladi", profile:"Shaxsiy profil", profile_after:"IQ + EQ + PQdan keyin", battle:"Battle", battle_desc:"Do‘stingiz bilan asynchronous duel", home:"Home", ranking:"Reyting", certificate:"Sertifikat", profile_nav:"Profil",
-      profile_title:"Profil", test_profile_title:"Testni boshlashdan oldin", test_profile_subtitle:"Natija va sertifikatda ishlatiladigan ma’lumotlaringizni bir marta kiriting.", test_profile_note:"Bu ma’lumotlar profilingizga saqlanadi. Keyingi testlarda qayta so‘ralmaydi.", test_profile_start:"🚀 Testni boshlash", name_label:"Ism / familiya", name_placeholder:"Ismingiz", gender_label:"Jins", select:"Tanlang", male:"O‘g‘il", female:"Qiz", age_label:"Yosh", country_label:"Davlat", save:"Saqlash",
-      q_label:"Q", easy:"OSON", medium:"O‘RTA", hard:"QIYIN", battle_label:"BATTLE", matrix_q:"Qaysi variant matritsani to‘ldiradi?", question:"Savol", next:"Davom etish", see_result:"Natijani ko‘rish", loading_result:"Natija tayyorlanmoqda", checked:"✓ Javoblar tekshirildi", scoring:"✓ Ball hisoblanmoqda", profile_updated:"✓ Profil yangilanmoqda",
-      payment:"To‘lov", payment_wait:"TO‘LOV KUTILMOQDA", payment_text:"Quyidagi kartaga to‘lov qiling va receipt rasmini shu yerga yuklang.", copy:"Nusxa", open_bot:"Telegram botini ochish", receipt:"To‘lov cheki", choose_file:"Fayl tanlang", send_receipt:"Receipt yuborish", pay_pending:"Receipt yuborildi. Admin tasdig‘i kutilmoqda.", pay_approved:"✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.", pay_rejected:"❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.", pay_waiting:"Receipt kutilmoqda.", next_result:"📊 Natijani ko‘rish", next_battle:"⚔️ Battle’ga o‘tish", home_btn:"🏠 Bosh sahifaga qaytish", retry_receipt:"🔄 Receiptni qayta yuborish", receipt_resend:"Receiptni qayta yuboring.",
-      result:"Natija", iq_done:"IQ TEST YAKUNLANDI", eq_done:"EQ TEST YAKUNLANDI", pq_done:"PQ TEST YAKUNLANDI", score_indicator:"Test ko‘rsatkichi", question_stat:"savol", correct:"to‘g‘ri", time:"vaqt", per_question:"s/savol", accuracy:"Aniqlik", rank:"Reytingdagi o‘rningiz", rank_compare:"Natijalar bilan taqqoslash", your_result:"Sizning natijangiz", next_stage:"Keyingi bosqich", eq_open_title:"EQ testi ochildi", eq_open_text:"Emotsional intellekt bo‘yicha testni ham topshirib ko‘ring.", start_eq:"🎭 EQ testini boshlash", pq_open_title:"PQ testi ochildi", pq_open_text:"Rejalashtirish va amaliy fikrlash bo‘yicha testni topshiring.", start_pq:"🧩 PQ testini boshlash", profile_open_title:"Shaxsiy profil ochildi", profile_open_text:"IQ, EQ va PQ natijalaringiz asosida profilingizni ko‘ring.", open_profile:"⭐ Profilni ko‘rish", no_next:"Barcha testlar yakunlandi", certificate_btn:"📄 Sertifikatni olish", share:"↗ Natijani ulashish", retry:"↻  Qayta topshirish", ranking_first:"Birinchi natijangiz", ranking_total:"{n} ta natija ichida", no_ranking:"Reyting hali shakllanmagan",
-      test_result_summary:"{correct} ta savolga to‘g‘ri javob berdingiz. Natijangiz {score} va test darajasi “{level}” sifatida hisoblandi.", behavior_summary:"Test natijangiz {score}% ko‘rsatkich bilan yakunlandi.",
-      certificate_screen:"Sertifikat", battle_screen:"Battle", battle_title:"⚔️ Asynchronous duel", battle_desc2:"4 belgili kod yarating yoki do‘stingiz kodini kiriting.", create_battle:"Battle yaratish", or:"yoki", join:"Kod bilan kirish", code_placeholder:"AB12", waiting_opponent:"Opponent kutilmoqda…", battle_found:"Battle topildi. Endi o‘z to‘lovingizni yuboring.", start_payment:"To‘lovni boshlash", waiting_payment:"To‘lov kutilmoqda…",
-      error_profile:"Profil ma’lumotlarini to‘liq kiriting", error_payment:"Payment topilmadi", error_receipt:"Receipt rasmini tanlang", error_server:"Server javobi juda uzoq davom etdi.", saved:"Profil saqlandi", copied:"Karta nusxalandi", copy_fail:"Nusxalash imkoni bo‘lmadi", receipt_sent:"Receipt yuborildi", approved_toast:"To‘lov tasdiqlandi",
-      personal_wait:"IQ + EQ + PQ testlarini yakunlaganingizdan keyin tahlil shu yerda ochiladi.", profile_edit:"✏️ Ma’lumotlarni tahrirlash", profile_save_note:"Profilingizdagi ma’lumotlarni istalgan payt yangilashingiz mumkin.", profile_identity:"Shaxsiy ma’lumotlar", profile_stats:"Test natijalari", profile_member:"A’zo bo‘lgan sana", profile_id:"Telegram ID", profile_username:"Username", profile_gender:"Jins", profile_country:"Davlat", profile_age:"Yosh", best_score:"Eng yaxshi natija", attempts:"Urinishlar", last_test:"Oxirgi test", not_done:"Hali topshirilmagan", cert_status:"Sertifikat holati", verified:"Tasdiqlangan", no_cert_short:"Mavjud emas", profile_rank:"IQ reytingi", certificate_details:"Sertifikat tafsilotlari", certificate_id:"Sertifikat ID", verification:"Verifikatsiya kodi", issued:"Berilgan sana", score:"Natija", level:"Daraja", open_png:"🖼 PNG sertifikatni ochish", share_cert:"↗ Sertifikatni ulashish", profile_close_edit:"✕ Tahrirlashni yopish",
-      strengths:"Kuchli tomonlar", development:"Rivojlanish nuqtalari", cert_empty:"Sertifikat yo‘q", cert_empty_text:"IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.", cert_open:"PNG ochish",
-    },
-    ru: {
-      home_greet:"Привет, {name} 👋", hero_pill:"18 ЛОГИЧЕСКИХ ЗАДАЧ", hero_title:"Проверьте свой уровень IQ", hero_text:"Тест на внимание, закономерности и логику.", iq_info_pill:"IQ ТЕСТ", iq_info_title:"Определите свой уровень интеллекта", iq_info_subtitle:"18 визуальных логических вопросов на внимание, закономерности и мышление.", iq_info_count:"18 вопросов", iq_info_count_label:"Вопросы", iq_info_time:"30 минут", iq_info_time_label:"Время", iq_info_visual:"Визуальная логика", iq_info_visual_label:"Формат", iq_info_result:"Результат IQ", iq_info_result_label:"Результат", iq_info_note:"Вопросы постепенно усложняются. После каждого ответа вы переходите к следующему вопросу.", live_total:"Всего участников", live_now:"Сейчас", live_people:"человек онлайн", tests:"Тесты", sequence:"открываются по порядку", iq_desc:"18 логических задач", eq_locked:"После IQ", eq_open:"Открыт", pq_locked:"После EQ", profile:"Личный профиль", profile_after:"После IQ + EQ + PQ", battle:"Battle", battle_desc:"Асинхронная дуэль с другом", home:"Главная", ranking:"Рейтинг", certificate:"Сертификат", profile_nav:"Профиль",
-      profile_title:"Профиль", test_profile_title:"Перед началом теста", test_profile_subtitle:"Введите данные, которые будут использованы в результате и сертификате. Это нужно сделать один раз.", test_profile_note:"Данные сохраняются в профиле и больше не будут запрашиваться перед следующими тестами.", test_profile_start:"🚀 Начать тест", name_label:"Имя / фамилия", name_placeholder:"Ваше имя", gender_label:"Пол", select:"Выберите", male:"Мужской", female:"Женский", age_label:"Возраст", country_label:"Страна", save:"Сохранить",
-      q_label:"В", easy:"ЛЕГКО", medium:"СРЕДНЕ", hard:"СЛОЖНО", battle_label:"BATTLE", matrix_q:"Какой вариант заполнит матрицу?", question:"Вопрос", next:"Продолжить", see_result:"Посмотреть результат", loading_result:"Готовим результат", checked:"✓ Ответы проверены", scoring:"✓ Баллы рассчитаны", profile_updated:"✓ Профиль обновлён",
-      payment:"Оплата", payment_wait:"ОЖИДАЕТСЯ ОПЛАТА", payment_text:"Оплатите на указанную карту и загрузите сюда чек.", copy:"Копировать", open_bot:"Открыть Telegram-бота", receipt:"Чек оплаты", choose_file:"Выбрать файл", send_receipt:"Отправить чек", pay_pending:"Чек отправлен. Ожидается подтверждение администратора.", pay_approved:"✅ Оплата подтверждена. Следующий этап открыт.", pay_rejected:"❌ Оплата не подтверждена. Администратор отклонил чек.", pay_waiting:"Ожидается чек.", next_result:"📊 Посмотреть результат", next_battle:"⚔️ Перейти в Battle", home_btn:"🏠 На главную", retry_receipt:"🔄 Отправить чек снова", receipt_resend:"Отправьте чек повторно.",
-      result:"Результат", iq_done:"IQ ТЕСТ ЗАВЕРШЁН", eq_done:"EQ ТЕСТ ЗАВЕРШЁН", pq_done:"PQ ТЕСТ ЗАВЕРШЁН", score_indicator:"Показатель теста", question_stat:"вопросов", correct:"верно", time:"время", per_question:"сек/вопрос", accuracy:"Точность", rank:"Место в рейтинге", rank_compare:"Сравнение с результатами", your_result:"Ваш результат", next_stage:"Следующий этап", eq_open_title:"EQ тест открыт", eq_open_text:"Проверьте также свой эмоциональный интеллект.", start_eq:"🎭 Начать EQ тест", pq_open_title:"PQ тест открыт", pq_open_text:"Пройдите тест на планирование и практическое мышление.", start_pq:"🧩 Начать PQ тест", profile_open_title:"Личный профиль открыт", profile_open_text:"Посмотрите профиль на основе результатов IQ, EQ и PQ.", open_profile:"⭐ Открыть профиль", no_next:"Все тесты завершены", certificate_btn:"📄 Получить сертификат", share:"↗ Поделиться результатом", retry:"↻  Пройти ещё раз", ranking_first:"Ваш первый результат", ranking_total:"Среди {n} результатов", no_ranking:"Рейтинг пока не сформирован",
-      test_result_summary:"Вы ответили правильно на {correct} вопросов. Ваш результат — {score}, уровень теста — «{level}».", behavior_summary:"Результат теста завершён с показателем {score}%.",
-      certificate_screen:"Сертификат", battle_screen:"Battle", battle_title:"⚔️ Асинхронная дуэль", battle_desc2:"Создайте 4-значный код или введите код друга.", create_battle:"Создать Battle", or:"или", join:"Войти по коду", code_placeholder:"AB12", waiting_opponent:"Ожидается соперник…", battle_found:"Battle найден. Теперь отправьте свою оплату.", start_payment:"Начать оплату", waiting_payment:"Ожидается оплата…",
-      error_profile:"Заполните все данные профиля", error_payment:"Платёж не найден", error_receipt:"Выберите изображение чека", error_server:"Сервер отвечает слишком долго.", saved:"Профиль сохранён", copied:"Карта скопирована", copy_fail:"Не удалось скопировать", receipt_sent:"Чек отправлен", approved_toast:"Оплата подтверждена",
-      personal_wait:"Анализ откроется после завершения IQ + EQ + PQ.", profile_edit:"✏️ Редактировать данные", profile_save_note:"Данные профиля можно изменить в любое время.", profile_identity:"Личные данные", profile_stats:"Результаты тестов", profile_member:"Дата регистрации", profile_id:"Telegram ID", profile_username:"Username", profile_gender:"Пол", profile_country:"Страна", profile_age:"Возраст", best_score:"Лучший результат", attempts:"Попытки", last_test:"Последний тест", not_done:"Ещё не пройден", cert_status:"Статус сертификата", verified:"Подтверждён", no_cert_short:"Нет", profile_rank:"Место в IQ рейтинге", certificate_details:"Детали сертификата", certificate_id:"ID сертификата", verification:"Код верификации", issued:"Дата выдачи", score:"Результат", level:"Уровень", open_png:"🖼 Открыть PNG сертификат", share_cert:"↗ Поделиться сертификатом", profile_close_edit:"✕ Закрыть редактирование", strengths:"Сильные стороны", development:"Точки развития", cert_empty:"Сертификата нет", cert_empty_text:"Завершите IQ тест — сертификат появится после открытия результата.", cert_open:"Открыть PNG",
-    },
-    en: {
-      home_greet:"Hi, {name} 👋", hero_pill:"18 LOGIC PUZZLES", hero_title:"Test your IQ level", hero_text:"A test of attention, patterns and logic.", iq_info_pill:"IQ TEST", iq_info_title:"Find out your reasoning level", iq_info_subtitle:"18 visual logic questions focused on attention, patterns and logical thinking.", iq_info_count:"18 questions", iq_info_count_label:"Questions", iq_info_time:"30 minutes", iq_info_time_label:"Time", iq_info_visual:"Visual logic", iq_info_visual_label:"Format", iq_info_result:"IQ result", iq_info_result_label:"Result", iq_info_note:"The questions gradually become harder. After each answer, you move to the next question.", live_total:"Total participants", live_now:"Now", live_people:"people online", tests:"Tests", sequence:"unlock in sequence", iq_desc:"18 logic puzzles", eq_locked:"After IQ", eq_open:"Open", pq_locked:"After EQ", profile:"Personal profile", profile_after:"After IQ + EQ + PQ", battle:"Battle", battle_desc:"Asynchronous duel with a friend", home:"Home", ranking:"Ranking", certificate:"Certificate", profile_nav:"Profile",
-      profile_title:"Profile", test_profile_title:"Before you start", test_profile_subtitle:"Enter the details used for your result and certificate. You only need to do this once.", test_profile_note:"These details are saved to your profile and will not be requested again before future tests.", test_profile_start:"🚀 Start test", name_label:"Name / surname", name_placeholder:"Your name", gender_label:"Gender", select:"Select", male:"Male", female:"Female", age_label:"Age", country_label:"Country", save:"Save",
-      q_label:"Q", easy:"EASY", medium:"MEDIUM", hard:"HARD", battle_label:"BATTLE", matrix_q:"Which option completes the matrix?", question:"Question", next:"Continue", see_result:"View result", loading_result:"Preparing result", checked:"✓ Answers checked", scoring:"✓ Score calculated", profile_updated:"✓ Profile updated",
-      payment:"Payment", payment_wait:"PAYMENT PENDING", payment_text:"Pay to the card below and upload the receipt here.", copy:"Copy", open_bot:"Open Telegram bot", receipt:"Payment receipt", choose_file:"Choose file", send_receipt:"Send receipt", pay_pending:"Receipt sent. Waiting for admin approval.", pay_approved:"✅ Payment approved. Next step is open.", pay_rejected:"❌ Payment not approved. The admin rejected the receipt.", pay_waiting:"Waiting for receipt.", next_result:"📊 View result", next_battle:"⚔️ Go to Battle", home_btn:"🏠 Back to home", retry_receipt:"🔄 Send receipt again", receipt_resend:"Please send the receipt again.",
-      result:"Result", iq_done:"IQ TEST COMPLETED", eq_done:"EQ TEST COMPLETED", pq_done:"PQ TEST COMPLETED", score_indicator:"Test indicator", question_stat:"questions", correct:"correct", time:"time", per_question:"sec/question", accuracy:"Accuracy", rank:"Your ranking", rank_compare:"Compared with results", your_result:"Your result", next_stage:"Next stage", eq_open_title:"EQ test unlocked", eq_open_text:"You can also test your emotional intelligence.", start_eq:"🎭 Start EQ test", pq_open_title:"PQ test unlocked", pq_open_text:"Take the planning and practical thinking test.", start_pq:"🧩 Start PQ test", profile_open_title:"Personal profile unlocked", profile_open_text:"View your profile based on IQ, EQ and PQ results.", open_profile:"⭐ View profile", no_next:"All tests completed", certificate_btn:"📄 Get certificate", share:"↗ Share result", retry:"↻  Retake test", ranking_first:"Your first result", ranking_total:"Among {n} results", no_ranking:"Ranking is not formed yet",
-      test_result_summary:"You answered {correct} questions correctly. Your result is {score}, with the test level “{level}”.", behavior_summary:"Your test result finished at {score}%.",
-      certificate_screen:"Certificate", battle_screen:"Battle", battle_title:"⚔️ Asynchronous duel", battle_desc2:"Create a 4-character code or enter your friend’s code.", create_battle:"Create Battle", or:"or", join:"Join by code", code_placeholder:"AB12", waiting_opponent:"Waiting for opponent…", battle_found:"Battle found. Now submit your payment.", start_payment:"Start payment", waiting_payment:"Waiting for payment…",
-      error_profile:"Complete all profile fields", error_payment:"Payment not found", error_receipt:"Choose the receipt image", error_server:"The server is taking too long to respond.", saved:"Profile saved", copied:"Card copied", copy_fail:"Could not copy", receipt_sent:"Receipt sent", approved_toast:"Payment approved",
-      personal_wait:"Analysis unlocks after completing IQ + EQ + PQ.", profile_edit:"✏️ Edit profile", profile_save_note:"You can update your profile information at any time.", profile_identity:"Personal information", profile_stats:"Test results", profile_member:"Member since", profile_id:"Telegram ID", profile_username:"Username", profile_gender:"Gender", profile_country:"Country", profile_age:"Age", best_score:"Best result", attempts:"Attempts", last_test:"Last test", not_done:"Not completed", cert_status:"Certificate status", verified:"Verified", no_cert_short:"Not available", profile_rank:"IQ ranking", certificate_details:"Certificate details", certificate_id:"Certificate ID", verification:"Verification code", issued:"Issued", score:"Score", level:"Level", open_png:"🖼 Open PNG certificate", share_cert:"↗ Share certificate", profile_close_edit:"✕ Close editing", strengths:"Strengths", development:"Development areas", cert_empty:"No certificate", cert_empty_text:"Complete the IQ test; the certificate appears after the result opens.", cert_open:"Open PNG",
-    }
-  };
-
-  function tx(key, vars = {}) {
-    const dict = I18N[state.lang] || I18N.uz;
-    let value = dict[key] ?? I18N.uz[key] ?? key;
-    return String(value).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
-  }
-
-  function localizeLevel(level) {
-    const m={
-      "Boshlang‘ich":{uz:"Boshlang‘ich",ru:"Начальный",en:"Beginner"},
-      "O‘rtacha":{uz:"O‘rtacha",ru:"Средний",en:"Average"},
-      "Yaxshi":{uz:"Yaxshi",ru:"Хороший",en:"Good"},
-      "Yuqori":{uz:"Yuqori",ru:"Высокий",en:"High"},
-      "Juda yuqori":{uz:"Juda yuqori",ru:"Очень высокий",en:"Very high"}
-    };
-    return m[level]?.[state.lang] || level || "—";
-  }
-
-  function applyLanguage(lang) {
-    state.lang = I18N[lang] ? lang : "uz";
-    document.documentElement.lang = state.lang;
-    const text = (sel, key) => { const el = $(sel); if (el) el.textContent = tx(key); };
-    const home = $("#homeScreen");
-    if (home) {
-      const greet=$("#homeScreen .topbar h1"); if(greet) greet.innerHTML = `${tx("home_greet", {name: state.user?.first_name || (state.lang === "ru" ? "Друг" : state.lang === "en" ? "Friend" : "Do‘st")})}`;
-      setText(".hero-copy .pill", tx("hero_pill"));
-      setText(".hero-copy h2", tx("hero_title")); setText(".hero-copy p", tx("hero_text"));
-      setText(".live-card > div:first-child small", tx("live_total")); setText(".online div small:first-child", tx("live_now")); setText(".online div small:last-child", tx("live_people"));
-      setText(".section-title h3", tx("tests")); setText(".section-title span", tx("sequence"));
-      setText(".test-card.iq small", tx("iq_desc")); setText("#eqState", state.user?.hasIQ ? tx("eq_open") : tx("eq_locked")); setText("#pqState", state.user?.hasEQ ? tx("eq_open") : tx("pq_locked"));
-      setText("#profileCard b", tx("profile")); setText("#profileCard small", tx("profile_after")); setText("#battleCard b", tx("battle")); setText("#battleCard small", tx("battle_desc"));
-      const nav = $$('[data-nav]'); if (nav[0]) nav[0].querySelector('small').textContent=tx('home'); if(nav[1])nav[1].querySelector('small').textContent=tx('ranking'); if(nav[2])nav[2].querySelector('small').textContent=tx('certificate'); if(nav[3])nav[3].querySelector('small').textContent=tx('profile_nav');
-    }
-    text("#profileScreen .subbar h2", "profile_title"); text("#saveProfile", "save");
-    text("#testProfileTitle", "test_profile_title"); text("#testProfileSubtitle", "test_profile_subtitle"); text("#saveTestProfile", "test_profile_start");
-    setText("#iqInfoPill", tx("iq_info_pill")); setText("#iqInfoTitle", tx("iq_info_title")); setText("#iqInfoSubtitle", tx("iq_info_subtitle"));
-    setText("#iqInfoCount", tx("iq_info_count")); setText("#iqInfoCountLabel", tx("iq_info_count_label"));
-    setText("#iqInfoTime", tx("iq_info_time")); setText("#iqInfoTimeLabel", tx("iq_info_time_label"));
-    setText("#iqInfoVisual", tx("iq_info_visual")); setText("#iqInfoVisualLabel", tx("iq_info_visual_label"));
-    setText("#iqInfoResult", tx("iq_info_result")); setText("#iqInfoResultLabel", tx("iq_info_result_label")); setText("#iqInfoNote", tx("iq_info_note"));
-    setText("#continueIqInfo", tx("test_profile_start"));
-    const tpf=$("#testProfileOverlay"); if(tpf){ const ls=tpf.querySelectorAll("label"); if(ls[0])ls[0].firstChild.textContent=tx("name_label"); if(ls[1])ls[1].firstChild.textContent=tx("gender_label"); if(ls[2])ls[2].firstChild.textContent=tx("age_label"); if(ls[3])ls[3].firstChild.textContent=tx("country_label"); const note=tpf.querySelector(".test-profile-note span:last-child"); if(note)note.textContent=tx("test_profile_note"); $("#testFullName").placeholder=tx("name_placeholder"); const tgx=$("#testGender"); if(tgx){tgx.options[0].text=tx("select");tgx.options[1].text=tx("male");tgx.options[2].text=tx("female");} const tcx=$("#testCountry"); if(tcx?.options[0])tcx.options[0].text=tx("select"); }
-    setText("#profileEditBtn", $("#profileEditor")?.classList.contains("hidden") ? tx("profile_edit") : tx("profile_close_edit"));
-    setText("#profileEditorTitle", tx("profile_identity")); setText("#profileEditorNote", tx("profile_save_note"));
-    const labels = $("#profileScreen"); if(labels){ const ls=labels.querySelectorAll('label'); if(ls[0])ls[0].firstChild.textContent=tx('name_label'); if(ls[1])ls[1].firstChild.textContent=tx('gender_label'); if(ls[2])ls[2].firstChild.textContent=tx('age_label'); if(ls[3])ls[3].firstChild.textContent=tx('country_label'); $("#fullName").placeholder=tx('name_placeholder'); }
-    const g=$("#gender"); if(g){g.options[0].text=tx('select');g.options[1].text=tx('male');g.options[2].text=tx('female');}
-    const c=$("#country"); if(c && c.options[0])c.options[0].text=tx('select');
-    text("#paymentScreen .subbar h2","payment"); text("#paymentScreen .payment-card .pill","payment_wait"); setText("#paymentScreen .payment-card p",tx('payment_text')); text("#copyCard","copy"); text("#sharePayment","open_bot"); const fileLabel=$("#paymentScreen .file-label"); if(fileLabel && fileLabel.firstChild) fileLabel.firstChild.textContent=tx('receipt'); text("#sendReceipt","send_receipt");
-    text("#resultScreen .subbar h2","result"); text("#certificateBtn span","certificate_btn"); text("#shareResultBtn span","share"); text("#retryIqBtn","retry");
-    const resultStats=$("#resultScreen .result-stats"); if(resultStats){ const sm=resultStats.querySelectorAll('small'); if(sm[0])sm[0].textContent=tx('question_stat');if(sm[1])sm[1].textContent=tx('correct');if(sm[2])sm[2].textContent=tx('time');if(sm[3])sm[3].textContent=tx('per_question'); }
-    text("#resultScreen .result-detail-card:first-child small","accuracy"); text("#resultScreen .result-detail-card:nth-child(2) small","rank"); text("#resultScreen .result-summary h3","your_result"); text("#nextStageLabel","next_stage");
-    text("#rankingScreen .subbar h2","ranking"); text("#certificateScreen .subbar h2","certificate_screen"); text("#battleScreen .subbar h2","battle_screen"); text("#battleScreen .battle-panel h2","battle_title");
-    const bp=$("#battleScreen .battle-panel p"); if(bp)bp.textContent=tx('battle_desc2'); text("#createBattle","create_battle"); text("#joinBattle","join"); const div=$("#battleScreen .divider"); if(div)div.textContent=tx('or'); const bc=$("#battleCode"); if(bc)bc.placeholder=tx('code_placeholder');
-  }
-
 
   function show(id) {
     screens.forEach((x) => document.getElementById(x)?.classList.toggle("hidden", x !== id));
@@ -182,6 +90,15 @@
 
   function clearProgress() {
     try { localStorage.removeItem("iq_test_progress"); } catch (_) {}
+  }
+
+  function normalizeQuestions(raw, type) {
+    let value = raw;
+    for (let i = 0; i < 3 && typeof value === "string"; i++) {
+      try { value = JSON.parse(value); } catch (_) { value = null; break; }
+    }
+    const expected = type === "IQ" ? 18 : 6;
+    return Array.isArray(value) && value.length === expected ? value : [];
   }
 
   function difficulty(index) { return index < 6 ? "EASY" : index < 12 ? "MEDIUM" : "HARD"; }
@@ -289,15 +206,26 @@
   }
 
   function renderQuestion() {
+    if (!Array.isArray(state.questions) || !state.questions.length) {
+      clearProgress();
+      show("homeScreen");
+      toast("Test savollari topilmadi. Testni qayta boshlang.");
+      return;
+    }
+    state.index = Math.max(0, Math.min(state.index, state.questions.length - 1));
     const q = state.questions[state.index];
-    if (!q) return;
+    if (!q || typeof q !== "object") {
+      clearProgress();
+      show("homeScreen");
+      toast("Test savoli noto‘g‘ri yuklandi. Testni qayta boshlang.");
+      return;
+    }
     state.selected = null;
     $("#nextQuestion").disabled = true;
-    $("#questionLabel").textContent = `${tx("q_label")}${state.index + 1}/${state.questions.length}`;
-    const diff = state.mode === "BATTLE" ? tx("battle_label") : state.testType === "IQ" ? tx(difficulty(state.index) === "EASY" ? "easy" : difficulty(state.index) === "MEDIUM" ? "medium" : "hard") : state.testType;
-    $("#difficulty").textContent = diff;
+    $("#questionLabel").textContent = `Q${state.index + 1}/${state.questions.length}`;
+    $("#difficulty").textContent = state.mode === "BATTLE" ? "BATTLE" : state.testType === "IQ" ? difficulty(state.index) : state.testType;
     $("#progressBar").style.width = `${((state.index) / Math.max(1, state.questions.length)) * 100}%`;
-    $("#questionText").textContent = state.testType === "IQ" ? tx("matrix_q") : q.text || tx("question");
+    $("#questionText").textContent = state.testType === "IQ" ? "Qaysi variant matritsani to‘ldiradi?" : q.text || "Savol";
 
     const matrix = $("#matrix");
     matrix.innerHTML = "";
@@ -307,7 +235,7 @@
     const options = $("#options");
     options.innerHTML = "";
     (q.options || []).forEach((option, i) => options.appendChild(renderOption(option, i)));
-    $("#nextQuestion").textContent = state.index === state.questions.length - 1 ? tx("see_result") : tx("next");
+    $("#nextQuestion").textContent = state.index === state.questions.length - 1 ? "Natijani ko‘rish" : "Davom etish";
     $("#celebration")?.classList.toggle("hidden", !(state.testType === "IQ" && (state.index === 6 || state.index === 12)));
   }
 
@@ -324,135 +252,36 @@
     window.__timer = setInterval(tick, 500);
   }
 
-  function openProfileEditor() {
-    const editor=$("#profileEditor");
-    if(editor) editor.classList.remove("hidden");
-    const btn=$("#profileEditBtn");
-    if(btn) btn.textContent=tx("profile_close_edit");
-    ["#fullName","#gender","#age","#country"].forEach(sel=>$(sel)?.removeAttribute("disabled"));
-    show("profileScreen");
-  }
-
-  function closeProfileEditor() {
-    const editor=$("#profileEditor");
-    if(editor) editor.classList.add("hidden");
-    const btn=$("#profileEditBtn");
-    if(btn) btn.textContent=tx("profile_edit");
-  }
-
-  function profileIsComplete() {
-    const u = state.user || {};
-    return Boolean(
-      String(u.full_name || "").trim() &&
-      (u.gender === "male" || u.gender === "female") &&
-      Number.isInteger(Number(u.age)) && Number(u.age) >= 10 && Number(u.age) <= 120 &&
-      String(u.country || "").trim()
-    );
-  }
-
-  function openIqInfo() {
-    const overlay = $("#iqInfoOverlay");
-    if (!overlay) return;
-    applyLanguage(state.lang);
-    overlay.classList.remove("hidden");
-    overlay.setAttribute("aria-hidden", "false");
-    document.body.classList.add("test-info-open");
-  }
-
-  function closeIqInfo() {
-    const overlay = $("#iqInfoOverlay");
-    if (!overlay) return;
-    overlay.classList.add("hidden");
-    overlay.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("test-info-open");
-  }
-
-  async function continueIqInfo() {
-    closeIqInfo();
-    if (profileIsComplete()) {
-      await startTest("IQ", true);
-    } else {
-      openTestProfilePrompt("IQ");
-    }
-  }
-
-  function openTestProfilePrompt(type) {
-    const overlay = $("#testProfileOverlay");
-    if (!overlay) return false;
-    state.pendingType = type;
-    $("#testFullName").value = state.user?.full_name || "";
-    $("#testGender").value = state.user?.gender || "";
-    $("#testAge").value = state.user?.age || "";
-    $("#testCountry").value = state.user?.country || "";
-    applyLanguage(state.lang);
-    overlay.classList.remove("hidden");
-    overlay.setAttribute("aria-hidden", "false");
-    document.body.classList.add("test-profile-open");
-    setTimeout(() => $("#testFullName")?.focus(), 50);
-    return true;
-  }
-
-  function closeTestProfilePrompt() {
-    const overlay = $("#testProfileOverlay");
-    if (!overlay) return;
-    overlay.classList.add("hidden");
-    overlay.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("test-profile-open");
-  }
-
-  async function saveTestProfile() {
-    if (state.busy) return;
-    const age = Number($("#testAge")?.value);
-    const body = {
-      full_name: $("#testFullName")?.value.trim() || "",
-      gender: $("#testGender")?.value || "",
-      age,
-      country: $("#testCountry")?.value || ""
-    };
-    if (!body.full_name || !body.gender || !body.country || !Number.isInteger(age) || age < 10 || age > 120) {
-      toast(tx("error_profile"));
-      return;
-    }
-    try {
-      state.busy = true;
-      await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
-      state.user = { ...state.user, ...body };
-      $("#fullName").value = body.full_name;
-      $("#gender").value = body.gender;
-      $("#age").value = body.age;
-      $("#country").value = body.country;
-      closeTestProfilePrompt();
-      const pending = state.pendingType;
-      delete state.pendingType;
-      if (pending) setTimeout(() => startTest(pending, true), 100);
-    } catch (e) {
-      toast(e.message);
-    } finally {
-      state.busy = false;
-    }
-  }
-
   async function startTest(type, profileConfirmed = false) {
     if (state.busy) return;
 
-    // The first time a user starts a test, ask for the required identity data
-    // in a small test-specific dialog. Once saved, it is stored in the profile
-    // and future tests start directly without asking again.
-    if (!profileConfirmed && !profileIsComplete()) {
-      openTestProfilePrompt(type);
+    // Profile must be confirmed before every test. Existing values are prefilled.
+    // profileConfirmed=true is used only after /api/profile/save succeeds, so
+    // saving the profile does not reopen the profile screen in a loop.
+    if (!profileConfirmed) {
+      state.pendingType = type;
+      $("#fullName").value = state.user?.full_name || "";
+      $("#gender").value = state.user?.gender || "";
+      $("#age").value = state.user?.age || "";
+      $("#country").value = state.user?.country || "";
+      show("profileScreen");
       return;
     }
-    if (type === "EQ" && !state.user.hasIQ) { toast(state.lang === "ru" ? "Сначала завершите IQ тест" : state.lang === "en" ? "Complete the IQ test first" : "Avval IQ testni yakunlang"); return; }
-    if (type === "PQ" && !state.user.hasEQ) { toast(state.lang === "ru" ? "Сначала завершите EQ тест" : state.lang === "en" ? "Complete the EQ test first" : "Avval EQ testni yakunlang"); return; }
+    if (type === "EQ" && !state.user.hasIQ) { toast("Avval IQ testni yakunlang"); return; }
+    if (type === "PQ" && !state.user.hasEQ) { toast("Avval EQ testni yakunlang"); return; }
     try {
       state.busy = true;
       const d = await api("/api/test/start", { method:"POST", body:JSON.stringify({ test_type:type }) });
       state.mode = "NORMAL";
       state.testType = type;
-      state.questions = d.questions || [];
+      state.questions = normalizeQuestions(d.questions, type);
       state.sessionId = d.session_id;
-      state.answers = d.resumed ? (d.answers || {}) : {};
+      state.answers = d.resumed && d.answers && typeof d.answers === "object" ? d.answers : {};
       state.index = d.resumed ? Math.min(Object.keys(state.answers).length, Math.max(0, state.questions.length - 1)) : 0;
+      if (!state.questions.length) {
+        clearProgress();
+        throw new Error("Test savoli yuklanmadi. Iltimos, testni qayta boshlang.");
+      }
       state.startedAt = d.resumed && d.started_at ? Date.parse(d.started_at) : Date.now();
       saveProgress();
       show("testScreen");
@@ -467,7 +296,6 @@
     clearInterval(window.__timer);
     if (state.selected !== null) state.answers[String(state.index + 1)] = state.selected;
     saveProgress();
-    applyLoadingLanguage();
     show("loadingResult");
     try {
       state.busy = true;
@@ -500,20 +328,6 @@
     } finally { state.busy = false; }
   }
 
-  function applyLoadingLanguage() {
-    const el=$("#loadingResult"); if(!el) return;
-    const h=el.querySelector("h2"); if(h)h.textContent=tx("loading_result");
-    const spans=el.querySelectorAll(".check-list span"); if(spans[0])spans[0].textContent=tx("checked"); if(spans[1])spans[1].textContent=tx("scoring"); if(spans[2])spans[2].textContent=tx("profile_updated");
-  }
-
-  function formatDuration(seconds) {
-    const total = Math.max(0, Math.round(Number(seconds) || 0));
-    if (!total) return "—";
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${m}:${String(s).padStart(2, "0")}`;
-  }
-
   async function showResult(attemptId) {
     const d = await api(`/api/result/${attemptId}`);
     if (!d.visible) {
@@ -529,59 +343,12 @@
       } else toast("Natija hali yopiq");
       return;
     }
-    state.attemptId = attemptId;
-    state.paymentAttemptId = attemptId;
     state.testType = d.test_type || state.testType || "IQ";
-    const questionCount = Number(d.question_count || (state.testType === "IQ" ? 18 : 6));
-    const correct = Number(d.correct_count || 0);
-    const accuracy = Math.max(0, Math.min(100, Number(d.accuracy ?? (questionCount ? Math.round(correct / questionCount * 100) : 0))));
-    const duration = Math.max(0, Number(d.duration || 0));
-    const avg = Number(d.avg_time || (questionCount && duration ? duration / questionCount : 0));
-    const score = Number(d.score || 0);
-
-    $("#resultBadge").textContent = state.testType === "IQ" ? tx("iq_done") : state.testType === "EQ" ? tx("eq_done") : tx("pq_done");
+    $("#resultBadge").textContent = `${state.testType} RESULT`;
     $("#resultUnit").textContent = state.testType === "IQ" ? "IQ" : "%";
-    $("#resultScore").textContent = score;
-    const displayLevel = state.testType === "IQ" ? localizeLevel(d.level) : (d.level || (state.lang === "ru" ? "Результат" : state.lang === "en" ? "Result" : "Natija"));
-    $("#resultLevel").textContent = displayLevel;
-    $("#resultQuestions").textContent = `${questionCount}/${questionCount}`;
-    $("#resultCorrectStat").textContent = `${correct}/${questionCount}`;
-    $("#resultDuration").textContent = formatDuration(duration);
-    $("#resultAvgTime").textContent = avg ? `${avg.toFixed(1)} s` : "—";
-    $("#resultAccuracy").textContent = `${accuracy}%`;
-    $("#accuracyBar").style.width = `${accuracy}%`;
-
-    const minScore = state.testType === "IQ" ? 70 : 0;
-    const maxScore = state.testType === "IQ" ? 130 : 100;
-    const ratio = Math.max(0, Math.min(1, (score - minScore) / Math.max(1, maxScore - minScore)));
-    $("#scoreRing")?.style.setProperty("--score-angle", `${Math.round(35 + ratio * 325)}deg`);
-
-    if (d.ranking_position) {
-      const total = Number(d.ranking_total || 0);
-      $("#resultRank").textContent = `#${d.ranking_position}`;
-      $("#resultRankText").textContent = total > 1 ? tx("ranking_total", {n:total}) : tx("ranking_first");
-    } else {
-      $("#resultRank").textContent = "—";
-      $("#resultRankText").textContent = tx("no_ranking");
-    }
-
-    $("#resultSummaryText").textContent = state.testType === "IQ"
-      ? tx("test_result_summary", {correct, score, level:displayLevel})
-      : tx("behavior_summary", {score});
-
-    const nextBtn=$("#startEqFromResult");
-    const nextCard=$(".next-stage-card");
-    if (state.testType === "IQ") {
-      $("#nextStageTitle").textContent=tx("eq_open_title"); $("#nextStageText").textContent=tx("eq_open_text"); nextBtn.textContent=tx("start_eq"); nextBtn.classList.remove("hidden");
-      nextBtn.onclick=()=>startTest("EQ"); if(nextCard)nextCard.classList.remove("hidden");
-    } else if (state.testType === "EQ") {
-      $("#nextStageTitle").textContent=tx("pq_open_title"); $("#nextStageText").textContent=tx("pq_open_text"); nextBtn.textContent=tx("start_pq"); nextBtn.classList.remove("hidden");
-      nextBtn.onclick=()=>startTest("PQ"); if(nextCard)nextCard.classList.remove("hidden");
-    } else {
-      $("#nextStageTitle").textContent=tx("profile_open_title"); $("#nextStageText").textContent=tx("profile_open_text"); nextBtn.textContent=tx("open_profile"); nextBtn.classList.remove("hidden");
-      nextBtn.onclick=()=>{renderPersonalProfile();show("profileScreen")}; if(nextCard)nextCard.classList.remove("hidden");
-    }
-    applyLanguage(state.lang);
+    $("#resultScore").textContent = d.score;
+    $("#resultLevel").textContent = d.level || (state.testType === "IQ" ? "—" : "Natija");
+    $("#resultCorrect").textContent = `${d.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
     show("resultScreen");
   }
 
@@ -608,60 +375,34 @@
   function renderApprovedPaymentAction() {
     const box = paymentActions();
     if (state.battleId) {
-      box.innerHTML = `<button id="paymentNextBtn" class="primary">${tx("next_battle")}</button>`;
+      box.innerHTML = `<button id="paymentNextBtn" class="primary">⚔️ Battle'ga o‘tish</button>`;
       $("#paymentNextBtn").onclick = async () => {
         show("battleScreen");
         await checkBattleReady(true);
         startBattlePolling();
       };
     } else if (state.paymentAttemptId) {
-      box.innerHTML = `<button id="paymentNextBtn" class="primary">${tx("next_result")}</button>`;
-      $("#paymentNextBtn").onclick = async () => {
-        try { await showResult(state.paymentAttemptId); } catch (e) { toast(e.message); }
-      };
-    } else {
-      box.innerHTML = `<button id="paymentNextBtn" class="primary">${tx("home_btn")}</button>`;
-      $("#paymentNextBtn").onclick = () => show("homeScreen");
+      box.innerHTML = `<button id="paymentNextBtn" class="primary">📊 Natijani ko‘rish</button>`;
+      $("#paymentNextBtn").onclick = () => showResult(state.paymentAttemptId);
     }
   }
 
-  function renderRejectedPaymentAction() {
-    const box = paymentActions();
-    box.innerHTML = `<button id="paymentHomeBtn" class="secondary">${tx("home_btn")}</button>
-      <button id="paymentRetryBtn" class="primary" style="margin-top:8px">${tx("retry_receipt")}</button>`;
-    $("#paymentHomeBtn").onclick = () => show("homeScreen");
-    $("#paymentRetryBtn").onclick = () => {
-      $("#paymentStatus").textContent = tx("receipt_resend");
-      $("#receiptFile").disabled = false;
-      $("#sendReceipt").disabled = false;
-      clearPaymentActions();
-    };
-  }
-
   async function renderPayment(d) {
-    state.paymentId = d.payment_id ?? d.id ?? state.paymentId;
-    state.paymentAttemptId = d.attempt_id ?? state.paymentAttemptId;
-    if (d.battle_id !== undefined) state.battleId = d.battle_id || null;
+    state.paymentId = d.payment_id || state.paymentId;
+    state.paymentAttemptId = d.attempt_id || state.paymentAttemptId;
     $("#paymentAmount").textContent = `${Number(d.amount || 0).toLocaleString("uz-UZ")} so‘m`;
     const card = d.card || (state.paymentId ? await getPaymentCard(state.paymentId) : null);
     $("#cardNumber").textContent = card?.card_number || "Faol karta topilmadi";
     $("#cardHolder").textContent = card?.holder || "";
     $("#cardBank").textContent = card?.bank || "";
     clearPaymentActions();
-    $("#receiptFile").disabled = false;
-    $("#sendReceipt").disabled = false;
     if (d.status === "approved") {
-      $("#paymentStatus").textContent = tx("pay_approved");
-      $("#receiptFile").disabled = true;
-      $("#sendReceipt").disabled = true;
+      $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi.";
       renderApprovedPaymentAction();
-    } else if (d.status === "rejected") {
-      $("#paymentStatus").textContent = tx("pay_rejected");
-      renderRejectedPaymentAction();
     } else if (d.receipt_file_id) {
-      $("#paymentStatus").textContent = tx("pay_pending");
+      $("#paymentStatus").textContent = "✅ Receipt yuborilgan. Admin tasdig‘i kutilmoqda.";
     } else {
-      $("#paymentStatus").textContent = card ? tx("payment_text") : tx("pay_waiting");
+      $("#paymentStatus").textContent = card ? "Kartaga to‘lov qiling va receipt yuklang." : "Admin karta qo‘shishini kuting.";
     }
     $("#receiptInput").value = "";
     $("#receiptFile").value = "";
@@ -673,22 +414,15 @@
       const p = await api("/api/payment/mine");
       const mine = p.payments.find((x) => Number(x.id) === Number(state.paymentId));
       if (!mine) return;
-      if (mine.battle_id !== undefined) state.battleId = mine.battle_id || null;
-      if (mine.attempt_id !== undefined) state.paymentAttemptId = mine.attempt_id;
       if (mine.status === "approved") {
-        $("#paymentStatus").textContent = tx("pay_approved");
-        $("#receiptFile").disabled = true;
-        $("#sendReceipt").disabled = true;
+        $("#paymentStatus").textContent = "✅ To‘lov tasdiqlandi.";
         clearPaymentActions();
         renderApprovedPaymentAction();
-      } else if (mine.status === "rejected") {
-        $("#paymentStatus").textContent = tx("pay_rejected");
-        $("#receiptFile").disabled = false;
-        $("#sendReceipt").disabled = false;
-        clearPaymentActions();
-        renderRejectedPaymentAction();
+        if (state.battleId) {
+          await checkBattleReady(true);
+        }
       } else if (mine.receipt_file_id) {
-        $("#paymentStatus").textContent = tx("pay_pending");
+        $("#paymentStatus").textContent = "✅ Receipt yuborilgan. Admin tasdig‘i kutilmoqda.";
       } else {
         $("#paymentStatus").textContent = "Receipt kutilmoqda.";
       }
@@ -696,34 +430,32 @@
   }
 
   async function sendReceipt() {
-    if (!state.paymentId) { toast(tx("error_payment")); return; }
+    if (!state.paymentId) { toast("Payment topilmadi"); return; }
     const file = $("#receiptFile")?.files?.[0];
     const legacy = $("#receiptInput")?.value.trim();
-    if (!file && !legacy) { toast(tx("error_receipt")); return; }
+    if (!file && !legacy) { toast("Receipt rasmini tanlang"); return; }
     try {
       const fd = new FormData();
       if (file) fd.append("receipt", file, file.name);
       else fd.append("receipt_file_id", legacy);
       const d = await api(`/api/payment/${state.paymentId}/receipt`, { method:"POST", body:fd });
-      clearPaymentActions();
-      $("#paymentStatus").textContent = d.status === "approved" ? "✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi." : "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
-      toast(d.status === "approved" ? tx("approved_toast") : tx("receipt_sent"));
-      if (d.status === "approved") renderApprovedPaymentAction();
-      else if (state.battleId) startBattlePolling();
+      $("#paymentStatus").textContent = d.status === "approved" ? "✅ To‘lov tasdiqlandi." : "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
+      toast(d.status === "approved" ? "To‘lov tasdiqlandi" : "Receipt yuborildi");
+      if (d.status === "approved") {
+        renderApprovedPaymentAction();
+        if (state.battleId) await checkBattleReady(true);
+      } else if (state.battleId) {
+        startBattlePolling();
+      }
     } catch (e) { toast(e.message); }
   }
 
   async function loadHome() {
     const d = await api("/api/bootstrap");
     state.user = d.user;
-    state.user.best_results = d.best_results || {};
-    state.user.certificate = d.certificate || null;
-    state.user.iq_rank = d.ranking_position || null;
-    state.lang = d.user.language || "uz";
-    applyLanguage(state.lang);
     state.prices = d.prices || {};
     state.questions = d.questions || [];
-    setText("#userName", d.user?.first_name || "Do‘st");
+    $("#userName").textContent = d.user.first_name || "Do‘st";
     $("#fullName").value = d.user.full_name || "";
     $("#gender").value = d.user.gender || "";
     $("#age").value = d.user.age || "";
@@ -742,11 +474,9 @@
       const p = d.pending_payment;
       state.paymentId = p.id;
       state.paymentAttemptId = p.attempt_id;
-      state.battleId = p.battle_id || null;
       await renderPayment({
         payment_id: p.id,
         attempt_id: p.attempt_id,
-        battle_id: p.battle_id || null,
         amount: p.amount,
         status: p.status,
         receipt_file_id: p.receipt_file_id,
@@ -759,8 +489,8 @@
   }
 
   function updateHomeLocks() {
-    $("#eqState").textContent = state.user.hasIQ ? tx("eq_open") : tx("eq_locked");
-    $("#pqState").textContent = state.user.hasEQ ? tx("eq_open") : tx("pq_locked");
+    $("#eqState").textContent = state.user.hasIQ ? "Ochilgan" : "IQdan keyin ochiladi";
+    $("#pqState").textContent = state.user.hasEQ ? "Ochilgan" : "EQdan keyin ochiladi";
     $(".test-card[data-test=EQ]")?.classList.toggle("locked", !state.user.hasIQ);
     $(".test-card[data-test=PQ]")?.classList.toggle("locked", !state.user.hasEQ);
   }
@@ -775,8 +505,12 @@
       state.mode = "NORMAL";
       state.sessionId = saved.sessionId;
       state.testType = d.test_type;
-      state.questions = d.questions || [];
-      state.answers = saved.answers || d.answers || {};
+      state.questions = normalizeQuestions(d.questions, d.test_type);
+      state.answers = saved.answers && typeof saved.answers === "object" ? saved.answers : (d.answers || {});
+      if (!state.questions.length) {
+        clearProgress();
+        return;
+      }
       state.index = Math.max(0, Math.min(Number(saved.index) || 0, state.questions.length - 1));
       state.startedAt = Number(saved.startedAt) || Date.now();
       show("testScreen");
@@ -803,133 +537,74 @@
       age, country: $("#country").value
     };
     if (!body.full_name || !body.gender || !body.country || !Number.isInteger(age) || age < 10 || age > 120) {
-      toast(tx("error_profile")); return;
+      toast("Profil ma’lumotlarini to‘liq kiriting"); return;
     }
     try {
       state.busy = true;
       await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
       state.user = { ...state.user, ...body };
-      setText("#userName", state.user?.first_name || "Do‘st");
+      $("#userName").textContent = state.user.first_name || "Do‘st";
       renderPersonalProfile();
-      closeProfileEditor();
-      toast(tx("saved"));
+      toast("Profil saqlandi");
       const pending = state.pendingType;
       delete state.pendingType;
       if (pending) setTimeout(() => startTest(pending, true), 250);
-      else show("profileScreen");
+      else show("homeScreen");
     } catch (e) { toast(e.message); }
     finally { state.busy = false; }
   }
 
-  function formatDate(value) {
-    if(!value) return "—";
-    const d=new Date(value);
-    if(Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString(state.lang === "ru" ? "ru-RU" : state.lang === "en" ? "en-GB" : "uz-UZ", {day:"2-digit",month:"2-digit",year:"numeric"});
-  }
-
-  function resultCardHtml(type,label,icon) {
-    const r=state.user?.best_results?.[type];
-    const score=r ? r.score : null;
-    const attempts=r?.attempts || 0;
-    return `<div class="profile-result-card">
-      <div class="profile-result-icon">${icon}</div><div class="profile-result-main"><small>${label}</small><strong>${score ?? "—"}</strong><span>${r ? `${tx("attempts")}: ${attempts}` : tx("not_done")}</span></div>
-    </div>`;
-  }
-
   function renderPersonalProfile() {
-    const box=$("#personalSummary");
-    if(!box || !state.user) return;
-    const u=state.user;
-    const cert=u.certificate;
-    const gender=u.gender === "male" ? tx("male") : u.gender === "female" ? tx("female") : "—";
-    box.innerHTML=`
-      <div class="profile-identity-card glass">
-        <div class="profile-avatar">${escapeHtml((u.full_name || u.first_name || "U").trim().charAt(0).toUpperCase())}</div>
-        <div class="profile-identity-main"><h3>${escapeHtml(u.full_name || u.first_name || "Foydalanuvchi")}</h3><p>${u.username ? "@"+escapeHtml(u.username) : tx("profile_username")}</p><span>${u.country || "—"} · ${u.age || "—"} · ${gender}</span></div>
-        <button id="profileEditBtn" class="profile-edit-btn">${tx("profile_edit")}</button>
+    const box = $("#personalSummary");
+    if (!box || !state.user) return;
+    const ready = state.user.hasIQ && state.user.hasEQ && state.user.hasPQ;
+    if (!ready) {
+      box.innerHTML = `<div class="empty-state"><b>Shaxsiy profil</b><span>IQ + EQ + PQ testlarini yakunlaganingizdan keyin tahlil shu yerda ochiladi.</span></div>`;
+      return;
+    }
+    box.innerHTML = `
+      <div class="summary-grid">
+        <div><small>IQ</small><b>Yakunlangan</b></div>
+        <div><small>EQ</small><b>Yakunlangan</b></div>
+        <div><small>PQ</small><b>Yakunlangan</b></div>
       </div>
-      <div class="profile-section-title"><b>${tx("profile_identity")}</b><span>${tx("profile_save_note")}</span></div>
-      <div class="profile-meta-grid">
-        <div><small>${tx("profile_id")}</small><b>${u.id || "—"}</b></div>
-        <div><small>${tx("profile_member")}</small><b>${formatDate(u.created_at)}</b></div>
-        <div><small>${tx("profile_country")}</small><b>${escapeHtml(u.country || "—")}</b></div>
-        <div><small>${tx("profile_age")}</small><b>${u.age || "—"}</b></div>
-      </div>
-      <div class="profile-section-title"><b>${tx("profile_stats")}</b><span>${tx("profile_rank")}: #${u.iq_rank || "—"}</span></div>
-      <div class="profile-results-grid">
-        ${resultCardHtml("IQ","IQ","🧠")}
-        ${resultCardHtml("EQ","EQ","🎭")}
-        ${resultCardHtml("PQ","PQ","🧩")}
-      </div>
-      <div class="profile-cert-card">
-        <div><span class="profile-cert-icon">📜</span><div><small>${tx("cert_status")}</small><b>${cert ? tx("verified") : tx("no_cert_short")}</b></div></div>
-        ${cert ? `<button id="profileCertBtn" class="small-btn">${tx("open_png")}</button>` : ""}
-      </div>
-      ${u.hasIQ && u.hasEQ && u.hasPQ ? `<div class="insight professional-insight"><b>${tx("strengths")}</b><p>${state.lang === "en" ? "Your profile combines logical reasoning, emotional judgment and practical planning results." : state.lang === "ru" ? "Ваш профиль объединяет результаты логического мышления, эмоционального интеллекта и практического планирования." : "Profilingiz mantiqiy fikrlash, hissiy qaror va amaliy rejalashtirish natijalarini birlashtiradi."}</p></div>` : `<div class="empty-state"><b>${tx("profile")}</b><span>${tx("personal_wait")}</span></div>`}`;
-    $("#profileEditBtn")?.addEventListener("click",()=>{
-      const editor=$("#profileEditor");
-      if(editor?.classList.contains("hidden")) openProfileEditor(); else closeProfileEditor();
-    });
-    $("#profileCertBtn")?.addEventListener("click",loadCertificate);
+      <div class="insight"><b>Kuchli tomonlar</b><p>Muammolarni tahlil qilish, hissiy vaziyatni anglash va vazifalarni rejalashtirish bo‘yicha test javoblaringiz mavjud.</p></div>
+      <div class="insight"><b>Rivojlanish nuqtalari</b><p>Natijalarni muntazam qayta ko‘rib chiqish va real hayotdagi qarorlar bilan solishtirish foydali.</p></div>`;
   }
 
   async function loadRanking() {
     try {
       const d = await api("/api/ranking");
       const box = $("#rankingList");
-      box.innerHTML = d.ranking?.length ? `
-        <div class="ranking-me glass"><small>${tx("rank")}</small><strong>#${d.my_position || "—"}</strong><span>${d.total_users || d.ranking.length} users</span></div>
-        ${d.ranking.map((r) =>
-        `<div class="rank-row"><span class="rank-pos">#${r.position}</span><span><b>${escapeHtml(r.name)}</b><small>${escapeHtml(localizeLevel(r.level || ""))}</small></span><strong>${r.score}</strong></div>`
-      ).join("")}` : `<div class="form-card glass empty-state"><b>${tx("no_ranking")}</b></div>`;
+      box.innerHTML = d.ranking?.length ? d.ranking.map((r) =>
+        `<div class="rank-row"><span class="rank-pos">#${r.position}</span><span><b>${escapeHtml(r.name)}</b><small>${escapeHtml(r.level || "")}</small></span><strong>${r.score}</strong></div>`
+      ).join("") : `<div class="form-card glass empty-state"><b>Hali natijalar yo‘q.</b></div>`;
       show("rankingScreen");
     } catch (e) { toast(e.message); }
   }
 
   async function loadCertificate() {
     try {
-      const d=await api("/api/certificate/mine");
-      const c=d.certificate;
-      const box=$("#certificateBox");
-      if(!box) return;
-      if(!c){
-        box.innerHTML=`<div class="certificate-empty"><div class="certificate-empty-icon">📜</div><h3>${tx("cert_empty")}</h3><p>${tx("cert_empty_text")}</p></div>`;
-      } else {
-        box.innerHTML=`
-          <div class="certificate-hero">
-            <div class="certificate-seal">✓</div>
-            <span class="pill">✓ ${tx("verified").toUpperCase()}</span>
-            <div class="certificate-mini-brand">IQ TEST BOT</div>
-            <div class="certificate-label">${tx("certificate")}</div>
-            <h1>${escapeHtml(c.full_name || "—")}</h1>
-            <div class="certificate-score"><strong>${c.score}</strong><span>IQ</span></div>
-            <div class="certificate-level">${escapeHtml(localizeLevel(c.level || ""))}</div>
-            <div class="certificate-meta-grid">
-              <div><small>${tx("certificate_id")}</small><b>${escapeHtml(c.certificate_id || "—")}</b></div>
-              <div><small>${tx("verification")}</small><b>${escapeHtml(c.verification_code || "—")}</b></div>
-              <div><small>${tx("issued")}</small><b>${formatDate(c.created_at)}</b></div>
-              <div><small>${tx("level")}</small><b>${escapeHtml(localizeLevel(c.level || "—"))}</b></div>
-            </div>
-          </div>
-          <div class="certificate-actions">
-            <button id="certDownload" class="primary">${tx("open_png")}</button>
-            <button id="certShare" class="secondary">${tx("share_cert")}</button>
-          </div>`;
-        $("#certDownload")?.addEventListener("click",async()=>{
-          try{const blob=await apiBlob(`/api/certificate/${encodeURIComponent(c.certificate_id)}/png`);const url=URL.createObjectURL(blob);if(tg?.openLink)tg.openLink(url);else window.open(url,"_blank");setTimeout(()=>URL.revokeObjectURL(url),30000);}catch(e){toast(e.message);}
-        });
-        $("#certShare")?.addEventListener("click",async()=>{
-          const text=`📜 IQ TEST BOT
-${c.full_name}
-IQ: ${c.score}
-${localizeLevel(c.level||"")}
-🔐 ${c.verification_code}`;
-          try{if(navigator.share)await navigator.share({title:"IQ TEST BOT",text});else{await navigator.clipboard.writeText(text);toast(tx("copied"));}}catch(_){}
-        });
-      }
+      const d = await api("/api/certificate/mine");
+      const c = d.certificate;
+      $("#certificateBox").innerHTML = c ? `
+        <span class="pill">VERIFIED</span>
+        <h2>${escapeHtml(c.full_name)}</h2>
+        <div class="score-ring"><strong>${c.score}</strong><small>IQ</small></div>
+        <p>${escapeHtml(c.level || "")}</p>
+        <div class="cert-code">${escapeHtml(c.verification_code)}</div>
+        <p>IQ TEST BOT</p>
+        <button id="certDownload" class="primary">PNG ochish</button>` : `<div class="empty-state"><b>Sertifikat yo‘q</b><span>IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.</span></div>`;
+      $("#certDownload")?.addEventListener("click", async () => {
+        try {
+          const blob = await apiBlob(`/api/certificate/${encodeURIComponent(c.certificate_id)}/png`);
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+          setTimeout(() => URL.revokeObjectURL(url), 30000);
+        } catch (e) { toast(e.message); }
+      });
       show("certificateScreen");
-    }catch(e){toast(e.message);}
+    } catch (e) { toast(e.message); }
   }
 
   function setBattleInfo(html) { $("#battleInfo").innerHTML = html; }
@@ -1039,17 +714,9 @@ ${localizeLevel(c.level||"")}
     } else finishTest();
   });
   $("#saveProfile")?.addEventListener("click", saveProfile);
-  $("#saveTestProfile")?.addEventListener("click", saveTestProfile);
-  $("#continueIqInfo")?.addEventListener("click", continueIqInfo);
-  $("#closeIqInfo")?.addEventListener("click", closeIqInfo);
-  $("#iqInfoOverlay")?.addEventListener("click", (e) => { if (e.target?.id === "iqInfoOverlay") closeIqInfo(); });
-  $("#cancelTestProfile")?.addEventListener("click", () => { state.pendingType = null; closeTestProfilePrompt(); });
-  $("#testProfileOverlay")?.addEventListener("click", (e) => {
-    if (e.target?.id === "testProfileOverlay") { state.pendingType = null; closeTestProfilePrompt(); }
-  });
   $("#copyCard")?.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast(tx("copied")); }
-    catch (_) { toast(tx("copy_fail")); }
+    try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast("Karta nusxalandi"); }
+    catch (_) { toast("Nusxalash imkoni bo‘lmadi"); }
   });
   $("#sendReceipt")?.addEventListener("click", sendReceipt);
   $("#sharePayment")?.addEventListener("click", () => {
@@ -1057,20 +724,9 @@ ${localizeLevel(c.level||"")}
     if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, "_blank");
   });
   $("#certificateBtn")?.addEventListener("click", loadCertificate);
-  // Result next-stage button receives a test-specific handler inside showResult().
-  $("#retryIqBtn")?.addEventListener("click", () => startTest("IQ"));
-  $("#shareResultBtn")?.addEventListener("click", async () => {
-    const score = $("#resultScore")?.textContent || "—";
-    const level = $("#resultLevel")?.textContent || "";
-    const text = `🧠 IQ TEST BOT\nNatijam: ${score} IQ · ${level}`;
-    try {
-      if (navigator.share) await navigator.share({ title: "IQ TEST BOT", text });
-      else { await navigator.clipboard.writeText(text); toast("Natija nusxalandi"); }
-    } catch (_) {}
-  });
   $("#createBattle")?.addEventListener("click", createBattle);
   $("#joinBattle")?.addEventListener("click", joinBattle);
-  $("#profileTopBtn")?.addEventListener("click", () => { renderPersonalProfile(); closeProfileEditor(); show("profileScreen"); });
+  $("#profileTopBtn")?.addEventListener("click", () => show("profileScreen"));
   $("#battleCard")?.addEventListener("click", () => show("battleScreen"));
   $("#profileCard")?.addEventListener("click", () => {
     renderPersonalProfile();
@@ -1083,17 +739,13 @@ ${localizeLevel(c.level||"")}
     show("homeScreen");
   });
   $("[data-back]") && $$('[data-back]').forEach((b) => b.addEventListener("click", () => show("homeScreen")));
-  $$(".test-card[data-test]").forEach((b) => b.addEventListener("click", () => {
-    const type = b.dataset.test;
-    if (type === "IQ") openIqInfo();
-    else startTest(type);
-  }));
+  $$(".test-card[data-test]").forEach((b) => b.addEventListener("click", () => startTest(b.dataset.test)));
   $$('[data-nav]').forEach((b) => b.addEventListener("click", () => {
     const n = b.dataset.nav;
     if (n === "home") show("homeScreen");
     if (n === "ranking") loadRanking();
     if (n === "certificate") loadCertificate();
-    if (n === "profile") { renderPersonalProfile(); closeProfileEditor(); show("profileScreen"); }
+    if (n === "profile") { renderPersonalProfile(); show("profileScreen"); }
   }));
 
   setInterval(() => {
@@ -1104,7 +756,6 @@ ${localizeLevel(c.level||"")}
     try {
       await loadHome();
     } catch (e) {
-      console.error("Mini App bootstrap failed", e);
       show("homeScreen");
       toast(e.message || "Mini App yuklanmadi");
     }
