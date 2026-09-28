@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=20260928-profilefix">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="bg-orb orb-a"></div><div class="bg-orb orb-b"></div>
@@ -19,44 +19,6 @@
       <div class="loader-ring"></div>
       <h2>IQ TEST BOT</h2><p>Yuklanmoqda…</p>
     </section>
-
-    <div id="iqInfoOverlay" class="test-info-overlay hidden" aria-hidden="true">
-      <div class="test-info-sheet" role="dialog" aria-modal="true" aria-labelledby="iqInfoTitle">
-        <button id="closeIqInfo" class="test-info-close" type="button" aria-label="Close">×</button>
-        <div class="test-info-icon">🧠</div>
-        <span class="pill" id="iqInfoPill">IQ TEST</span>
-        <h2 id="iqInfoTitle">Aql darajangizni aniqlang</h2>
-        <p id="iqInfoSubtitle" class="test-info-subtitle">18 ta tasviriy mantiq savoli orqali diqqat, naqsh va mantiqiy fikrlashingizni sinang.</p>
-        <div class="test-info-chips">
-          <span><b id="iqInfoCount">18 ta savol</b><small id="iqInfoCountLabel">Savollar</small></span>
-          <span><b id="iqInfoTime">30 daqiqa</b><small id="iqInfoTimeLabel">Vaqt</small></span>
-          <span><b id="iqInfoVisual">Tasviriy mantiq</b><small id="iqInfoVisualLabel">Format</small></span>
-          <span><b id="iqInfoResult">IQ natija</b><small id="iqInfoResultLabel">Natija</small></span>
-        </div>
-        <div class="test-info-note"><span>✓</span><p id="iqInfoNote">Savollar bosqichma-bosqich murakkablashadi. Har bir javobdan keyin keyingi savolga o‘tasiz.</p></div>
-        <button id="continueIqInfo" class="primary">🚀 Testni boshlash</button>
-      </div>
-    </div>
-
-    <div id="testProfileOverlay" class="test-profile-overlay hidden" aria-hidden="true">
-      <div class="test-profile-sheet" role="dialog" aria-modal="true" aria-labelledby="testProfileTitle">
-        <div class="test-profile-top">
-          <div class="test-profile-icon">🧠</div>
-          <button id="cancelTestProfile" class="test-profile-close" type="button" aria-label="Close">×</button>
-        </div>
-        <span class="pill">TEST UCHUN MA’LUMOT</span>
-        <h2 id="testProfileTitle">Testni boshlashdan oldin</h2>
-        <p id="testProfileSubtitle" class="test-profile-subtitle">Natija va sertifikatda ishlatiladigan ma’lumotlaringizni bir marta kiriting.</p>
-        <div class="test-profile-form">
-          <label>Ism / familiya<input id="testFullName" maxlength="120" placeholder="Ismingiz"></label>
-          <label>Jins<select id="testGender"><option value="">Tanlang</option><option value="male">O‘g‘il</option><option value="female">Qiz</option></select></label>
-          <label>Yosh<input id="testAge" type="number" min="10" max="120" inputmode="numeric" placeholder="20"></label>
-          <label>Davlat<select id="testCountry"><option value="">Tanlang</option><option>O‘zbekiston</option><option>Rossiya</option><option>Qozog‘iston</option><option>Qirg‘iziston</option><option>Turkiya</option><option>AQSH</option><option>Buyuk Britaniya</option><option>Germaniya</option><option>Boshqa</option></select></label>
-        </div>
-        <div class="test-profile-note"><span>✓</span><span>Bu ma’lumotlar profilingizga saqlanadi. Keyingi testlarda qayta so‘ralmaydi.</span></div>
-        <button id="saveTestProfile" class="primary">🚀 Testni boshlash</button>
-      </div>
-    </div>
 
     <section id="homeScreen" class="screen hidden">
       <header class="topbar">
@@ -80,11 +42,19 @@
     </section>
 
     <section id="profileScreen" class="screen hidden">
-      <header class="subbar"><button class="back" data-back>‹</button><h2>Profil</h2><span></span></header>
-      <div id="personalSummary" class="personal-summary"></div>
+      <header class="subbar"><button class="back" data-back>‹</button><h2>Profil</h2><button id="editProfileBtn" class="icon-btn" aria-label="Ma’lumotlarni tahrirlash">✎</button></header>
+
+      <div id="profileOverview">
+        <div class="profile-hero glass">
+          <div id="profileAvatar" class="profile-avatar">U</div>
+          <div class="profile-identity"><span class="eyebrow">SHAXSIY PROFIL</span><h1 id="profileDisplayName">Foydalanuvchi</h1><p id="profileMeta">Profil ma’lumotlari</p></div>
+        </div>
+        <div id="personalSummary" class="personal-summary"></div>
+      </div>
+
       <div id="profileEditor" class="form-card glass hidden">
-        <div class="editor-heading"><b id="profileEditorTitle">Profil ma’lumotlari</b><small id="profileEditorNote">Bu ma’lumotlar natija va sertifikatda ishlatiladi.</small></div>
-        <label>Ism / familiya<input id="fullName" maxlength="120" placeholder="Ismingiz"></label>
+        <div class="editor-head"><div><span class="eyebrow">PROFIL</span><h3 id="profileEditorTitle">Ma’lumotlarni tahrirlash</h3></div><button id="profileCancel" class="small-btn">Bekor qilish</button></div>
+        <label>Ism / familiya<input id="fullName" maxlength="120" placeholder="Ismingiz va familiyangiz"></label>
         <label>Jins<select id="gender"><option value="">Tanlang</option><option value="male">O‘g‘il</option><option value="female">Qiz</option></select></label>
         <label>Yosh<input id="age" type="number" min="10" max="120" inputmode="numeric" placeholder="20"></label>
         <label>Davlat<select id="country"><option value="">Tanlang</option><option>O‘zbekiston</option><option>Rossiya</option><option>Qozog‘iston</option><option>Qirg‘iziston</option><option>Turkiya</option><option>AQSH</option><option>Buyuk Britaniya</option><option>Germaniya</option><option>Boshqa</option></select></label>
@@ -111,53 +81,8 @@
     </section>
 
     <section id="resultScreen" class="screen hidden">
-      <header class="subbar result-subbar"><button class="back" data-back>‹</button><h2>Natija</h2><span></span></header>
-      <div class="result-premium glass">
-        <div class="result-badge"><span>🧠</span><b id="resultBadge">IQ TEST YAKUNLANDI</b></div>
-        <div class="result-score-wrap">
-          <div id="scoreRing" class="score-ring-premium" style="--score-angle: 260deg">
-            <div class="score-ring-core"><strong id="resultScore">—</strong><small id="resultUnit">IQ</small></div>
-          </div>
-          <h1 id="resultLevel">—</h1>
-          <p class="result-subtitle">Test ko‘rsatkichi <span class="info-dot">i</span></p>
-        </div>
-
-        <div class="result-stats">
-          <div><span class="stat-icon">▣</span><b id="resultQuestions">18/18</b><small>savol</small></div>
-          <div><span class="stat-icon success">✓</span><b id="resultCorrectStat">—</b><small>to‘g‘ri</small></div>
-          <div><span class="stat-icon violet">◷</span><b id="resultDuration">—</b><small>vaqt</small></div>
-          <div><span class="stat-icon gold">ϟ</span><b id="resultAvgTime">—</b><small>s/savol</small></div>
-        </div>
-
-        <div class="result-insight-grid">
-          <div class="result-detail-card">
-            <div class="detail-icon blue">◎</div>
-            <div><small>Aniqlik</small><strong id="resultAccuracy">—%</strong><div class="accuracy-track"><i id="accuracyBar"></i></div></div>
-          </div>
-          <div class="result-detail-card">
-            <div class="detail-icon purple">▥</div>
-            <div><small>Reytingdagi o‘rningiz</small><strong id="resultRank">—</strong><p id="resultRankText">Natijalar bilan taqqoslash</p></div>
-          </div>
-        </div>
-
-        <div class="result-summary">
-          <div class="summary-medal">★</div>
-          <div><h3>Sizning natijangiz</h3><p id="resultSummaryText">Natijangiz testdagi javoblaringiz asosida backend tomonidan hisoblandi.</p></div>
-        </div>
-
-        <div class="next-stage-card">
-          <div class="next-stage-icon">ϟ</div>
-          <div><small id="nextStageLabel">Keyingi bosqich</small><b id="nextStageTitle">EQ testi ochildi</b><p id="nextStageText">Emotsional intellekt bo‘yicha testni ham topshirib ko‘ring.</p></div>
-          <span>›</span>
-        </div>
-        <button id="startEqFromResult" class="primary result-main-action">🎭 EQ testini boshlash <span>›</span></button>
-
-        <div class="result-actions-grid">
-          <button id="certificateBtn" class="secondary result-action">📄 <span>Sertifikatni olish</span></button>
-          <button id="shareResultBtn" class="secondary result-action">↗ <span>Natijani ulashish</span></button>
-        </div>
-        <button id="retryIqBtn" class="secondary result-retry">↻ &nbsp; Qayta topshirish</button>
-      </div>
+      <div class="result-glow"></div><header class="subbar"><button class="back" data-back>‹</button><h2>Natija</h2><span></span></header>
+      <div class="result-card glass"><span id="resultBadge" class="pill">IQ RESULT</span><div class="score-ring"><strong id="resultScore">—</strong><small id="resultUnit">IQ</small></div><h2 id="resultLevel">—</h2><p id="resultCorrect">—</p><button id="certificateBtn" class="primary">📜 Sertifikatni olish</button></div>
     </section>
 
     <section id="rankingScreen" class="screen hidden">
@@ -165,8 +90,7 @@
     </section>
 
     <section id="certificateScreen" class="screen hidden">
-      <header class="subbar"><button class="back" data-back>‹</button><h2>Sertifikat</h2><span></span></header>
-      <div id="certificateBox" class="certificate-box"></div>
+      <header class="subbar"><button class="back" data-back>‹</button><h2>Sertifikat</h2><span></span></header><div id="certificateBox" class="certificate-box glass"></div>
     </section>
 
     <section id="battleScreen" class="screen hidden">
@@ -176,6 +100,6 @@
 
     <section id="toast" class="toast" aria-live="polite"></section>
   </main>
-<script src="/static/app.js?v=20260928-testprofilefix"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>
