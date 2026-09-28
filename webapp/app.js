@@ -24,7 +24,7 @@
       home_greet:"Salom, {name} 👋", hero_pill:"18 TA MANTIQIY PUZZLE", hero_title:"IQ darajangizni sinab ko‘ring", hero_text:"Diqqat, naqsh va mantiq asosidagi test.", live_total:"Botga qo‘shilganlar", live_now:"Hozir", live_people:"kishi onlayn", tests:"Testlar", sequence:"ketma-ket ochiladi", iq_desc:"Mantiqiy fikrlash darajangiz", eq_desc:"His-tuyg‘ularni tushunish qobiliyati", pq_desc:"Ishni keyinga surish odatingiz", eq_locked:"IQdan keyin ochiladi", eq_open:"Ochilgan", pq_locked:"EQdan keyin ochiladi", profile:"Shaxsiy profil", profile_after:"IQ + EQ + PQdan keyin", battle:"Battle", battle_desc:"Do‘stingiz bilan asynchronous duel", home:"Home", ranking:"Reyting", certificate:"Sertifikat", profile_nav:"Profil",
       profile_title:"Profil", name_label:"Ism / familiya", name_placeholder:"Ismingiz", gender_label:"Jins", select:"Tanlang", male:"O‘g‘il", female:"Qiz", age_label:"Yosh", country_label:"Davlat", save:"Saqlash",
       q_label:"Q", easy:"OSON", medium:"O‘RTA", hard:"QIYIN", battle_label:"BATTLE", matrix_q:"Qaysi variant matritsani to‘ldiradi?", question:"Savol", next:"Davom etish", see_result:"Natijani ko‘rish", loading_result:"Natija tayyorlanmoqda", checked:"✓ Javoblar tekshirildi", scoring:"✓ Ball hisoblanmoqda", profile_updated:"✓ Profil yangilanmoqda",
-      payment:"To‘lov", payment_wait:"NATIJA UCHUN TO‘LOV", payment_text:"Natijangiz tayyor. Uni ochish uchun quyidagi to‘lovni amalga oshirib, chekni yuboring.", copy:"Nusxa", open_bot:"Telegram botini ochish", receipt:"To‘lov cheki", choose_file:"Fayl tanlang", send_receipt:"Receipt yuborish", pay_pending:"Receipt yuborildi. Admin tasdig‘i kutilmoqda.", pay_approved:"✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.", pay_rejected:"❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.", pay_waiting:"Receipt kutilmoqda.", next_result:"📊 Natijani ko‘rish", next_battle:"⚔️ Battle’ga o‘tish", home_btn:"🏠 Bosh sahifaga qaytish", retry_receipt:"🔄 Receiptni qayta yuborish", receipt_resend:"Receiptni qayta yuboring.",
+      payment:"To‘lov", payment_wait:"NATIJA UCHUN TO‘LOV", payment_text:"Natijangiz tayyor. Uni ochish uchun quyidagi to‘lovni amalga oshirib, chekni yuboring.", copy:"Nusxa", open_bot:"Telegram botini ochish", receipt:"To‘lov cheki", choose_file:"Fayl tanlang", send_receipt:"Receipt yuborish", pay_pending:"Receipt yuborildi. Admin tasdig‘i kutilmoqda.", pay_approved:"✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.", pay_rejected:"❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.", pay_waiting:"Receipt kutilmoqda.", next_result:"📊 Natijani ko‘rish", next_battle:"⚔️ Battle’ga o‘tish", home_btn:"🏠 Bosh sahifaga qaytish", retry_receipt:"🔄 Receiptni qayta yuborish", receipt_resend:"Receiptni qayta yuboring.", why_paid:"Nega pulli?", why_paid_title:"Nega natija pulli?", why_paid_text:"To‘lov testni ishlab chiqish, server, natijalarni hisoblash va xizmatni doimiy ishlatish xarajatlarini qoplashga yordam beradi. Testni topshirish bepul, to‘lov esa tayyor natijani ochish uchun olinadi.", why_paid_test:"Test va savollar", why_paid_score:"Natijani hisoblash", why_paid_storage:"Natijani saqlash", why_paid_ok:"Tushundim",
       result:"Natija", iq_done:"IQ TEST YAKUNLANDI", eq_done:"EQ TEST YAKUNLANDI", pq_done:"PQ TEST YAKUNLANDI", score_indicator:"Test ko‘rsatkichi", question_stat:"savol", correct:"to‘g‘ri", time:"vaqt", per_question:"s/savol", accuracy:"Aniqlik", rank:"Reytingdagi o‘rningiz", rank_compare:"Natijalar bilan taqqoslash", your_result:"Sizning natijangiz", next_stage:"Keyingi bosqich", eq_open_title:"EQ testi ochildi", eq_open_text:"Emotsional intellekt bo‘yicha testni ham topshirib ko‘ring.", start_eq:"🎭 EQ testini boshlash", pq_open_title:"PQ testi ochildi", pq_open_text:"Rejalashtirish va amaliy fikrlash bo‘yicha testni topshiring.", start_pq:"🧩 PQ testini boshlash", profile_open_title:"Shaxsiy profil ochildi", profile_open_text:"IQ, EQ va PQ natijalaringiz asosida profilingizni ko‘ring.", open_profile:"⭐ Profilni ko‘rish", no_next:"Barcha testlar yakunlandi", certificate_btn:"📄 Sertifikatni olish", share:"↗ Natijani ulashish", retry:"↻  Qayta topshirish", ranking_first:"Birinchi natijangiz", ranking_total:"{n} ta natija ichida", no_ranking:"Reyting hali shakllanmagan",
       test_result_summary:"{correct} ta savolga to‘g‘ri javob berdingiz. Natijangiz {score} va test darajasi “{level}” sifatida hisoblandi.", behavior_summary:"Test natijangiz {score}% ko‘rsatkich bilan yakunlandi.",
       certificate_screen:"Sertifikat", battle_screen:"Battle", battle_title:"⚔️ Asynchronous duel", battle_desc2:"4 belgili kod yarating yoki do‘stingiz kodini kiriting.", create_battle:"Battle yaratish", or:"yoki", join:"Kod bilan kirish", code_placeholder:"AB12", waiting_opponent:"Opponent kutilmoqda…", battle_found:"Battle topildi. Endi o‘z to‘lovingizni yuboring.", start_payment:"To‘lovni boshlash", waiting_payment:"To‘lov kutilmoqda…",
@@ -36,7 +36,7 @@
       home_greet:"Привет, {name} 👋", hero_pill:"18 ЛОГИЧЕСКИХ ЗАДАЧ", hero_title:"Проверьте свой уровень IQ", hero_text:"Тест на внимание, закономерности и логику.", live_total:"Всего участников", live_now:"Сейчас", live_people:"человек онлайн", tests:"Тесты", sequence:"открываются по порядку", iq_desc:"Ваш уровень логического мышления", eq_desc:"Способность понимать эмоции", pq_desc:"Склонность откладывать дела", eq_locked:"После IQ", eq_open:"Открыт", pq_locked:"После EQ", profile:"Личный профиль", profile_after:"После IQ + EQ + PQ", battle:"Battle", battle_desc:"Асинхронная дуэль с другом", home:"Главная", ranking:"Рейтинг", certificate:"Сертификат", profile_nav:"Профиль",
       profile_title:"Профиль", name_label:"Имя / фамилия", name_placeholder:"Ваше имя", gender_label:"Пол", select:"Выберите", male:"Мужской", female:"Женский", age_label:"Возраст", country_label:"Страна", save:"Сохранить",
       q_label:"В", easy:"ЛЕГКО", medium:"СРЕДНЕ", hard:"СЛОЖНО", battle_label:"BATTLE", matrix_q:"Какой вариант заполнит матрицу?", question:"Вопрос", next:"Продолжить", see_result:"Посмотреть результат", loading_result:"Готовим результат", checked:"✓ Ответы проверены", scoring:"✓ Баллы рассчитаны", profile_updated:"✓ Профиль обновлён",
-      payment:"Оплата", payment_wait:"ОПЛАТА ДЛЯ ОТКРЫТИЯ РЕЗУЛЬТАТА", payment_text:"Ваш результат готов. Чтобы открыть его, выполните оплату ниже и отправьте чек.", copy:"Копировать", open_bot:"Открыть Telegram-бота", receipt:"Чек оплаты", choose_file:"Выбрать файл", send_receipt:"Отправить чек", pay_pending:"Чек отправлен. Ожидается подтверждение администратора.", pay_approved:"✅ Оплата подтверждена. Следующий этап открыт.", pay_rejected:"❌ Оплата не подтверждена. Администратор отклонил чек.", pay_waiting:"Ожидается чек.", next_result:"📊 Посмотреть результат", next_battle:"⚔️ Перейти в Battle", home_btn:"🏠 На главную", retry_receipt:"🔄 Отправить чек снова", receipt_resend:"Отправьте чек повторно.",
+      payment:"Оплата", payment_wait:"ОПЛАТА ДЛЯ ОТКРЫТИЯ РЕЗУЛЬТАТА", payment_text:"Ваш результат готов. Чтобы открыть его, выполните оплату ниже и отправьте чек.", copy:"Копировать", open_bot:"Открыть Telegram-бота", receipt:"Чек оплаты", choose_file:"Выбрать файл", send_receipt:"Отправить чек", pay_pending:"Чек отправлен. Ожидается подтверждение администратора.", pay_approved:"✅ Оплата подтверждена. Следующий этап открыт.", pay_rejected:"❌ Оплата не подтверждена. Администратор отклонил чек.", pay_waiting:"Ожидается чек.", next_result:"📊 Посмотреть результат", next_battle:"⚔️ Перейти в Battle", home_btn:"🏠 На главную", retry_receipt:"🔄 Отправить чек снова", receipt_resend:"Отправьте чек повторно.", why_paid:"Почему платно?", why_paid_title:"Почему результат платный?", why_paid_text:"Оплата помогает покрывать разработку теста, сервер, расчёт результатов и поддержку сервиса. Сам тест можно пройти бесплатно, а оплата нужна для открытия готового результата.", why_paid_test:"Тест и вопросы", why_paid_score:"Расчёт результата", why_paid_storage:"Хранение результата", why_paid_ok:"Понятно",
       result:"Результат", iq_done:"IQ ТЕСТ ЗАВЕРШЁН", eq_done:"EQ ТЕСТ ЗАВЕРШЁН", pq_done:"PQ ТЕСТ ЗАВЕРШЁН", score_indicator:"Показатель теста", question_stat:"вопросов", correct:"верно", time:"время", per_question:"сек/вопрос", accuracy:"Точность", rank:"Место в рейтинге", rank_compare:"Сравнение с результатами", your_result:"Ваш результат", next_stage:"Следующий этап", eq_open_title:"EQ тест открыт", eq_open_text:"Проверьте также свой эмоциональный интеллект.", start_eq:"🎭 Начать EQ тест", pq_open_title:"PQ тест открыт", pq_open_text:"Пройдите тест на планирование и практическое мышление.", start_pq:"🧩 Начать PQ тест", profile_open_title:"Личный профиль открыт", profile_open_text:"Посмотрите профиль на основе результатов IQ, EQ и PQ.", open_profile:"⭐ Открыть профиль", no_next:"Все тесты завершены", certificate_btn:"📄 Получить сертификат", share:"↗ Поделиться результатом", retry:"↻  Пройти ещё раз", ranking_first:"Ваш первый результат", ranking_total:"Среди {n} результатов", no_ranking:"Рейтинг пока не сформирован",
       test_result_summary:"Вы ответили правильно на {correct} вопросов. Ваш результат — {score}, уровень теста — «{level}».", behavior_summary:"Результат теста завершён с показателем {score}%.",
       certificate_screen:"Сертификат", battle_screen:"Battle", battle_title:"⚔️ Асинхронная дуэль", battle_desc2:"Создайте 4-значный код или введите код друга.", create_battle:"Создать Battle", or:"или", join:"Войти по коду", code_placeholder:"AB12", waiting_opponent:"Ожидается соперник…", battle_found:"Battle найден. Теперь отправьте свою оплату.", start_payment:"Начать оплату", waiting_payment:"Ожидается оплата…",
@@ -47,7 +47,7 @@
       home_greet:"Hi, {name} 👋", hero_pill:"18 LOGIC PUZZLES", hero_title:"Test your IQ level", hero_text:"A test of attention, patterns and logic.", live_total:"Total participants", live_now:"Now", live_people:"people online", tests:"Tests", sequence:"unlock in sequence", iq_desc:"Your logical thinking level", eq_desc:"Ability to understand emotions", pq_desc:"Tendency to postpone tasks", eq_locked:"After IQ", eq_open:"Open", pq_locked:"After EQ", profile:"Personal profile", profile_after:"After IQ + EQ + PQ", battle:"Battle", battle_desc:"Asynchronous duel with a friend", home:"Home", ranking:"Ranking", certificate:"Certificate", profile_nav:"Profile",
       profile_title:"Profile", name_label:"Name / surname", name_placeholder:"Your name", gender_label:"Gender", select:"Select", male:"Male", female:"Female", age_label:"Age", country_label:"Country", save:"Save",
       q_label:"Q", easy:"EASY", medium:"MEDIUM", hard:"HARD", battle_label:"BATTLE", matrix_q:"Which option completes the matrix?", question:"Question", next:"Continue", see_result:"View result", loading_result:"Preparing result", checked:"✓ Answers checked", scoring:"✓ Score calculated", profile_updated:"✓ Profile updated",
-      payment:"Payment", payment_wait:"PAYMENT TO UNLOCK RESULT", payment_text:"Your result is ready. Complete the payment below and send the receipt to unlock it.", copy:"Copy", open_bot:"Open Telegram bot", receipt:"Payment receipt", choose_file:"Choose file", send_receipt:"Send receipt", pay_pending:"Receipt sent. Waiting for admin approval.", pay_approved:"✅ Payment approved. Next step is open.", pay_rejected:"❌ Payment not approved. The admin rejected the receipt.", pay_waiting:"Waiting for receipt.", next_result:"📊 View result", next_battle:"⚔️ Go to Battle", home_btn:"🏠 Back to home", retry_receipt:"🔄 Send receipt again", receipt_resend:"Please send the receipt again.",
+      payment:"Payment", payment_wait:"PAYMENT TO UNLOCK RESULT", payment_text:"Your result is ready. Complete the payment below and send the receipt to unlock it.", copy:"Copy", open_bot:"Open Telegram bot", receipt:"Payment receipt", choose_file:"Choose file", send_receipt:"Send receipt", pay_pending:"Receipt sent. Waiting for admin approval.", pay_approved:"✅ Payment approved. Next step is open.", pay_rejected:"❌ Payment not approved. The admin rejected the receipt.", pay_waiting:"Waiting for receipt.", next_result:"📊 View result", next_battle:"⚔️ Go to Battle", home_btn:"🏠 Back to home", retry_receipt:"🔄 Send receipt again", receipt_resend:"Please send the receipt again.", why_paid:"Why paid?", why_paid_title:"Why is the result paid?", why_paid_text:"Payment helps cover test development, servers, result calculation and service maintenance. The test itself can be completed for free; payment is required to unlock the ready result.", why_paid_test:"Test and questions", why_paid_score:"Result calculation", why_paid_storage:"Result storage", why_paid_ok:"Got it",
       result:"Result", iq_done:"IQ TEST COMPLETED", eq_done:"EQ TEST COMPLETED", pq_done:"PQ TEST COMPLETED", score_indicator:"Test indicator", question_stat:"questions", correct:"correct", time:"time", per_question:"sec/question", accuracy:"Accuracy", rank:"Your ranking", rank_compare:"Compared with results", your_result:"Your result", next_stage:"Next stage", eq_open_title:"EQ test unlocked", eq_open_text:"You can also test your emotional intelligence.", start_eq:"🎭 Start EQ test", pq_open_title:"PQ test unlocked", pq_open_text:"Take the planning and practical thinking test.", start_pq:"🧩 Start PQ test", profile_open_title:"Personal profile unlocked", profile_open_text:"View your profile based on IQ, EQ and PQ results.", open_profile:"⭐ View profile", no_next:"All tests completed", certificate_btn:"📄 Get certificate", share:"↗ Share result", retry:"↻  Retake test", ranking_first:"Your first result", ranking_total:"Among {n} results", no_ranking:"Ranking is not formed yet",
       test_result_summary:"You answered {correct} questions correctly. Your result is {score}, with the test level “{level}”.", behavior_summary:"Your test result finished at {score}%.",
       certificate_screen:"Certificate", battle_screen:"Battle", battle_title:"⚔️ Asynchronous duel", battle_desc2:"Create a 4-character code or enter your friend’s code.", create_battle:"Create Battle", or:"or", join:"Join by code", code_placeholder:"AB12", waiting_opponent:"Waiting for opponent…", battle_found:"Battle found. Now submit your payment.", start_payment:"Start payment", waiting_payment:"Waiting for payment…",
@@ -92,7 +92,7 @@
     const labels = $("#profileEditForm"); if(labels){ const ls=labels.querySelectorAll('label'); if(ls[0])ls[0].firstChild.textContent=tx('name_label'); if(ls[1])ls[1].firstChild.textContent=tx('gender_label'); if(ls[2])ls[2].firstChild.textContent=tx('age_label'); if(ls[3])ls[3].firstChild.textContent=tx('country_label'); $("#fullName").placeholder=tx('name_placeholder'); }
     const g=$("#gender"); if(g){g.options[0].text=tx('select');g.options[1].text=tx('male');g.options[2].text=tx('female');}
     const c=$("#country"); if(c && c.options[0])c.options[0].text=tx('select');
-    text("#paymentScreen .subbar h2","payment"); text("#paymentScreen .payment-card .pill","payment_wait"); setText("#paymentScreen .payment-card p",tx('payment_text')); text("#copyCard","copy"); text("#sharePayment","open_bot"); const fileLabel=$("#paymentScreen .file-label"); if(fileLabel && fileLabel.firstChild) fileLabel.firstChild.textContent=tx('receipt'); text("#sendReceipt","send_receipt");
+    text("#paymentScreen .subbar h2","payment"); text("#paymentScreen .payment-card .pill","payment_wait"); setText("#paymentScreen .payment-card p.payment-short-text",tx('payment_text')); text("#copyCard","copy"); text("#sharePayment","open_bot"); text("#whyPaidBtn","why_paid"); const fileLabel=$("#paymentScreen .file-label"); if(fileLabel && fileLabel.firstChild) fileLabel.firstChild.textContent=tx('receipt'); text("#sendReceipt","send_receipt"); text("#whyPaidTitle","why_paid_title"); text("#whyPaidText","why_paid_text"); text("#whyPaidOk","why_paid_ok"); const wp= $("#whyPaidModal .why-paid-points"); if(wp){const ws=wp.querySelectorAll('span'); if(ws[0])ws[0].textContent=tx('why_paid_test'); if(ws[1])ws[1].textContent=tx('why_paid_score'); if(ws[2])ws[2].textContent=tx('why_paid_storage');}
     text("#resultScreen .subbar h2","result"); text("#certificateBtn span","certificate_btn"); text("#shareResultBtn span","share"); text("#retryIqBtn","retry");
     const resultStats=$("#resultScreen .result-stats"); if(resultStats){ const sm=resultStats.querySelectorAll('small'); if(sm[0])sm[0].textContent=tx('question_stat');if(sm[1])sm[1].textContent=tx('correct');if(sm[2])sm[2].textContent=tx('time');if(sm[3])sm[3].textContent=tx('per_question'); }
     text("#resultScreen .result-detail-card:first-child small","accuracy"); text("#resultScreen .result-detail-card:nth-child(2) small","rank"); text("#resultScreen .result-summary h3","your_result"); text("#nextStageLabel","next_stage");
@@ -583,6 +583,39 @@
     return `${m}:${String(s).padStart(2, "0")}`;
   }
 
+  function burstParticles(kind = "result") {
+    const layer = document.createElement("div");
+    layer.className = `celebration-layer ${kind}`;
+    const symbols = ["✦","✧","◆","●","★","+","◇"];
+    for (let i = 0; i < 46; i++) {
+      const piece = document.createElement("span");
+      piece.className = "celebration-piece";
+      piece.textContent = symbols[i % symbols.length];
+      piece.style.setProperty("--x", `${(Math.random() - 0.5) * 100}vw`);
+      piece.style.setProperty("--y", `${-25 - Math.random() * 55}vh`);
+      piece.style.setProperty("--r", `${Math.round(Math.random() * 900 - 450)}deg`);
+      piece.style.setProperty("--d", `${(Math.random() * 0.45).toFixed(2)}s`);
+      piece.style.setProperty("--s", `${0.55 + Math.random() * 0.85}`);
+      layer.appendChild(piece);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 2400);
+  }
+
+  function openWhyPaid() {
+    const modal = $("#whyPaidModal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeWhyPaid() {
+    const modal = $("#whyPaidModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
   async function showResult(attemptId) {
     const d = await api(`/api/result/${attemptId}`);
     if (!d.visible) {
@@ -662,6 +695,7 @@
     }
     applyLanguage(state.lang);
     show("resultScreen");
+    setTimeout(() => burstParticles("result"), 120);
   }
 
   async function getPaymentCard(paymentId) {
@@ -751,8 +785,8 @@
         $("#paymentAmount")?.insertAdjacentElement("afterend", guide);
       }
       guide.innerHTML = d.status === "approved"
-        ? `<b>Natijangiz ochildi</b><span>Quyidagi tugma orqali natijangizga qaytishingiz mumkin.</span>`
-        : `<b>Natijangizni ochish uchun</b><span>Kartadagi summani yuboring, so‘ng to‘lov chekini yuklang. Admin tekshirganidan keyin natija avtomatik ochiladi.</span>`;
+        ? `<b>✅ Natijangiz ochildi</b><span>Quyidagi tugma orqali natijangizni ko‘ring.</span>`
+        : `<b>Natijani ochish</b><span>To‘lov qiling → chekni tanlang → “Receipt yuborish”ni bosing.</span>`;
     }
     $("#receiptInput").value = "";
     $("#receiptFile").value = "";
@@ -772,6 +806,7 @@
         $("#sendReceipt").disabled = true;
         clearPaymentActions();
         renderApprovedPaymentAction();
+        burstParticles("payment");
       } else if (mine.status === "rejected") {
         $("#paymentStatus").textContent = tx("pay_rejected");
         $("#receiptFile").disabled = false;
@@ -799,7 +834,7 @@
       clearPaymentActions();
       $("#paymentStatus").textContent = d.status === "approved" ? "✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi." : "Receipt yuborildi. Admin tasdig‘i kutilmoqda.";
       toast(d.status === "approved" ? tx("approved_toast") : tx("receipt_sent"));
-      if (d.status === "approved") renderApprovedPaymentAction();
+      if (d.status === "approved") { burstParticles("payment"); renderApprovedPaymentAction(); }
       else if (state.battleId) startBattlePolling();
     } catch (e) { toast(e.message); }
   }
@@ -1265,6 +1300,10 @@
     try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast(tx("copied")); }
     catch (_) { toast(tx("copy_fail")); }
   });
+  $("#whyPaidBtn")?.addEventListener("click", openWhyPaid);
+  $("#whyPaidClose")?.addEventListener("click", closeWhyPaid);
+  $("#whyPaidOk")?.addEventListener("click", closeWhyPaid);
+  $("[data-close-why-paid]")?.addEventListener("click", closeWhyPaid);
   $("#sendReceipt")?.addEventListener("click", sendReceipt);
   $("#sharePayment")?.addEventListener("click", () => {
     const url = `https://t.me/${encodeURIComponent("iqtest_ubot")}`;
