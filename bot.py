@@ -538,6 +538,48 @@ async def migrate():
         level TEXT NOT NULL DEFAULT 'Yaxshi',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )""")
+    # Fake ranking compatibility: keep gender so generated names use natural
+    # Uzbek surname forms (e.g. Sabina Sobirova, not Sabina Sobirov).
+    await db_execute("ALTER TABLE fake_ranking ADD COLUMN IF NOT EXISTS gender TEXT")
+    # Repair legacy generated names so female names use the natural Uzbek
+    # -ova/-yeva surname form. This only touches the old fake-ranking rows.
+    await db_execute("""
+        UPDATE fake_ranking
+        SET name = split_part(name, ' ', 1) || ' ' ||
+            CASE
+                WHEN split_part(name, ' ', 2) LIKE '%yev' THEN split_part(name, ' ', 2) || 'a'
+                WHEN split_part(name, ' ', 2) LIKE '%ov' THEN split_part(name, ' ', 2) || 'a'
+                ELSE split_part(name, ' ', 2)
+            END,
+            gender = 'female'
+        WHERE split_part(name, ' ', 1) IN (
+            'Madina','Malika','Zarina','Sevinch','Dilnoza','Shahnoza','Nilufar','Mohira',
+            'Diyora','Sabina','Gulnoza','Rayhona','Munisa','Feruza'
+        ) AND split_part(name, ' ', 2) !~ '(ova|yeva)$'
+    """)
+    await db_execute("""
+        UPDATE fake_ranking
+        SET gender = COALESCE(gender, 'male')
+        WHERE gender IS NULL
+    """)
+
+    # Repair old fake rows from earlier versions. Scores above 105 were never
+    # intended for fake ranking; replace them with varied realistic values.
+    await db_execute("""
+        UPDATE fake_ranking
+        SET score = 86 + floor(random() * 20)::int
+        WHERE score > 105
+    """)
+    await db_execute("""
+        UPDATE fake_ranking
+        SET level = CASE
+            WHEN score < 85 THEN 'Boshlang‘ich'
+            WHEN score < 100 THEN 'O‘rtacha'
+            WHEN score < 105 THEN 'Yaxshi'
+            ELSE 'Yuqori'
+        END
+        WHERE score <= 105
+    """)
 
     # Legacy battle schema migration. Earlier versions used INTEGER/BIGINT
     # battle IDs. The current API uses UUIDs, so an existing database must
@@ -1127,20 +1169,33 @@ async def my_certificate(message: types.Message):
         logger.exception("Telegram certificate image delivery failed")
         await message.answer("❌ Sertifikat rasmini yuborishda xatolik yuz berdi. Keyinroq qayta urinib ko‘ring.")
 
-@dp.message(F.text.in_({"🏆 Reyting","🏆 Рейтинг","🏆 Ranking"}))
+@dp.message(F.text.in_({"🏆 Reyting","🏆 Рейтинг","🏆 Ranking","Reyting","Рейтинг","Ranking"}))
 async def ranking_message(message: types.Message):
+    # The bot chat shows the same global Top 10 as the Mini App, including
+    # approved real results and the admin-managed fake ranking entries.
     rows = await db_fetch("""
-        SELECT u.full_name, r.score, r.level
-        FROM results r JOIN users u ON u.user_id=r.user_id
-        WHERE r.test_type='IQ'
-        ORDER BY r.score DESC, r.created_at ASC LIMIT 10
+        SELECT name, score, level
+        FROM (
+            SELECT DISTINCT ON (r.user_id)
+                COALESCE(u.full_name, 'Foydalanuvchi') AS name,
+                r.score, r.level, r.created_at
+            FROM results r
+            LEFT JOIN users u ON u.user_id=r.user_id
+            WHERE r.test_type='IQ'
+            ORDER BY r.user_id, r.score DESC, r.created_at ASC
+        ) real_rows
+        UNION ALL
+        SELECT name, score, level
+        FROM fake_ranking
+        ORDER BY score DESC, name ASC
+        LIMIT 10
     """)
     if not rows:
-        await message.answer("🏆 Reyting\n\nHali natijalar yo‘q.")
+        await message.answer("🏆 <b>REYTING</b>\n\nHali natijalar yo‘q.")
         return
-    lines = ["🏆 <b>REYTING</b>",""]
-    for i, r in enumerate(rows,1):
-        lines.append(f"{i}. {r['full_name'] or 'Foydalanuvchi'} — <b>{r['score']}</b> · {r['level'] or '—'}")
+    lines = ["🏆 <b>TOP 10 REYTING</b>", ""]
+    for i, r in enumerate(rows, 1):
+        lines.append(f"<b>#{i}</b>  {r['name'] or 'Foydalanuvchi'} — <b>{int(r['score'] or 0)}</b> · {r['level'] or '—'}")
     await message.answer("\n".join(lines))
 
 @dp.message(F.text.in_({"ℹ️ Narx va yordam","ℹ️ Цена и помощь","ℹ️ Prices & help"}))
@@ -1328,23 +1383,47 @@ async def add_fake_ranking_rows(count: int):
     count = max(0, min(int(count), 100))
     if not count:
         return
-    first_names = [
+
+    # Keep first/surname pairs natural. Female Uzbek surnames use -ova/-yeva,
+    # while male forms use -ov/-yev.
+    male_names = [
         "Aziz","Bekzod","Diyor","Javohir","Sardor","Muhammad","Abdulloh","Islom",
         "Temur","Shahzod","Akmal","Bobur","Oybek","Samandar","Rustam","Asadbek",
-        "Madina","Malika","Zarina","Sevinch","Dilnoza","Shahnoza","Nilufar","Mohira",
-        "Diyora","Sabina","Gulnoza","Rayhona","Munisa","Feruza"
+        "Jasur","Siroj","Farruh","Umid"
     ]
-    last_names = [
+    male_surnames = [
         "Karimov","Aliyev","Tursunov","Rahimov","Abdullayev","Yusupov","Ergashev",
         "Qodirov","Saidov","Nazarov","Ismoilov","Hamidov","Sobirov","Rasulov",
         "Mamatqulov","Usmonov","Omonov","Jabborov","Yoqubov","Sattorov"
     ]
+    female_names = [
+        "Madina","Malika","Zarina","Sevinch","Dilnoza","Shahnoza","Nilufar","Mohira",
+        "Diyora","Sabina","Gulnoza","Rayhona","Munisa","Feruza","Nargiza","Shahzoda",
+        "Maftuna","Aziza","Zebo","Mubina"
+    ]
+    female_surnames = [
+        "Karimova","Aliyeva","Tursunova","Rahimova","Abdullayeva","Yusupova","Ergasheva",
+        "Qodirova","Saidova","Nazarova","Ismoilova","Hamidova","Sobirova","Rasulova",
+        "Mamatqulova","Usmonova","Omonova","Jabborova","Yoqubova","Sattorova"
+    ]
+
     for _ in range(count):
-        name = f"{random.choice(first_names)} {random.choice(last_names)}"
-        score = random.randint(86, 128)
+        is_female = random.choice((False, True))
+        if is_female:
+            first = random.choice(female_names)
+            surname = random.choice(female_surnames)
+            gender = "female"
+        else:
+            first = random.choice(male_names)
+            surname = random.choice(male_surnames)
+            gender = "male"
+
+        name = f"{first} {surname}"
+        # Fake ranking must never exceed 105. Keep the distribution varied.
+        score = random.randint(78, 105)
         await db_execute(
-            "INSERT INTO fake_ranking(name,score,level) VALUES($1,$2,$3)",
-            name, score, level_for_score(score)
+            "INSERT INTO fake_ranking(name,score,level,gender) VALUES($1,$2,$3,$4)",
+            name, score, level_for_score(score), gender
         )
 
 @dp.message(Command("delfake"))
@@ -2632,8 +2711,8 @@ async def api_ranking(request:Request):
         UNION ALL
         SELECT name,score,level,created_at
         FROM fake_ranking
-        ORDER BY score DESC,created_at ASC
-        LIMIT 100
+        ORDER BY score DESC, name ASC, created_at ASC
+        LIMIT 10
     """)
     items=[{
         "position":i+1,
