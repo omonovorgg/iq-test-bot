@@ -234,7 +234,7 @@ def localized_behavior_questions(test_type: str, lang: str):
 TRANSLATIONS = {
     "uz": {
         "choose_lang":"Tilni tanlang:",
-        "welcome":"Salom, {name}! 👋\n\n<b>IQ TEST BOT</b>\n\nAqlingizni sinash uchun Mini App'ni oching.",
+        "welcome":"👋 Salom, {name}!\n\n🧠 <b>IQ TEST BOT</b> — IQ, EQ va PQ testlari\n\n🧠 <b>IQ</b> — mantiqiy fikrlash darajangiz\n🎭 <b>EQ</b> — his-tuyg‘ularni tushunish qobiliyatingiz\n⏳ <b>PQ</b> — ishni keyinga surish odatingiz\n\n⭐ Uchalasi yakunlangach — to‘liq shaxsiy tahlil ochiladi.\n📜 IQ natijasi ochilgach sertifikat olish mumkin.\n\n👇 <b>Boshlash uchun tugmani bosing.</b>",
         "menu_test":"🧠 IQ · EQ · PQ testini ishlash",
         "menu_cert":"📜 Sertifikatim",
         "menu_rank":"🏆 Reyting",
@@ -247,7 +247,7 @@ TRANSLATIONS = {
     },
     "ru": {
         "choose_lang":"Выберите язык:",
-        "welcome":"Привет, {name}! 👋\n\n<b>IQ TEST BOT</b>\n\nОткройте Mini App, чтобы пройти тест.",
+        "welcome":"👋 Привет, {name}!\n\n🧠 <b>IQ TEST BOT</b> — тесты IQ, EQ и PQ\n\n🧠 <b>IQ</b> — уровень логического мышления\n🎭 <b>EQ</b> — способность понимать эмоции\n⏳ <b>PQ</b> — склонность откладывать дела\n\n⭐ После всех трёх тестов открывается полный личный анализ.\n📜 После открытия результата IQ доступен сертификат.\n\n👇 <b>Нажмите кнопку, чтобы начать.</b>",
         "menu_test":"🧠 Пройти IQ · EQ · PQ",
         "menu_cert":"📜 Мой сертификат",
         "menu_rank":"🏆 Рейтинг",
@@ -260,7 +260,7 @@ TRANSLATIONS = {
     },
     "en": {
         "choose_lang":"Choose language:",
-        "welcome":"Hello, {name}! 👋\n\n<b>IQ TEST BOT</b>\n\nOpen the Mini App to take the test.",
+        "welcome":"👋 Hello, {name}!\n\n🧠 <b>IQ TEST BOT</b> — IQ, EQ and PQ tests\n\n🧠 <b>IQ</b> — your logical thinking level\n🎭 <b>EQ</b> — your ability to understand emotions\n⏳ <b>PQ</b> — your tendency to postpone tasks\n\n⭐ Full personal analysis opens after all three tests.\n📜 A certificate is available after your IQ result is unlocked.\n\n👇 <b>Tap the button below to start.</b>",
         "menu_test":"🧠 Take IQ · EQ · PQ",
         "menu_cert":"📜 My certificate",
         "menu_rank":"🏆 Ranking",
@@ -1203,12 +1203,27 @@ async def ranking_message(message: types.Message):
 @dp.message(F.text.in_({"ℹ️ Narx va yordam","ℹ️ Цена и помощь","ℹ️ Prices & help"}))
 async def help_message(message: types.Message):
     vals = await asyncio.gather(
-        setting_int("iq_price"), setting_int("eq_price"), setting_int("pq_price"), setting_int("battle_price")
+        setting_int("iq_price"), setting_int("iq_retry_price"),
+        setting_int("eq_price"), setting_int("eq_retry_price"),
+        setting_int("pq_price"), setting_int("pq_retry_price"),
+        setting_int("battle_price")
     )
+    iq, iq_retry, eq, eq_retry, pq, pq_retry, battle = vals
+    def money(v):
+        return f"{v:,}".replace(",", " ") + " so‘m" if v > 0 else "Bepul"
     await message.answer(
-        f"<b>IQ TEST BOT</b>\n\n"
-        f"🧠 IQ — {vals[0]:,} so‘m\n🎭 EQ — {vals[1]:,} so‘m\n⏳ PQ — {vals[2]:,} so‘m\n⚔️ Battle — {vals[3]:,} so‘m"
-        .replace(",", " ")
+        "<b>ℹ️ NARX VA YORDAM</b>\n\n"
+        f"🧠 IQ test — <b>{money(iq)}</b>\n"
+        f"🎭 EQ test — <b>{money(eq)}</b>\n"
+        f"⏳ PQ test — <b>{money(pq)}</b>\n"
+        f"🔁 IQ qayta topshirish — <b>{money(iq_retry)}</b>\n"
+        f"🔁 EQ qayta topshirish — <b>{money(eq_retry)}</b>\n"
+        f"🔁 PQ qayta topshirish — <b>{money(pq_retry)}</b>\n"
+        f"⚔️ Do‘st bilan Battle — <b>{money(battle)}</b>\n\n"
+        "⭐ IQ + EQ + PQ yakunlangach shaxsiy tahlil ochiladi.\n"
+        "📜 IQ natijasi ochilgach sertifikat mavjud bo‘ladi.\n"
+        "💳 To‘lov karta orqali amalga oshiriladi, chek yuborilgach admin tasdiqlaydi.\n\n"
+        "Agar muammo bo‘lsa, shu bot orqali yozing."
     )
 
 @dp.message(F.text.in_({"🌐 Til","🌐 Язык","🌐 Language"}))
@@ -2383,17 +2398,26 @@ async def get_result(attempt_id:int,request:Request):
             logger.exception("Result certificate self-heal failed for user %s attempt %s", uid, attempt_id)
     question_count = 18 if a["test_type"] == "IQ" else 6
     if a["test_type"] == "IQ":
+        # The result page is tied to this exact attempt. Recalculate the IQ
+        # score from this attempt's stored answers so an older/best score can
+        # never leak into a lower-scoring retest. The ranking keeps its separate
+        # MAX(score) logic and is therefore unaffected.
         stored_answers = a["answers"] if isinstance(a["answers"], dict) else {}
-        correct_count = 0
-        for q in IQ_QUESTIONS:
-            try:
-                if int(stored_answers.get(str(q["id"]))) == int(q["correct"]):
-                    correct_count += 1
-            except (TypeError, ValueError):
-                pass
-        # Repair legacy attempts that stored the weighted score as correct_count.
-        if int(a["correct_count"] or 0) != correct_count:
-            await db_execute("UPDATE test_attempts SET correct_count=$1 WHERE id=$2", correct_count, int(a["id"]))
+        score, correct_count, _ = calculate_iq(stored_answers)
+        current_level = level_for_score(score)
+        if int(a["score"] or 0) != score or int(a["correct_count"] or 0) != correct_count or (a["level"] or "") != current_level:
+            await db_execute(
+                "UPDATE test_attempts SET score=$1, correct_count=$2, level=$3 WHERE id=$4",
+                score, correct_count, current_level, int(a["id"])
+            )
+            await db_execute(
+                "UPDATE results SET score=$1, level=$2 WHERE attempt_id=$3",
+                score, current_level, int(a["id"])
+            )
+            a = dict(a)
+            a["score"] = score
+            a["correct_count"] = correct_count
+            a["level"] = current_level
     else:
         correct_count = max(0, min(question_count, int(a["correct_count"] or 0)))
     duration = max(0, int(a["duration"] or 0))
@@ -2579,10 +2603,26 @@ async def approve_payment_record(payment_id:int):
                 )
                 if not attempt_row:
                     raise RuntimeError(f"Attempt #{p['attempt_id']} not found for payment #{payment_id}")
-                await conn.execute(
-                    "UPDATE test_attempts SET payment_status='approved',result_visible=TRUE WHERE id=$1",
-                    p["attempt_id"]
-                )
+                # Recalculate IQ from the approved attempt's own answers before
+                # creating the result/certificate. A lower retest must never
+                # inherit the user's historical best score.
+                if attempt_row["test_type"] == "IQ":
+                    attempt_answers = attempt_row["answers"] if isinstance(attempt_row["answers"], dict) else {}
+                    current_score, current_correct, _ = calculate_iq(attempt_answers)
+                    current_level = level_for_score(current_score)
+                    await conn.execute(
+                        "UPDATE test_attempts SET score=$1,correct_count=$2,level=$3,payment_status='approved',result_visible=TRUE WHERE id=$4",
+                        current_score,current_correct,current_level,p["attempt_id"]
+                    )
+                    attempt_row = dict(attempt_row)
+                    attempt_row["score"] = current_score
+                    attempt_row["correct_count"] = current_correct
+                    attempt_row["level"] = current_level
+                else:
+                    await conn.execute(
+                        "UPDATE test_attempts SET payment_status='approved',result_visible=TRUE WHERE id=$1",
+                        p["attempt_id"]
+                    )
 
                 result_row=await conn.fetchrow(
                     "SELECT * FROM results WHERE attempt_id=$1 ORDER BY id LIMIT 1",
