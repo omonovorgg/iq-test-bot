@@ -1007,8 +1007,9 @@
     try {
       const d = await api("/api/ranking");
       const box = $("#rankingList");
-      box.innerHTML = d.ranking?.length ? d.ranking.map((r) =>
-        `<div class="rank-row"><span class="rank-pos">#${r.position}</span><span><b>${escapeHtml(r.name)}</b><small>${escapeHtml(localizeLevel(r.level || ""))}</small></span><strong>${r.score}</strong></div>`
+      const top10 = Array.isArray(d.ranking) ? d.ranking.slice(0, 10) : [];
+      box.innerHTML = top10.length ? top10.map((r, i) =>
+        `<div class="rank-row"><span class="rank-pos">#${i + 1}</span><span><b>${escapeHtml(r.name)}</b><small>${escapeHtml(localizeLevel(r.level || ""))}</small></span><strong>${r.score}</strong></div>`
       ).join("") : `<div class="form-card glass empty-state"><b>Hali natijalar yo‘q.</b></div>`;
       show("rankingScreen");
     } catch (e) { toast(e.message); }
