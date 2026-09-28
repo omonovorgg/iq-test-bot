@@ -9,7 +9,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const state = {
-    user: null, prices: {}, questions: [],
+    user: null, prices: {}, questions: [], profileStats: {},
     sessionId: null, testType: null, mode: "NORMAL",
     index: 0, answers: {}, selected: null, startedAt: 0,
     attemptId: null, paymentId: null, paymentAttemptId: null,
@@ -92,13 +92,17 @@
     try { localStorage.removeItem("iq_test_progress"); } catch (_) {}
   }
 
-  function normalizeQuestions(raw, type) {
-    let value = raw;
-    for (let i = 0; i < 3 && typeof value === "string"; i++) {
-      try { value = JSON.parse(value); } catch (_) { value = null; break; }
+  async function persistServerProgress() {
+    if (!state.sessionId || state.mode !== "NORMAL" || !state.questions.length) return;
+    try {
+      await api(`/api/test/${state.sessionId}/progress`, {
+        method: "POST",
+        body: JSON.stringify({ current_index: state.index, answers: state.answers })
+      });
+    } catch (_) {
+      // Local storage remains the immediate fallback. Do not interrupt a test
+      // just because a background progress-save request failed.
     }
-    const expected = type === "IQ" ? 18 : 6;
-    return Array.isArray(value) && value.length === expected ? value : [];
   }
 
   function difficulty(index) { return index < 6 ? "EASY" : index < 12 ? "MEDIUM" : "HARD"; }
@@ -198,28 +202,19 @@
 
     button.addEventListener("click", () => {
       state.selected = index;
+      state.answers[String(state.index + 1)] = index;
       $$(".option").forEach((x) => x.classList.remove("selected"));
       button.classList.add("selected");
       $("#nextQuestion").disabled = false;
+      saveProgress();
+      void persistServerProgress();
     });
     return button;
   }
 
   function renderQuestion() {
-    if (!Array.isArray(state.questions) || !state.questions.length) {
-      clearProgress();
-      show("homeScreen");
-      toast("Test savollari topilmadi. Testni qayta boshlang.");
-      return;
-    }
-    state.index = Math.max(0, Math.min(state.index, state.questions.length - 1));
     const q = state.questions[state.index];
-    if (!q || typeof q !== "object") {
-      clearProgress();
-      show("homeScreen");
-      toast("Test savoli noto‘g‘ri yuklandi. Testni qayta boshlang.");
-      return;
-    }
+    if (!q) return;
     state.selected = null;
     $("#nextQuestion").disabled = true;
     $("#questionLabel").textContent = `Q${state.index + 1}/${state.questions.length}`;
@@ -235,6 +230,12 @@
     const options = $("#options");
     options.innerHTML = "";
     (q.options || []).forEach((option, i) => options.appendChild(renderOption(option, i)));
+    const savedAnswer = state.answers[String(state.index + 1)];
+    if (savedAnswer !== undefined && savedAnswer !== null && Number.isInteger(Number(savedAnswer))) {
+      state.selected = Number(savedAnswer);
+      $(`.option[data-i="${state.selected}"]`)?.classList.add("selected");
+      $("#nextQuestion").disabled = false;
+    }
     $("#nextQuestion").textContent = state.index === state.questions.length - 1 ? "Natijani ko‘rish" : "Davom etish";
     $("#celebration")?.classList.toggle("hidden", !(state.testType === "IQ" && (state.index === 6 || state.index === 12)));
   }
@@ -255,20 +256,19 @@
   async function startTest(type, profileConfirmed = false) {
     if (state.busy) return;
 
-    // Profile must be confirmed before every test. Existing values are prefilled.
-    // profileConfirmed=true is used only after /api/profile/save succeeds, so
-    // saving the profile does not reopen the profile screen in a loop.
-    if (!profileConfirmed) {
-      state.pendingType = type;
-      $("#fullName").value = state.user?.full_name || "";
-      $("#gender").value = state.user?.gender || "";
-      $("#age").value = state.user?.age || "";
-      $("#country").value = state.user?.country || "";
-      show("profileScreen");
-      return;
-    }
     if (type === "EQ" && !state.user.hasIQ) { toast("Avval IQ testni yakunlang"); return; }
     if (type === "PQ" && !state.user.hasEQ) { toast("Avval EQ testni yakunlang"); return; }
+
+    // Profile data is requested only once. Existing saved data goes directly
+    // into the test; the profile screen itself is never used as a mandatory
+    // step after the user has already saved their details.
+    const profileReady = Boolean(state.user?.full_name && state.user?.gender && state.user?.age && state.user?.country);
+    if (!profileReady && !profileConfirmed) {
+      state.pendingType = type;
+      openProfileEditor(true);
+      return;
+    }
+
     try {
       state.busy = true;
       const d = await api("/api/test/start", { method:"POST", body:JSON.stringify({ test_type:type }) });
@@ -276,17 +276,23 @@
       state.testType = type;
       state.questions = normalizeQuestions(d.questions, type);
       state.sessionId = d.session_id;
-      state.answers = d.resumed && d.answers && typeof d.answers === "object" ? d.answers : {};
-      state.index = d.resumed ? Math.min(Object.keys(state.answers).length, Math.max(0, state.questions.length - 1)) : 0;
+      state.answers = d.answers && typeof d.answers === "object" ? d.answers : {};
+      state.index = Number.isInteger(Number(d.current_index)) ? Number(d.current_index) : 0;
+      if (d.resumed && Object.keys(state.answers).length && !Number.isInteger(Number(d.current_index))) {
+        const firstMissing = state.questions.findIndex((_, i) => state.answers[String(i + 1)] === undefined);
+        state.index = firstMissing >= 0 ? firstMissing : Math.max(0, state.questions.length - 1);
+      }
       if (!state.questions.length) {
         clearProgress();
-        throw new Error("Test savoli yuklanmadi. Iltimos, testni qayta boshlang.");
+        throw new Error("Test savollari topilmadi. Testni qayta boshlang.");
       }
-      state.startedAt = d.resumed && d.started_at ? Date.parse(d.started_at) : Date.now();
+      state.index = Math.max(0, Math.min(state.index, state.questions.length - 1));
+      state.startedAt = d.started_at ? Date.parse(d.started_at) : Date.now();
       saveProgress();
       show("testScreen");
       renderQuestion();
       startTimer();
+      if (d.resumed) toast("Test saqlangan joyidan davom etdi.");
     } catch (e) { toast(e.message); }
     finally { state.busy = false; }
   }
@@ -349,6 +355,11 @@
     $("#resultScore").textContent = d.score;
     $("#resultLevel").textContent = d.level || (state.testType === "IQ" ? "—" : "Natija");
     $("#resultCorrect").textContent = `${d.correct_count ?? 0}/${state.questions.length} to‘g‘ri`;
+    const key = `${String(state.testType).toLowerCase()}_best`;
+    state.profileStats = { ...state.profileStats, [key]: Math.max(Number(state.profileStats?.[key] ?? -1), Number(d.score ?? 0)), total_tests: Number(state.profileStats?.total_tests || 0) + 1 };
+    if (key === "iq_best" && Number.isFinite(Number(d.score))) state.profileStats.iq_attempts = Number(state.profileStats.iq_attempts || 0) + 1;
+    if (key === "eq_best" && Number.isFinite(Number(d.score))) state.profileStats.eq_attempts = Number(state.profileStats.eq_attempts || 0) + 1;
+    if (key === "pq_best" && Number.isFinite(Number(d.score))) state.profileStats.pq_attempts = Number(state.profileStats.pq_attempts || 0) + 1;
     show("resultScreen");
   }
 
@@ -455,11 +466,9 @@
     state.user = d.user;
     state.prices = d.prices || {};
     state.questions = d.questions || [];
+    state.profileStats = d.profile_stats || {};
     $("#userName").textContent = d.user.first_name || "Do‘st";
-    $("#fullName").value = d.user.full_name || "";
-    $("#gender").value = d.user.gender || "";
-    $("#age").value = d.user.age || "";
-    $("#country").value = d.user.country || "";
+    fillProfileFields();
     updateHomeLocks();
     renderPersonalProfile();
     show("homeScreen");
@@ -467,22 +476,21 @@
     clearInterval(window.__liveTimer);
     window.__liveTimer = setInterval(updateLive, 5000);
 
-    // Payment state must survive closing/reopening the Mini App.
-    // Bootstrap returns the latest pending payment, so the user is placed
-    // straight back on the receipt screen instead of losing the flow.
     if (d.pending_payment) {
       const p = d.pending_payment;
       state.paymentId = p.id;
       state.paymentAttemptId = p.attempt_id;
-      await renderPayment({
-        payment_id: p.id,
-        attempt_id: p.attempt_id,
-        amount: p.amount,
-        status: p.status,
-        receipt_file_id: p.receipt_file_id,
-        card: p.card
-      });
+      await renderPayment({ payment_id:p.id, attempt_id:p.attempt_id, amount:p.amount, status:p.status, receipt_file_id:p.receipt_file_id, card:p.card });
       show("paymentScreen");
+    } else if (d.active_test) {
+      let active = d.active_test;
+      try {
+        const saved = JSON.parse(localStorage.getItem("iq_test_progress") || "null");
+        if (saved?.sessionId === active.session_id) {
+          active = { ...active, current_index: Math.max(Number(active.current_index) || 0, Number(saved.index) || 0), answers: Object.keys(saved.answers || {}).length ? saved.answers : active.answers };
+        }
+      } catch (_) {}
+      await restoreServerActive(active);
     } else {
       await restoreProgress();
     }
@@ -495,6 +503,46 @@
     $(".test-card[data-test=PQ]")?.classList.toggle("locked", !state.user.hasEQ);
   }
 
+  function fillProfileFields() {
+    $("#fullName").value = state.user?.full_name || "";
+    $("#gender").value = state.user?.gender || "";
+    $("#age").value = state.user?.age || "";
+    $("#country").value = state.user?.country || "";
+  }
+
+  function openProfileEditor(forTest = false) {
+    fillProfileFields();
+    $("#profileOverview")?.classList.toggle("hidden", forTest);
+    $("#profileEditor")?.classList.remove("hidden");
+    $("#profileEditorTitle") && ($("#profileEditorTitle").textContent = forTest ? "Test uchun ma’lumotlar" : "Ma’lumotlarni tahrirlash");
+    $("#profileCancel")?.classList.toggle("hidden", forTest);
+    show("profileScreen");
+    window.scrollTo({ top:0, behavior:"instant" });
+  }
+
+  async function restoreServerActive(active) {
+    if (!active?.session_id) return false;
+    const questions = normalizeQuestions(active.questions, active.test_type);
+    if (!questions.length) {
+      clearProgress();
+      toast("Saqlangan testni tiklab bo‘lmadi. Yangi testni boshlang.");
+      return false;
+    }
+    state.mode = "NORMAL";
+    state.sessionId = active.session_id;
+    state.testType = active.test_type;
+    state.questions = questions;
+    state.answers = active.answers && typeof active.answers === "object" ? active.answers : {};
+    state.index = Math.max(0, Math.min(Number(active.current_index) || 0, questions.length - 1));
+    state.startedAt = active.started_at ? Date.parse(active.started_at) : Date.now();
+    saveProgress();
+    show("testScreen");
+    renderQuestion();
+    startTimer();
+    toast("Test saqlangan joyidan davom etdi.");
+    return true;
+  }
+
   async function restoreProgress() {
     let saved;
     try { saved = JSON.parse(localStorage.getItem("iq_test_progress") || "null"); } catch (_) { saved = null; }
@@ -502,21 +550,11 @@
     try {
       const d = await api(`/api/test/${saved.sessionId}/resume`);
       if (d.status === "completed" || d.status === "expired") { clearProgress(); return; }
-      state.mode = "NORMAL";
-      state.sessionId = saved.sessionId;
-      state.testType = d.test_type;
-      state.questions = normalizeQuestions(d.questions, d.test_type);
-      state.answers = saved.answers && typeof saved.answers === "object" ? saved.answers : (d.answers || {});
-      if (!state.questions.length) {
-        clearProgress();
-        return;
-      }
-      state.index = Math.max(0, Math.min(Number(saved.index) || 0, state.questions.length - 1));
-      state.startedAt = Number(saved.startedAt) || Date.now();
-      show("testScreen");
-      renderQuestion();
-      startTimer();
-      toast("Testingiz saqlangan joyidan davom etdi.");
+      await restoreServerActive({
+        session_id:saved.sessionId, test_type:d.test_type, questions:d.questions,
+        answers:d.answers || saved.answers || {}, current_index:Number.isInteger(Number(d.current_index)) ? Number(d.current_index) : Number(saved.index || 0),
+        started_at:d.started_at || saved.startedAt
+      });
     } catch (_) { clearProgress(); }
   }
 
@@ -532,24 +570,22 @@
 
   async function saveProfile() {
     const age = Number($("#age").value);
-    const body = {
-      full_name: $("#fullName").value.trim(), gender: $("#gender").value,
-      age, country: $("#country").value
-    };
+    const body = { full_name:$("#fullName").value.trim(), gender:$("#gender").value, age, country:$("#country").value };
     if (!body.full_name || !body.gender || !body.country || !Number.isInteger(age) || age < 10 || age > 120) {
-      toast("Profil ma’lumotlarini to‘liq kiriting"); return;
+      toast("Ma’lumotlarni to‘liq kiriting"); return;
     }
     try {
       state.busy = true;
       await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
       state.user = { ...state.user, ...body };
-      $("#userName").textContent = state.user.first_name || "Do‘st";
+      fillProfileFields();
+      $("#profileOverview")?.classList.remove("hidden");
+      $("#profileEditor")?.classList.add("hidden");
       renderPersonalProfile();
-      toast("Profil saqlandi");
       const pending = state.pendingType;
       delete state.pendingType;
-      if (pending) setTimeout(() => startTest(pending, true), 250);
-      else show("homeScreen");
+      if (pending) setTimeout(() => startTest(pending, true), 150);
+      else { show("profileScreen"); toast("Ma’lumotlar saqlandi"); }
     } catch (e) { toast(e.message); }
     finally { state.busy = false; }
   }
@@ -557,19 +593,32 @@
   function renderPersonalProfile() {
     const box = $("#personalSummary");
     if (!box || !state.user) return;
-    const ready = state.user.hasIQ && state.user.hasEQ && state.user.hasPQ;
-    if (!ready) {
-      box.innerHTML = `<div class="empty-state"><b>Shaxsiy profil</b><span>IQ + EQ + PQ testlarini yakunlaganingizdan keyin tahlil shu yerda ochiladi.</span></div>`;
-      return;
+    const st = state.profileStats || {};
+    const initials = (state.user.full_name || state.user.first_name || "U").trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join("") || "U";
+    $("#profileAvatar") && ($("#profileAvatar").textContent = initials);
+    $("#profileDisplayName") && ($("#profileDisplayName").textContent = state.user.full_name || state.user.first_name || "Foydalanuvchi");
+    $("#profileMeta") && ($("#profileMeta").textContent = [state.user.country, state.user.age ? `${state.user.age} yosh` : ""].filter(Boolean).join(" • ") || "Profil ma’lumotlari saqlangan");
+    const iq = st.iq_best == null ? "—" : st.iq_best;
+    const eq = st.eq_best == null ? "—" : `${st.eq_best}%`;
+    const pq = st.pq_best == null ? "—" : `${st.pq_best}%`;
+    let resultMessage = "Birinchi natijangiz shu yerda saqlanadi.";
+    if (st.iq_best != null) {
+      const n=Number(st.iq_best);
+      resultMessage = n >= 125 ? `IQ natijangiz <b>${n}</b> — juda yuqori diapazon.` : n >= 115 ? `IQ natijangiz <b>${n}</b> — yuqori diapazon.` : n >= 100 ? `IQ natijangiz <b>${n}</b> — yaxshi diapazon.` : `IQ natijangiz <b>${n}</b> — natijangiz saqlangan va keyingi urinishlar bilan solishtiriladi.`;
     }
     box.innerHTML = `
-      <div class="summary-grid">
-        <div><small>IQ</small><b>Yakunlangan</b></div>
-        <div><small>EQ</small><b>Yakunlangan</b></div>
-        <div><small>PQ</small><b>Yakunlangan</b></div>
+      <div class="profile-results-title"><span>Natijalarim</span><small>${st.total_tests || 0} ta yakunlangan test</small></div>
+      <div class="profile-result-grid">
+        <div class="profile-result-card iq"><small>🧠 IQ</small><strong>${iq}</strong><span>${st.iq_attempts || 0} ta urinish</span></div>
+        <div class="profile-result-card eq"><small>🎭 EQ</small><strong>${eq}</strong><span>${st.eq_attempts || 0} ta urinish</span></div>
+        <div class="profile-result-card pq"><small>🎯 PQ</small><strong>${pq}</strong><span>${st.pq_attempts || 0} ta urinish</span></div>
       </div>
-      <div class="insight"><b>Kuchli tomonlar</b><p>Muammolarni tahlil qilish, hissiy vaziyatni anglash va vazifalarni rejalashtirish bo‘yicha test javoblaringiz mavjud.</p></div>
-      <div class="insight"><b>Rivojlanish nuqtalari</b><p>Natijalarni muntazam qayta ko‘rib chiqish va real hayotdagi qarorlar bilan solishtirish foydali.</p></div>`;
+      <div class="profile-stat-row">
+        <div><small>IQ reytingi</small><b>${st.iq_rank ? `#${st.iq_rank}` : "—"}</b></div>
+        <div><small>Eng yuqori IQ</small><b>${iq}</b></div>
+        <div><small>Testlar</small><b>${st.total_tests || 0}</b></div>
+      </div>
+      <div class="profile-note">${resultMessage} ${st.iq_best != null ? "Qayta topshirishda faqat yuqoriroq IQ natijangiz reytingdagi eng yaxshi natijani yangilaydi." : ""}</div>`;
   }
 
   async function loadRanking() {
@@ -711,6 +760,8 @@
     if (state.index < state.questions.length - 1) {
       state.index += 1;
       renderQuestion();
+      saveProgress();
+      void persistServerProgress();
     } else finishTest();
   });
   $("#saveProfile")?.addEventListener("click", saveProfile);
@@ -724,12 +775,16 @@
     if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, "_blank");
   });
   $("#certificateBtn")?.addEventListener("click", loadCertificate);
+  $("#editProfileBtn")?.addEventListener("click", () => openProfileEditor(false));
+  $("#profileCancel")?.addEventListener("click", () => { $("#profileOverview")?.classList.remove("hidden"); $("#profileEditor")?.classList.add("hidden"); });
   $("#createBattle")?.addEventListener("click", createBattle);
   $("#joinBattle")?.addEventListener("click", joinBattle);
-  $("#profileTopBtn")?.addEventListener("click", () => show("profileScreen"));
+  $("#profileTopBtn")?.addEventListener("click", () => { renderPersonalProfile(); $("#profileOverview")?.classList.remove("hidden"); $("#profileEditor")?.classList.add("hidden"); show("profileScreen"); });
   $("#battleCard")?.addEventListener("click", () => show("battleScreen"));
   $("#profileCard")?.addEventListener("click", () => {
     renderPersonalProfile();
+    $("#profileOverview")?.classList.remove("hidden");
+    $("#profileEditor")?.classList.add("hidden");
     show("profileScreen");
     $("#personalSummary")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
@@ -745,7 +800,7 @@
     if (n === "home") show("homeScreen");
     if (n === "ranking") loadRanking();
     if (n === "certificate") loadCertificate();
-    if (n === "profile") { renderPersonalProfile(); show("profileScreen"); }
+    if (n === "profile") { renderPersonalProfile(); $("#profileOverview")?.classList.remove("hidden"); $("#profileEditor")?.classList.add("hidden"); show("profileScreen"); }
   }));
 
   setInterval(() => {
