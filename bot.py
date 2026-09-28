@@ -1928,7 +1928,9 @@ async def test_submit(session_id: str, request: Request):
         try: attempt=await submit_iq_internal(uid,session_id,answers,duration)
         except ValueError as exc: return json_error(str(exc),409)
     else:
-        source=LOCAL_BEHAVIOR_QUESTIONS["en"][session["test_type"]]
+        lang_row = await db_fetchrow("SELECT language FROM users WHERE user_id=$1::bigint", uid)
+        submit_lang = lang_row["language"] if lang_row and lang_row["language"] in LOCAL_BEHAVIOR_QUESTIONS else "uz"
+        source = LOCAL_BEHAVIOR_QUESTIONS.get(submit_lang, LOCAL_BEHAVIOR_QUESTIONS["uz"])[session["test_type"]]
         async with db_pool.acquire() as conn:
             async with conn.transaction():
                 locked=await conn.fetchrow("SELECT * FROM test_sessions WHERE session_id=$1::uuid AND user_id=$2 FOR UPDATE",session_id,uid)
@@ -1998,10 +2000,34 @@ async def get_result(attempt_id:int,request:Request):
     duration = max(0, int(a["duration"] or 0))
     accuracy = round((correct_count / question_count) * 100) if question_count else 0
     avg_time = round(duration / question_count, 1) if question_count and duration else 0
-    rank_row = await db_fetchrow("""
-        WITH best AS (SELECT user_id,MAX(score) AS score FROM results WHERE test_type=$2 GROUP BY user_id)
-        SELECT COUNT(*) FILTER (WHERE score > (SELECT MAX(score) FROM results WHERE user_id=$3 AND test_type=$2))+1 AS position,COUNT(*) AS total FROM best
-    """, int(a["score"] or 0), a["test_type"], uid)
+    # Ranking uses each user's best score. Keep each parameter explicitly typed
+    # so PostgreSQL cannot fail with IndeterminateDatatypeError on legacy schemas.
+    rank_row = None
+    try:
+        my_best = await db_fetchval(
+            "SELECT MAX(score) FROM results WHERE user_id=$1::bigint AND test_type=$2::text",
+            uid, str(a["test_type"]),
+        )
+        if my_best is not None:
+            better = await db_fetchval(
+                """
+                WITH best AS (
+                    SELECT user_id, MAX(score) AS score
+                    FROM results
+                    WHERE test_type=$1::text
+                    GROUP BY user_id
+                )
+                SELECT COUNT(*) FROM best WHERE score>$2::integer
+                """,
+                str(a["test_type"]), int(my_best),
+            )
+            total_users = await db_fetchval(
+                "SELECT COUNT(DISTINCT user_id) FROM results WHERE test_type=$1::text",
+                str(a["test_type"]),
+            )
+            rank_row = {"position": int(better or 0) + 1, "total": int(total_users or 0)}
+    except Exception:
+        logger.exception("Result ranking calculation failed for user %s attempt %s", uid, attempt_id)
     return {
         "ok":True,
         "visible":True,
@@ -2278,8 +2304,15 @@ async def api_ranking(request:Request):
         ORDER BY MAX(r.score) DESC,MAX(r.created_at) ASC LIMIT 100
     """)
     items=[{"position":i+1,"name":r["full_name"] or "Foydalanuvchi","score":int(r["score"] or 0),"level":r["level"]} for i,r in enumerate(rows)]
-    best=await db_fetchrow("SELECT MAX(score) AS score FROM results WHERE user_id=$1 AND test_type='IQ'",uid)
-    mine=await db_fetchrow("""WITH best AS (SELECT user_id,MAX(score) AS score FROM results WHERE test_type='IQ' GROUP BY user_id) SELECT COUNT(*) FILTER (WHERE score>$1)+1 AS position,COUNT(*) AS total FROM best""",int(best["score"]) if best and best["score"] is not None else -1)
+    best=await db_fetchrow("SELECT MAX(score) AS score FROM results WHERE user_id=$1::bigint AND test_type='IQ'",uid)
+    best_score=int(best["score"]) if best and best["score"] is not None else None
+    if best_score is None:
+        mine={"position":None,"total":await db_fetchval("SELECT COUNT(DISTINCT user_id) FROM results WHERE test_type='IQ'")}
+    else:
+        mine={
+            "position":int(await db_fetchval("WITH best AS (SELECT user_id,MAX(score) AS score FROM results WHERE test_type='IQ' GROUP BY user_id) SELECT COUNT(*)+1 FROM best WHERE score>$1::integer",best_score)),
+            "total":int(await db_fetchval("SELECT COUNT(DISTINCT user_id) FROM results WHERE test_type='IQ'")),
+        }
     return {"ok":True,"ranking":items,"my_position":int(mine["position"]) if mine else None,"total_users":int(mine["total"]) if mine else 0}
 
 @app.get("/api/stats/live")
