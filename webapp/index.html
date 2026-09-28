@@ -53,7 +53,7 @@
       </div>
 
       <div id="profileEditor" class="form-card glass hidden">
-        <div class="editor-head"><div><span class="eyebrow">PROFIL</span><h3 id="profileEditorTitle">Ma’lumotlarni tahrirlash</h3></div><button id="profileCancel" class="small-btn">Bekor qilish</button></div>
+        <div class="editor-head"><div><span class="eyebrow">PROFIL</span><h3>Ma’lumotlarni tahrirlash</h3></div><button id="profileCancel" class="small-btn">Bekor qilish</button></div>
         <label>Ism / familiya<input id="fullName" maxlength="120" placeholder="Ismingiz va familiyangiz"></label>
         <label>Jins<select id="gender"><option value="">Tanlang</option><option value="male">O‘g‘il</option><option value="female">Qiz</option></select></label>
         <label>Yosh<input id="age" type="number" min="10" max="120" inputmode="numeric" placeholder="20"></label>
@@ -81,8 +81,55 @@
     </section>
 
     <section id="resultScreen" class="screen hidden">
-      <div class="result-glow"></div><header class="subbar"><button class="back" data-back>‹</button><h2>Natija</h2><span></span></header>
-      <div class="result-card glass"><span id="resultBadge" class="pill">IQ RESULT</span><div class="score-ring"><strong id="resultScore">—</strong><small id="resultUnit">IQ</small></div><h2 id="resultLevel">—</h2><p id="resultCorrect">—</p><button id="certificateBtn" class="primary">📜 Sertifikatni olish</button></div>
+      <header class="subbar result-subbar"><button class="back" data-back>‹</button><h2>Natija</h2><span></span></header>
+      <div class="result-premium glass">
+        <div class="result-badge"><span>🧠</span><b id="resultBadge">IQ TEST YAKUNLANDI</b></div>
+        <div class="result-score-wrap">
+          <div id="scoreRing" class="score-ring-premium" style="--score-angle: 260deg">
+            <div class="score-ring-core"><strong id="resultScore">—</strong><small id="resultUnit">IQ</small></div>
+          </div>
+          <h1 id="resultLevel">—</h1>
+          <p class="result-subtitle">Test ko‘rsatkichi <span class="info-dot">i</span></p>
+        </div>
+
+        <div class="result-stats">
+          <div><span class="stat-icon">▣</span><b id="resultQuestions">18/18</b><small>savol</small></div>
+          <div><span class="stat-icon success">✓</span><b id="resultCorrectStat">—</b><small>to‘g‘ri</small></div>
+          <div><span class="stat-icon violet">◷</span><b id="resultDuration">—</b><small>vaqt</small></div>
+          <div><span class="stat-icon gold">ϟ</span><b id="resultAvgTime">—</b><small>s/savol</small></div>
+        </div>
+
+        <div class="result-insight-grid">
+          <div class="result-detail-card">
+            <div class="detail-icon blue">◎</div>
+            <div><small>Aniqlik</small><strong id="resultAccuracy">—%</strong><div class="accuracy-track"><i id="accuracyBar"></i></div></div>
+          </div>
+          <div class="result-detail-card">
+            <div class="detail-icon purple">▥</div>
+            <div><small>Reytingdagi o‘rningiz</small><strong id="resultRank">—</strong><p id="resultRankText">Natijalar bilan taqqoslash</p></div>
+          </div>
+        </div>
+
+        <span id="resultCorrect" class="hidden"></span>
+
+        <div class="result-summary">
+          <div class="summary-medal">★</div>
+          <div><h3>Sizning natijangiz</h3><p id="resultSummaryText">Natijangiz testdagi javoblaringiz asosida backend tomonidan hisoblandi.</p></div>
+        </div>
+
+        <div class="next-stage-card">
+          <div class="next-stage-icon">ϟ</div>
+          <div><small id="nextStageLabel">Keyingi bosqich</small><b id="nextStageTitle">EQ testi ochildi</b><p id="nextStageText">Emotsional intellekt bo‘yicha testni ham topshirib ko‘ring.</p></div>
+          <span>›</span>
+        </div>
+        <button id="startEqFromResult" class="primary result-main-action">🎭 EQ testini boshlash <span>›</span></button>
+
+        <div class="result-actions-grid">
+          <button id="certificateBtn" class="secondary result-action">📄 <span>Sertifikatni olish</span></button>
+          <button id="shareResultBtn" class="secondary result-action">↗ <span>Natijani ulashish</span></button>
+        </div>
+        <button id="retryIqBtn" class="secondary result-retry">↻ &nbsp; Qayta topshirish</button>
+      </div>
     </section>
 
     <section id="rankingScreen" class="screen hidden">
