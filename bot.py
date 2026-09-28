@@ -429,6 +429,7 @@ async def migrate():
         test_type TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'active',
         answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+        current_index INTEGER NOT NULL DEFAULT 0,
         questions JSONB,
         score INTEGER,
         correct_count INTEGER,
@@ -788,7 +789,7 @@ async def migrate():
 
     # Final schema verification/self-healing pass. This runs after all legacy
     # migrations so an old database can never reach an API handler with a
-    # partially upgraded test_sessions table. CREATE TABLE IF NOT EXISTS does\n    # not modify an existing table, therefore every runtime column used by the\n    # test flow is explicitly ensured here as well.\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS questions JSONB")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS score INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS correct_count INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS is_retry BOOLEAN NOT NULL DEFAULT FALSE")\n\n    # Old sessions may have been created before expires_at/questions existed.\n    # Give them a deterministic expiry and regenerate their public question\n    # payload when it is missing, without touching submitted answers.\n    await db_execute("""\n        UPDATE test_sessions\n        SET expires_at = COALESCE(expires_at, started_at + INTERVAL '30 minutes')\n        WHERE expires_at IS NULL\n    """)\n\n    required_schema = {\n        "test_sessions": {\n            "session_id", "user_id", "test_type", "status", "answers",\n            "questions", "score", "correct_count", "started_at",\n            "completed_at", "expires_at", "price", "is_retry"\n        },\n        "test_attempts": {\n            "id", "user_id", "test_type", "session_id", "score",\n            "correct_count", "duration", "payment_status",\n            "result_visible", "level", "answers", "created_at"\n        },\n        "results": {\n            "id", "user_id", "attempt_id", "test_type", "score",\n            "level", "created_at"\n        },\n        "payments": {\n            "id", "user_id", "attempt_id", "battle_id", "payment_type",\n            "amount", "card_id", "receipt_file_id", "status",\n            "created_at", "updated_at"\n        },\n        "payment_cards": {\n            "id", "card_number", "holder", "bank", "active", "created_at"\n        },\n        "battles": {\n            "id", "code", "status", "created_by", "created_at",\n            "ready_at", "finalized_at"\n        },\n        "battle_players": {\n            "battle_id", "user_id", "role", "payment_id", "session_id",\n            "score", "correct_count", "finished_at"\n        },\n        "certificates": {\n            "id", "user_id", "result_id", "certificate_id",\n            "verification_code", "type", "full_name", "score", "level",\n            "created_at"\n        },\n    }\n    async with db_pool.acquire() as conn:\n        for table, expected in required_schema.items():\n            rows = await conn.fetch(\n                """\n                SELECT column_name\n                FROM information_schema.columns\n                WHERE table_schema='public' AND table_name=$1\n                """,\n                table,\n            )\n            actual = {r["column_name"] for r in rows}\n            missing = sorted(expected - actual)\n            if missing:\n                raise RuntimeError(\n                    f"Database schema incomplete for {table}: missing {', '.join(missing)}"\n                )\n\n        q_type = await conn.fetchval("""\n            SELECT data_type\n            FROM information_schema.columns\n            WHERE table_schema='public'\n              AND table_name='test_sessions'\n              AND column_name='questions'\n        """)\n        if q_type != "jsonb":\n            raise RuntimeError(\n                f"Database schema invalid: test_sessions.questions must be jsonb, got {q_type!r}"\n            )\n\n    logger.info("Database schema verification passed: all runtime tables/columns are present")\n\n    # Existing databases may have battle_players rows created by an older
+    # partially upgraded test_sessions table. CREATE TABLE IF NOT EXISTS does\n    # not modify an existing table, therefore every runtime column used by the\n    # test flow is explicitly ensured here as well.\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS current_index INTEGER NOT NULL DEFAULT 0")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS questions JSONB")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS score INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS correct_count INTEGER")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0")\n    await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS is_retry BOOLEAN NOT NULL DEFAULT FALSE")\n\n    # Old sessions may have been created before expires_at/questions existed.\n    # Give them a deterministic expiry and regenerate their public question\n    # payload when it is missing, without touching submitted answers.\n    await db_execute("""\n        UPDATE test_sessions\n        SET expires_at = COALESCE(expires_at, started_at + INTERVAL '30 minutes')\n        WHERE expires_at IS NULL\n    """)\n\n    required_schema = {\n        "test_sessions": {\n            "session_id", "user_id", "test_type", "status", "answers",\n            "questions", "score", "correct_count", "started_at",\n            "completed_at", "expires_at", "price", "is_retry"\n        },\n        "test_attempts": {\n            "id", "user_id", "test_type", "session_id", "score",\n            "correct_count", "duration", "payment_status",\n            "result_visible", "level", "answers", "created_at"\n        },\n        "results": {\n            "id", "user_id", "attempt_id", "test_type", "score",\n            "level", "created_at"\n        },\n        "payments": {\n            "id", "user_id", "attempt_id", "battle_id", "payment_type",\n            "amount", "card_id", "receipt_file_id", "status",\n            "created_at", "updated_at"\n        },\n        "payment_cards": {\n            "id", "card_number", "holder", "bank", "active", "created_at"\n        },\n        "battles": {\n            "id", "code", "status", "created_by", "created_at",\n            "ready_at", "finalized_at"\n        },\n        "battle_players": {\n            "battle_id", "user_id", "role", "payment_id", "session_id",\n            "score", "correct_count", "finished_at"\n        },\n        "certificates": {\n            "id", "user_id", "result_id", "certificate_id",\n            "verification_code", "type", "full_name", "score", "level",\n            "created_at"\n        },\n    }\n    async with db_pool.acquire() as conn:\n        for table, expected in required_schema.items():\n            rows = await conn.fetch(\n                """\n                SELECT column_name\n                FROM information_schema.columns\n                WHERE table_schema='public' AND table_name=$1\n                """,\n                table,\n            )\n            actual = {r["column_name"] for r in rows}\n            missing = sorted(expected - actual)\n            if missing:\n                raise RuntimeError(\n                    f"Database schema incomplete for {table}: missing {', '.join(missing)}"\n                )\n\n        q_type = await conn.fetchval("""\n            SELECT data_type\n            FROM information_schema.columns\n            WHERE table_schema='public'\n              AND table_name='test_sessions'\n              AND column_name='questions'\n        """)\n        if q_type != "jsonb":\n            raise RuntimeError(\n                f"Database schema invalid: test_sessions.questions must be jsonb, got {q_type!r}"\n            )\n\n    logger.info("Database schema verification passed: all runtime tables/columns are present")\n\n    # Existing databases may have battle_players rows created by an older
     # version without the role column. Backfill those rows before enforcing
     # NOT NULL, using battles.created_by to identify the creator.
     await db_execute("""
@@ -1121,62 +1122,212 @@ async def admin_set_live(message: types.Message):
 
 @dp.message(F.text.regexp(r"^(?!/).+"))
 async def admin_pending_input(message: types.Message):
-    user_id=message.from_user.id
-    pending=ADMIN_PENDING.get(user_id)
+    user_id = message.from_user.id
+    pending = ADMIN_PENDING.get(user_id)
     if not pending:
         return
     if not await is_admin(user_id):
-        ADMIN_PENDING.pop(user_id,None)
-        return
-    raw=message.text.strip()
-    try:
-        value=int(raw)
-        if value < 0:
-            raise ValueError
-    except ValueError:
-        await message.answer("❌ Faqat 0 yoki undan katta butun son yuboring.")
+        ADMIN_PENDING.pop(user_id, None)
         return
 
+    raw = (message.text or "").strip()
+
     if pending.startswith("price:"):
-        key=pending.split(":",1)[1]
-        allowed={"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}
-        if key not in allowed:
-            ADMIN_PENDING.pop(user_id,None)
-            await message.answer("❌ Noto‘g‘ri narx kaliti.")
+        key = pending.split(":", 1)[1]
+        allowed = {"iq_price", "iq_retry_price", "eq_price", "eq_retry_price", "pq_price", "pq_retry_price", "battle_price"}
+        try:
+            value = int(raw)
+            if value < 0 or key not in allowed:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Narx 0 yoki undan katta butun son bo‘lishi kerak.")
             return
-        await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",key,str(value))
-        ADMIN_PENDING.pop(user_id,None)
-        await message.answer(f"✅ <b>{key}</b> = <b>{value:,}</b> so‘m")
+        await db_execute(
+            "INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
+            key, str(value)
+        )
+        ADMIN_PENDING.pop(user_id, None)
+        await message.answer(f"✅ <b>{key}</b> = <b>{value:,}</b> so‘m".replace(",", " "))
+        await send_admin_panel(message)
         return
 
     if pending.startswith("live:"):
-        field=pending.split(":",1)[1]
-        mapping={"base":"live_fake_base","online":"live_fake_online","delta":"live_fake_delta"}
-        key=mapping.get(field)
-        if not key:
-            ADMIN_PENDING.pop(user_id,None)
-            await message.answer("❌ Noto‘g‘ri live qiymati.")
+        field = pending.split(":", 1)[1]
+        mapping = {"base": "live_fake_base", "online": "live_fake_online", "delta": "live_fake_delta"}
+        key = mapping.get(field)
+        try:
+            value = int(raw)
+            if value < 0 or not key:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Faqat 0 yoki undan katta butun son yuboring.")
             return
-        await db_execute("INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",key,str(value))
-        ADMIN_PENDING.pop(user_id,None)
-        await message.answer(f"✅ <b>{field}</b> = <b>{value:,}</b>")
+        await db_execute(
+            "INSERT INTO app_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
+            key, str(value)
+        )
+        ADMIN_PENDING.pop(user_id, None)
+        await message.answer(f"✅ Live <b>{field}</b> = <b>{value:,}</b>".replace(",", " "))
+        await send_admin_panel(message)
         return
+
+    if pending == "msg:user_id":
+        try:
+            target_id = int(raw)
+            if target_id <= 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Telegram User ID faqat musbat son bo‘lishi kerak.")
+            return
+        exists = await db_fetchrow("SELECT user_id FROM users WHERE user_id=$1", target_id)
+        if not exists:
+            await message.answer("❌ Bu User ID bazada topilmadi. Qaytadan yuboring.")
+            return
+        ADMIN_PENDING[user_id] = f"msg:user:{target_id}"
+        await message.answer(f"👤 User <code>{target_id}</code> tanlandi. Endi yuboriladigan xabar matnini yuboring.\n\nBekor qilish: /cancel")
+        return
+
+    if pending.startswith("msg:user:"):
+        try:
+            target_id = int(pending.split(":", 2)[2])
+        except (ValueError, IndexError):
+            ADMIN_PENDING.pop(user_id, None)
+            await message.answer("❌ Xabar sessiyasi buzilgan. Qaytadan urinib ko‘ring.")
+            return
+        if not raw:
+            await message.answer("❌ Bo‘sh xabar yuborib bo‘lmaydi.")
+            return
+        try:
+            await bot.send_message(target_id, raw)
+        except Exception as exc:
+            logger.exception("Admin direct message failed: target=%s", target_id)
+            await message.answer(f"❌ Xabar yuborilmadi. Telegram xatosi: <code>{type(exc).__name__}</code>")
+            return
+        ADMIN_PENDING.pop(user_id, None)
+        await message.answer(f"✅ Xabar <code>{target_id}</code> foydalanuvchiga yuborildi.")
+        return
+
+    if pending in {"broadcast:all", "broadcast:paid"}:
+        if not raw:
+            await message.answer("❌ Bo‘sh xabar yuborib bo‘lmaydi.")
+            return
+        if pending == "broadcast:paid":
+            users = await db_fetch("""
+                SELECT DISTINCT u.user_id
+                FROM users u
+                JOIN payments p ON p.user_id=u.user_id
+                WHERE p.status='approved'
+                ORDER BY u.user_id
+            """)
+        else:
+            users = await db_fetch("SELECT user_id FROM users ORDER BY user_id")
+        sent = 0
+        failed = 0
+        for row in users:
+            try:
+                await bot.send_message(int(row["user_id"]), raw)
+                sent += 1
+                await asyncio.sleep(0.04)
+            except Exception:
+                failed += 1
+        ADMIN_PENDING.pop(user_id, None)
+        await message.answer(f"📨 <b>Yuborish yakunlandi</b>\n\n✅ Yuborildi: <b>{sent}</b>\n❌ Yetkazilmadi: <b>{failed}</b>\n👥 Jami: <b>{len(users)}</b>")
+        return
+
+    if pending == "card:add":
+        parts = [x.strip() for x in raw.split("|", 2)]
+        if len(parts) != 3 or not parts[0]:
+            await message.answer("❌ Format noto‘g‘ri.\n<code>8600123456789012 | ISM FAMILIYA | BANK</code>")
+            return
+        await db_execute(
+            "INSERT INTO payment_cards(card_number,holder,bank,active) VALUES($1,$2,$3,TRUE)",
+            parts[0], parts[1], parts[2]
+        )
+        ADMIN_PENDING.pop(user_id, None)
+        await message.answer("✅ Karta qo‘shildi va faol holatga o‘rnatildi.")
+        await send_admin_panel(message)
+        return
+
+    if pending.startswith("card:edit:"):
+        try:
+            card_id = int(pending.split(":", 2)[2])
+        except (ValueError, IndexError):
+            ADMIN_PENDING.pop(user_id, None)
+            await message.answer("❌ Karta ID noto‘g‘ri.")
+            return
+        parts = [x.strip() for x in raw.split("|", 2)]
+        if len(parts) != 3 or not parts[0]:
+            await message.answer("❌ Format noto‘g‘ri.\n<code>8600123456789012 | ISM FAMILIYA | BANK</code>")
+            return
+        await db_execute(
+            "UPDATE payment_cards SET card_number=$1,holder=$2,bank=$3 WHERE id=$4",
+            parts[0], parts[1], parts[2], card_id
+        )
+        ADMIN_PENDING.pop(user_id, None)
+        await message.answer(f"✅ Karta <b>#{card_id}</b> yangilandi.")
+        await send_admin_panel(message)
+        return
+
+    if pending == "user:lookup":
+        try:
+            target_id = int(raw)
+            if target_id <= 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ User ID noto‘g‘ri.")
+            return
+        row = await db_fetchrow("""
+            SELECT u.*, COALESCE((SELECT MAX(score) FROM results r WHERE r.user_id=u.user_id AND r.test_type='IQ'),0) best_iq,
+                   (SELECT COUNT(*) FROM results r WHERE r.user_id=u.user_id) result_count,
+                   (SELECT COUNT(*) FROM payments p WHERE p.user_id=u.user_id AND p.status='approved') paid_count
+            FROM users u WHERE u.user_id=$1
+        """, target_id)
+        ADMIN_PENDING.pop(user_id, None)
+        if not row:
+            await message.answer("❌ Foydalanuvchi topilmadi.")
+            return
+        await message.answer(
+            f"👤 <b>Foydalanuvchi</b>\n\n"
+            f"ID: <code>{row['user_id']}</code>\n"
+            f"Username: @{row['username'] or '—'}\n"
+            f"Ism: <b>{row['full_name'] or row['first_name'] or '—'}</b>\n"
+            f"Jins: {row['gender'] or '—'}\n"
+            f"Yosh: {row['age'] or '—'}\n"
+            f"Davlat: {row['country'] or '—'}\n"
+            f"Eng yuqori IQ: <b>{row['best_iq']}</b>\n"
+            f"Natijalar: <b>{row['result_count']}</b>\n"
+            f"Tasdiqlangan to‘lovlar: <b>{row['paid_count']}</b>",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✉️ Xabar yozish", callback_data=f"admin:msg:{row['user_id']}")],
+                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]
+            ])
+        )
+        return
+
+@dp.message(Command("cancel"))
+async def admin_cancel(message: types.Message):
+    if await is_admin(message.from_user.id):
+        ADMIN_PENDING.pop(message.from_user.id, None)
+        await message.answer("↩️ Amal bekor qilindi.")
 
 @dp.message(Command("broadcast"))
 async def admin_broadcast(message: types.Message):
     if not await is_admin(message.from_user.id):
-        await message.answer("Ruxsat yo‘q."); return
-    text=message.text.partition(" ")[2].strip()
-    if not text: await message.answer("Format: /broadcast Matn"); return
-    users=await db_fetch("SELECT user_id FROM users")
-    sent=0
+        await message.answer("Ruxsat yo‘q.")
+        return
+    text = message.text.partition(" ")[2].strip()
+    if not text:
+        await message.answer("Format: /broadcast Matn")
+        return
+    users = await db_fetch("SELECT user_id FROM users")
+    sent = 0
     for u in users:
         try:
-            await bot.send_message(u["user_id"],text)
-            sent+=1
-            await asyncio.sleep(.05)
+            await bot.send_message(u["user_id"], text)
+            sent += 1
+            await asyncio.sleep(.04)
         except Exception:
-            logger.exception("Broadcast delivery failed for user %s",u["user_id"])
+            pass
     await message.answer(f"✅ Yuborildi: {sent}/{len(users)}")
 
 @dp.message(Command("admin"))
@@ -1196,8 +1347,27 @@ async def send_admin_panel(target):
          InlineKeyboardButton(text="⚔️ Battles", callback_data="admin:battles")],
         [InlineKeyboardButton(text="💳 Cards", callback_data="admin:cards"),
          InlineKeyboardButton(text="🎯 Live Counter", callback_data="admin:live")],
+        [InlineKeyboardButton(text="📨 Userlarga xabar", callback_data="admin:messaging")],
     ])
-    await target.answer("⚙️ <b>ADMIN PANEL</b>", reply_markup=kb)
+    await target.answer("⚙️ <b>ADMIN PANEL</b>\n\nKerakli bo‘limni tanlang:", reply_markup=kb)
+
+async def _admin_edit_message(callback: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None = None):
+    try:
+        if callback.message and (callback.message.photo or callback.message.document):
+            await callback.message.edit_caption(caption=text, reply_markup=markup)
+        else:
+            await callback.message.edit_text(text, reply_markup=markup)
+    except Exception:
+        await callback.message.answer(text, reply_markup=markup)
+
+async def _admin_home_markup():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Users", callback_data="admin:users"), InlineKeyboardButton(text="📊 Statistics", callback_data="admin:stats")],
+        [InlineKeyboardButton(text="💳 Payments", callback_data="admin:payments"), InlineKeyboardButton(text="💰 Products", callback_data="admin:products")],
+        [InlineKeyboardButton(text="📜 Certificates", callback_data="admin:certs"), InlineKeyboardButton(text="⚔️ Battles", callback_data="admin:battles")],
+        [InlineKeyboardButton(text="💳 Cards", callback_data="admin:cards"), InlineKeyboardButton(text="🎯 Live Counter", callback_data="admin:live")],
+        [InlineKeyboardButton(text="📨 Userlarga xabar", callback_data="admin:messaging")],
+    ])
 
 @dp.callback_query(F.data.startswith("admin:"))
 async def admin_callback(callback: CallbackQuery):
@@ -1205,186 +1375,314 @@ async def admin_callback(callback: CallbackQuery):
         if not await is_admin(callback.from_user.id):
             await callback.answer("Ruxsat yo‘q", show_alert=True)
             return
-        action = callback.data.split(":",1)[1]
-        payment_buttons = []
+        action = callback.data.split(":", 1)[1]
+
         if action == "home":
-            try: await callback.message.delete()
-            except Exception: pass
-            await send_admin_panel(callback.message)
+            await _admin_edit_message(callback, "⚙️ <b>ADMIN PANEL</b>\n\nKerakli bo‘limni tanlang:", await _admin_home_markup())
             await callback.answer()
             return
+
         if action.startswith("approve:"):
-            try:
-                pid=int(action.split(":",1)[1])
-            except ValueError:
-                await callback.answer("Payment ID noto‘g‘ri",show_alert=True)
-                return
-            await callback.answer("Tekshirilmoqda…")
-            try:
-                p,status=await approve_payment_record(pid)
-                if not p:
-                    await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.",reply_markup=None)
-                    return
-                if status == "rejected":
-                    await callback.message.edit_caption(caption=f"❌ <b>Payment #{pid} avval rad etilgan.</b>",reply_markup=None)
-                    return
-                if status == "already":
-                    await callback.message.edit_caption(caption=f"✅ <b>Payment #{pid} allaqachon tasdiqlangan.</b>",reply_markup=None)
-                    return
-                try:
-                    lang = await get_user_language(int(p["user_id"]))
-                    msg = {"uz":"✅ To‘lov tasdiqlandi. Mini App’da keyingi bosqich ochildi.","ru":"✅ Оплата подтверждена. Следующий этап открыт в Mini App.","en":"✅ Payment approved. The next step is open in the Mini App."}[lang]
-                    await bot.send_message(p["user_id"], msg)
-                except Exception:
-                    logger.exception("Admin approval notification failed")
-                if p["attempt_id"]:
-                    try:
-                        await ensure_and_send_iq_certificate(p["user_id"],p["attempt_id"])
-                    except Exception:
-                        logger.exception("Paid certificate delivery failed")
-                await callback.message.edit_caption(
-                    caption=f"✅ <b>Payment #{pid} tasdiqlandi.</b>",reply_markup=None
-                )
-            except Exception:
-                logger.exception("Payment approval failed: payment_id=%s",pid)
-                try:
-                    await callback.message.edit_caption(
-                        caption=f"❌ <b>Payment #{pid} tasdiqlanmadi.</b> Server xatosi. Qayta urinib ko‘ring.",
-                        reply_markup=None
-                    )
-                except Exception:
-                    logger.exception("Failed to edit failed approval message")
-            return
-        elif action.startswith("reject:"):
-            try:
-                pid=int(action.split(":",1)[1])
-            except ValueError:
-                await callback.answer("Payment ID noto‘g‘ri",show_alert=True)
-                return
-            await callback.answer("Tekshirilmoqda…")
-            p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",pid)
+            pid = int(action.split(":", 1)[1])
+            await callback.answer("Tasdiqlanmoqda…")
+            p, status = await approve_payment_record(pid)
             if not p:
-                try: await callback.message.edit_caption(caption=f"❌ Payment #{pid} topilmadi.",reply_markup=None)
-                except Exception: pass
+                await _admin_edit_message(callback, f"❌ Payment #{pid} topilmadi.")
                 return
-            if p["status"] == "approved":
-                try: await callback.message.edit_caption(caption=f"⚠️ <b>Payment #{pid} allaqachon tasdiqlangan.</b>",reply_markup=None)
-                except Exception: pass
+            if status == "rejected":
+                await _admin_edit_message(callback, f"❌ Payment #{pid} avval rad etilgan.")
                 return
-            await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",pid)
-            if p["attempt_id"]:
-                await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1",p["attempt_id"])
+            if status == "already":
+                await _admin_edit_message(callback, f"✅ Payment #{pid} allaqachon tasdiqlangan.")
+                return
             try:
                 lang = await get_user_language(int(p["user_id"]))
-                msg = {"uz":"❌ To‘lov tasdiqlanmadi. Receipt rad etildi. Mini App’da Bosh sahifaga qaytishingiz mumkin.","ru":"❌ Оплата не подтверждена. Чек отклонён. Вернитесь на главную в Mini App.","en":"❌ Payment was not approved. The receipt was rejected. You can return to Home in the Mini App."}[lang]
+                msg = {"uz":"✅ To‘lov tasdiqlandi. Natijangiz ochildi.","ru":"✅ Оплата подтверждена. Результат открыт.","en":"✅ Payment approved. Your result is now available."}[lang]
+                await bot.send_message(p["user_id"], msg)
+            except Exception:
+                logger.exception("Admin approval notification failed")
+            if p["attempt_id"]:
+                try:
+                    await ensure_and_send_iq_certificate(p["user_id"], p["attempt_id"])
+                except Exception:
+                    logger.exception("Paid certificate delivery failed")
+            await _admin_edit_message(callback, f"✅ <b>Payment #{pid} tasdiqlandi.</b>")
+            return
+
+        if action.startswith("reject:"):
+            pid = int(action.split(":", 1)[1])
+            p = await db_fetchrow("SELECT * FROM payments WHERE id=$1", pid)
+            if not p:
+                await _admin_edit_message(callback, f"❌ Payment #{pid} topilmadi.")
+                await callback.answer()
+                return
+            if p["status"] == "approved":
+                await callback.answer("Bu payment allaqachon tasdiqlangan", show_alert=True)
+                return
+            await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1", pid)
+            if p["attempt_id"]:
+                await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1", p["attempt_id"])
+            try:
+                lang = await get_user_language(int(p["user_id"]))
+                msg = {"uz":"❌ To‘lov rad etildi. Receiptni tekshirib qayta yuboring.","ru":"❌ Оплата отклонена. Проверьте чек и отправьте снова.","en":"❌ Payment rejected. Check the receipt and send it again."}[lang]
                 await bot.send_message(p["user_id"], msg)
             except Exception:
                 logger.exception("Admin rejection notification failed")
-            try:
-                await callback.message.edit_caption(caption=f"❌ <b>Payment #{pid} rad etildi.</b>",reply_markup=None)
-            except Exception:
-                logger.exception("Failed to edit rejected payment message")
+            await _admin_edit_message(callback, f"❌ <b>Payment #{pid} rad etildi.</b>")
+            await callback.answer()
             return
-        elif action == "users":
+
+        if action == "users":
             row = await db_fetchrow("SELECT COUNT(*) c FROM users")
-            text = f"👥 Users: <b>{row['c']}</b>"
-        elif action == "stats":
-            row = await db_fetchrow("SELECT COUNT(*) c FROM results")
-            text = f"📊 Results: <b>{row['c']}</b>"
-        elif action == "payments":
-            rows = await db_fetch("SELECT id,user_id,amount,status,payment_type FROM payments ORDER BY id DESC LIMIT 10")
-            text = "💳 <b>Payments</b>\n\n" + "\n".join(
-                f"#{r['id']} · {r['user_id']} · {r['amount']} · {r['status']} · {r['payment_type']}" for r in rows
-            ) if rows else "Payment yo‘q."
-            payment_buttons = [[InlineKeyboardButton(text=f"#{r['id']} ✅", callback_data=f"admin:approve:{r['id']}"), InlineKeyboardButton(text=f"#{r['id']} ❌", callback_data=f"admin:reject:{r['id']}")] for r in rows if r['status']=='pending']
-        elif action == "products":
-            keys=["iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"]
-            vals=await asyncio.gather(*(setting(k,"0") for k in keys))
-            text="💰 <b>Products</b>\n\n"+"\n".join(f"{k}: {v}" for k,v in zip(keys,vals))
-            keyboard = [
-                [InlineKeyboardButton(text=f"✏️ IQ: {vals[0]}", callback_data="admin:price:iq_price"), InlineKeyboardButton(text=f"✏️ IQ retry: {vals[1]}", callback_data="admin:price:iq_retry_price")],
-                [InlineKeyboardButton(text=f"✏️ EQ: {vals[2]}", callback_data="admin:price:eq_price"), InlineKeyboardButton(text=f"✏️ EQ retry: {vals[3]}", callback_data="admin:price:eq_retry_price")],
-                [InlineKeyboardButton(text=f"✏️ PQ: {vals[4]}", callback_data="admin:price:pq_price"), InlineKeyboardButton(text=f"✏️ PQ retry: {vals[5]}", callback_data="admin:price:pq_retry_price")],
-                [InlineKeyboardButton(text=f"✏️ Battle: {vals[6]}", callback_data="admin:price:battle_price")],
-                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")],
+            rows = await db_fetch("""
+                SELECT u.user_id,u.username,u.full_name,u.first_name,u.last_seen,
+                       COALESCE((SELECT MAX(r.score) FROM results r WHERE r.user_id=u.user_id AND r.test_type='IQ'),0) best_iq
+                FROM users u ORDER BY u.last_seen DESC NULLS LAST LIMIT 8
+            """)
+            lines = [f"👥 <b>Users: {row['c']}</b>", ""]
+            buttons = []
+            for r in rows:
+                name = r["full_name"] or r["first_name"] or "Foydalanuvchi"
+                lines.append(f"<code>{r['user_id']}</code> · {name} · IQ <b>{r['best_iq']}</b>")
+                buttons.append([InlineKeyboardButton(text=f"✉️ {name[:18]}", callback_data=f"admin:msg:{r['user_id']}")])
+            buttons += [
+                [InlineKeyboardButton(text="🔎 User ID qidirish", callback_data="admin:user_lookup"), InlineKeyboardButton(text="✉️ Userga yozish", callback_data="admin:msg")],
+                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]
             ]
-            await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+            await _admin_edit_message(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons))
             await callback.answer()
             return
-        elif action.startswith("price:"):
-            key=action.split(":",1)[1]
-            if key not in {"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}:
-                await callback.answer("Noto‘g‘ri narx",show_alert=True); return
-            ADMIN_PENDING[callback.from_user.id]=f"price:{key}"
-            await callback.message.answer(f"✏️ <b>{key}</b> uchun yangi narxni faqat son bilan yuboring.\nMasalan: <code>5000</code>")
-            await callback.answer("Yangi narx kutilmoqda")
-            return
-        elif action.startswith("live_mode:"):
-            mode=action.split(":",1)[1]
-            if mode not in ("fake","real"):
-                await callback.answer("Noto‘g‘ri mode",show_alert=True); return
-            await db_execute("INSERT INTO app_settings(key,value) VALUES('live_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",mode)
-            await callback.answer(f"Live: {mode}")
-            vals=await asyncio.gather(setting("live_mode","fake"),setting("live_fake_base","95114"),setting("live_fake_online","342"),setting("live_fake_delta","8"))
-            text=f"🎯 <b>Live Counter</b>\n\nmode={vals[0]}\nbase={vals[1]}\nonline={vals[2]}\ndelta={vals[3]}"
-            keyboard=[[InlineKeyboardButton(text="🟣 FAKE",callback_data="admin:live_mode:fake"),InlineKeyboardButton(text="🟢 REAL",callback_data="admin:live_mode:real")],
-                      [InlineKeyboardButton(text=f"✏️ Base {vals[1]}",callback_data="admin:live_edit:base"),InlineKeyboardButton(text=f"✏️ Online {vals[2]}",callback_data="admin:live_edit:online")],
-                      [InlineKeyboardButton(text=f"✏️ Delta {vals[3]}",callback_data="admin:live_edit:delta")],
-                      [InlineKeyboardButton(text="⬅️ Admin",callback_data="admin:home")]]
-            await callback.message.edit_text(text,reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-            return
-        elif action.startswith("live_edit:"):
-            field=action.split(":",1)[1]
-            if field not in {"base","online","delta"}:
-                await callback.answer("Noto‘g‘ri qiymat",show_alert=True); return
-            ADMIN_PENDING[callback.from_user.id]=f"live:{field}"
-            await callback.message.answer(f"✏️ Live <b>{field}</b> qiymatini faqat son bilan yuboring.")
-            await callback.answer("Yangi qiymat kutilmoqda")
-            return
-        elif action == "certs":
-            row=await db_fetchrow("SELECT COUNT(*) c FROM certificates")
-            text=f"📜 Certificates: <b>{row['c']}</b>"
-        elif action == "battles":
-            row=await db_fetchrow("SELECT COUNT(*) c FROM battles")
-            text=f"⚔️ Battles: <b>{row['c']}</b>"
-        elif action == "cards":
-            rows=await db_fetch("SELECT id,card_number,holder,bank,active FROM payment_cards ORDER BY id DESC")
-            text="💳 <b>Cards</b>\n\n" + "\n".join(
-                f"#{r['id']} · {r['card_number']} · {r['holder'] or ''} · {r['bank'] or ''} · {'ON' if r['active'] else 'OFF'}" for r in rows
-            ) if rows else "Kartalar yo‘q."
-        elif action == "live":
-            vals=await asyncio.gather(setting("live_mode","fake"),setting("live_fake_base","95114"),setting("live_fake_online","342"),setting("live_fake_delta","8"))
-            text=f"🎯 <b>Live Counter</b>\n\nmode={vals[0]}\nbase={vals[1]}\nonline={vals[2]}\ndelta={vals[3]}"
-            keyboard=[[InlineKeyboardButton(text="🟣 FAKE",callback_data="admin:live_mode:fake"),InlineKeyboardButton(text="🟢 REAL",callback_data="admin:live_mode:real")],
-                      [InlineKeyboardButton(text=f"✏️ Base {vals[1]}",callback_data="admin:live_edit:base"),InlineKeyboardButton(text=f"✏️ Online {vals[2]}",callback_data="admin:live_edit:online")],
-                      [InlineKeyboardButton(text=f"✏️ Delta {vals[3]}",callback_data="admin:live_edit:delta")],
-                      [InlineKeyboardButton(text="⬅️ Admin",callback_data="admin:home")]]
-            await callback.message.edit_text(text,reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+
+        if action == "user_lookup":
+            ADMIN_PENDING[callback.from_user.id] = "user:lookup"
+            await callback.message.answer("🔎 Foydalanuvchi Telegram <b>User ID</b> sini yuboring.\n\nBekor qilish: /cancel")
             await callback.answer()
             return
-        else:
-            text="Noma’lum bo‘lim."
-        keyboard = payment_buttons + [[InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]
-        markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-        try:
-            if callback.message.document or callback.message.photo:
-                await callback.message.edit_caption(caption=text, reply_markup=markup)
+
+        if action == "msg":
+            ADMIN_PENDING[callback.from_user.id] = "msg:user_id"
+            await callback.message.answer("✉️ Xabar yuboriladigan foydalanuvchining Telegram <b>User ID</b> sini yuboring.\n\nBekor qilish: /cancel")
+            await callback.answer()
+            return
+
+        if action.startswith("msg:"):
+            target_id = int(action.split(":", 1)[1])
+            ADMIN_PENDING[callback.from_user.id] = f"msg:user:{target_id}"
+            await callback.message.answer(f"✉️ <code>{target_id}</code> ga yuboriladigan xabar matnini yuboring.\n\nBekor qilish: /cancel")
+            await callback.answer()
+            return
+
+        if action == "messaging":
+            markup = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👤 Bitta userga", callback_data="admin:msg")],
+                [InlineKeyboardButton(text="📢 Barchaga", callback_data="admin:broadcast:all")],
+                [InlineKeyboardButton(text="💳 To‘lov qilganlarga", callback_data="admin:broadcast:paid")],
+                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")],
+            ])
+            await _admin_edit_message(callback, "📨 <b>USERLARGA XABAR</b>\n\nKimga yuborishni tanlang.", markup)
+            await callback.answer()
+            return
+
+        if action.startswith("broadcast:"):
+            mode = action.split(":", 1)[1]
+            if mode not in {"all", "paid"}:
+                await callback.answer("Noto‘g‘ri tur", show_alert=True)
+                return
+            ADMIN_PENDING[callback.from_user.id] = f"broadcast:{mode}"
+            target = "barcha foydalanuvchilarga" if mode == "all" else "tasdiqlangan to‘lov qilgan foydalanuvchilarga"
+            await callback.message.answer(f"📨 Xabarni {target} yuborish uchun matnni yuboring.\n\nBekor qilish: /cancel")
+            await callback.answer()
+            return
+
+        if action == "stats":
+            stats = await db_fetchrow("""
+                SELECT
+                    (SELECT COUNT(*) FROM users) users,
+                    (SELECT COUNT(*) FROM results) results,
+                    (SELECT COUNT(*) FROM test_attempts WHERE status='finished') finished,
+                    (SELECT COUNT(*) FROM payments WHERE status='pending') pending_payments,
+                    (SELECT COUNT(*) FROM payments WHERE status='approved') approved_payments,
+                    (SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='approved') revenue,
+                    (SELECT COUNT(*) FROM certificates) certificates,
+                    (SELECT COUNT(*) FROM battles) battles,
+                    (SELECT COUNT(*) FROM referrals) referrals
+            """)
+            text = (
+                "📊 <b>UMUMIY STATISTIKA</b>\n\n"
+                f"👥 Users: <b>{stats['users']}</b>\n"
+                f"🧠 Yakunlangan testlar: <b>{stats['finished']}</b>\n"
+                f"📄 Natijalar: <b>{stats['results']}</b>\n"
+                f"⏳ Kutilayotgan to‘lovlar: <b>{stats['pending_payments']}</b>\n"
+                f"✅ Tasdiqlangan to‘lovlar: <b>{stats['approved_payments']}</b>\n"
+                f"💰 Tushum: <b>{int(stats['revenue']):,}</b> so‘m\n"
+                f"📜 Sertifikatlar: <b>{stats['certificates']}</b>\n"
+                f"⚔️ Battles: <b>{stats['battles']}</b>\n"
+                f"🤝 Referrals: <b>{stats['referrals']}</b>"
+            ).replace(",", " ")
+            await _admin_edit_message(callback, text, InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]))
+            await callback.answer()
+            return
+
+        if action == "payments":
+            rows = await db_fetch("""
+                SELECT p.id,p.user_id,p.amount,p.status,p.payment_type,p.receipt_file_id,p.created_at,
+                       u.full_name,u.username
+                FROM payments p LEFT JOIN users u ON u.user_id=p.user_id
+                ORDER BY CASE WHEN p.status='pending' THEN 0 ELSE 1 END, p.id DESC LIMIT 15
+            """)
+            if not rows:
+                text = "💳 <b>Payments</b>\n\nPayment mavjud emas."
+                buttons = []
             else:
-                await callback.message.edit_text(text, reply_markup=markup)
-        except Exception:
-            # A receipt message may not support the requested edit operation.
-            # Never make a successful payment approval look like a failed one.
-            await callback.message.answer(text, reply_markup=markup)
-        await callback.answer()
+                lines = ["💳 <b>PAYMENTS</b>", ""]
+                buttons = []
+                for r in rows:
+                    state = {"pending":"⏳","approved":"✅","rejected":"❌"}.get(r["status"],"•")
+                    name = r["full_name"] or ("@" + r["username"] if r["username"] else str(r["user_id"]))
+                    lines.append(f"{state} <b>#{r['id']}</b> · {name} · {r['amount'] or 0} so‘m · {r['payment_type']}")
+                    if r["status"] == "pending":
+                        buttons.append([
+                            InlineKeyboardButton(text=f"✅ #{r['id']}", callback_data=f"admin:approve:{r['id']}"),
+                            InlineKeyboardButton(text=f"❌ #{r['id']}", callback_data=f"admin:reject:{r['id']}"),
+                            InlineKeyboardButton(text="✉️", callback_data=f"admin:msg:{r['user_id']}"),
+                        ])
+                buttons.append([InlineKeyboardButton(text="🔄 Yangilash", callback_data="admin:payments"), InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")])
+                text = "\n".join(lines)
+            await _admin_edit_message(callback, text, InlineKeyboardMarkup(inline_keyboard=buttons))
+            await callback.answer()
+            return
+
+        if action == "products":
+            keys = ["iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"]
+            vals = await asyncio.gather(*(setting(k,"0") for k in keys))
+            labels = ["IQ", "IQ qayta", "EQ", "EQ qayta", "PQ", "PQ qayta", "Battle"]
+            keyboard = []
+            for key, val, label in zip(keys, vals, labels):
+                keyboard.append([InlineKeyboardButton(text=f"✏️ {label}: {val} so‘m", callback_data=f"admin:price:{key}")])
+            keyboard.append([InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")])
+            await _admin_edit_message(callback, "💰 <b>MAHSULOTLAR / NARXLAR</b>\n\nHar bir narxni alohida o‘zgartirish mumkin.", InlineKeyboardMarkup(inline_keyboard=keyboard))
+            await callback.answer()
+            return
+
+        if action.startswith("price:"):
+            key = action.split(":", 1)[1]
+            allowed = {"iq_price","iq_retry_price","eq_price","eq_retry_price","pq_price","pq_retry_price","battle_price"}
+            if key not in allowed:
+                await callback.answer("Noto‘g‘ri narx", show_alert=True)
+                return
+            ADMIN_PENDING[callback.from_user.id] = f"price:{key}"
+            await callback.message.answer(f"✏️ <b>{key}</b> uchun yangi narxni yuboring.\nMasalan: <code>5000</code>\n\nBekor qilish: /cancel")
+            await callback.answer()
+            return
+
+        if action == "cards":
+            rows = await db_fetch("SELECT id,card_number,holder,bank,active FROM payment_cards ORDER BY id DESC")
+            lines = ["💳 <b>TO‘LOV KARTALARI</b>", ""]
+            buttons = []
+            for r in rows:
+                state = "🟢" if r["active"] else "🔴"
+                lines.append(f"{state} <b>#{r['id']}</b> · <code>{r['card_number']}</code> · {r['holder'] or '—'} · {r['bank'] or '—'}")
+                buttons.append([
+                    InlineKeyboardButton(text=f"✏️ #{r['id']}", callback_data=f"admin:card:edit:{r['id']}"),
+                    InlineKeyboardButton(text="ON/OFF", callback_data=f"admin:card:toggle:{r['id']}"),
+                    InlineKeyboardButton(text="🗑", callback_data=f"admin:card:delete:{r['id']}")
+                ])
+            buttons.append([InlineKeyboardButton(text="➕ Karta qo‘shish", callback_data="admin:card:add")])
+            buttons.append([InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")])
+            await _admin_edit_message(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons))
+            await callback.answer()
+            return
+
+        if action == "card:add":
+            ADMIN_PENDING[callback.from_user.id] = "card:add"
+            await callback.message.answer("➕ Karta ma’lumotini yuboring:\n<code>KARTA | HOLDER | BANK</code>\n\nMasalan:\n<code>8600123456789012 | ALI OMONOV | Ipak Yo‘li</code>\n\nBekor qilish: /cancel")
+            await callback.answer()
+            return
+
+        if action.startswith("card:edit:"):
+            card_id = int(action.split(":")[2])
+            ADMIN_PENDING[callback.from_user.id] = f"card:edit:{card_id}"
+            await callback.message.answer(f"✏️ Karta <b>#{card_id}</b> ma’lumotlarini yuboring:\n<code>KARTA | HOLDER | BANK</code>")
+            await callback.answer()
+            return
+
+        if action.startswith("card:toggle:"):
+            card_id = int(action.split(":")[2])
+            await db_execute("UPDATE payment_cards SET active=NOT active WHERE id=$1", card_id)
+            await callback.answer("Karta holati o‘zgartirildi")
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer("💳 Karta holati yangilandi.")
+            return
+
+        if action.startswith("card:delete:"):
+            card_id = int(action.split(":")[2])
+            row = await db_fetchrow("SELECT card_number FROM payment_cards WHERE id=$1", card_id)
+            if not row:
+                await callback.answer("Karta topilmadi", show_alert=True)
+                return
+            await db_execute("DELETE FROM payment_cards WHERE id=$1", card_id)
+            await callback.answer("Karta o‘chirildi")
+            await _admin_edit_message(callback, f"🗑 Karta <b>#{card_id}</b> o‘chirildi.", InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Kartalar", callback_data="admin:cards")]]))
+            return
+
+        if action == "certs":
+            row = await db_fetchrow("SELECT COUNT(*) c FROM certificates")
+            recent = await db_fetch("SELECT certificate_id,full_name,score,created_at FROM certificates ORDER BY id DESC LIMIT 8")
+            lines = [f"📜 <b>CERTIFICATES: {row['c']}</b>", ""]
+            for r in recent:
+                lines.append(f"• <b>{r['full_name']}</b> — IQ <b>{r['score']}</b> — <code>{r['certificate_id']}</code>")
+            await _admin_edit_message(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]))
+            await callback.answer()
+            return
+
+        if action == "battles":
+            rows = await db_fetch("""
+                SELECT b.code,b.status,b.created_at,COUNT(bp.user_id) players
+                FROM battles b LEFT JOIN battle_players bp ON bp.battle_id=b.id
+                GROUP BY b.id ORDER BY b.created_at DESC LIMIT 10
+            """)
+            lines = ["⚔️ <b>BATTLЕS</b>", ""]
+            for r in rows:
+                lines.append(f"• <code>{r['code']}</code> · {r['status']} · {r['players']} players")
+            if not rows:
+                lines.append("Battle mavjud emas.")
+            await _admin_edit_message(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔄 Yangilash", callback_data="admin:battles"), InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]]))
+            await callback.answer()
+            return
+
+        if action == "live" or action.startswith("live_mode:") or action.startswith("live_edit:"):
+            if action.startswith("live_mode:"):
+                mode = action.split(":", 1)[1]
+                if mode not in {"fake", "real"}:
+                    await callback.answer("Noto‘g‘ri mode", show_alert=True)
+                    return
+                await db_execute("INSERT INTO app_settings(key,value) VALUES('live_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value", mode)
+            elif action.startswith("live_edit:"):
+                field = action.split(":", 1)[1]
+                if field not in {"base", "online", "delta"}:
+                    await callback.answer("Noto‘g‘ri qiymat", show_alert=True)
+                    return
+                ADMIN_PENDING[callback.from_user.id] = f"live:{field}"
+                await callback.message.answer(f"✏️ Live <b>{field}</b> qiymatini yuboring.\n\nBekor qilish: /cancel")
+                await callback.answer()
+                return
+            vals = await asyncio.gather(setting("live_mode","fake"),setting("live_fake_base","95114"),setting("live_fake_online","342"),setting("live_fake_delta","8"))
+            text = f"🎯 <b>LIVE COUNTER</b>\n\nMode: <b>{vals[0]}</b>\nJami: <b>{vals[1]}</b>\nOnline: <b>{vals[2]}</b>\nDelta: <b>{vals[3]}</b>"
+            keyboard = [
+                [InlineKeyboardButton(text="🟣 FAKE", callback_data="admin:live_mode:fake"), InlineKeyboardButton(text="🟢 REAL", callback_data="admin:live_mode:real")],
+                [InlineKeyboardButton(text=f"✏️ Jami {vals[1]}", callback_data="admin:live_edit:base"), InlineKeyboardButton(text=f"✏️ Online {vals[2]}", callback_data="admin:live_edit:online")],
+                [InlineKeyboardButton(text=f"✏️ Delta {vals[3]}", callback_data="admin:live_edit:delta")],
+                [InlineKeyboardButton(text="⬅️ Admin", callback_data="admin:home")]
+            ]
+            await _admin_edit_message(callback, text, InlineKeyboardMarkup(inline_keyboard=keyboard))
+            await callback.answer()
+            return
+
+        await callback.answer("Noma’lum bo‘lim", show_alert=True)
     except Exception:
         logger.exception("Admin callback failed")
-        await callback.answer("Xatolik", show_alert=True)
+        await callback.answer("Xatolik. Render logini tekshiring.", show_alert=True)
 
-@dp.callback_query(F.data=="admin:home")
-async def admin_home(callback: CallbackQuery):
-    if await is_admin(callback.from_user.id):
-        await callback.message.delete()
-        await send_admin_panel(callback.message)
 
 def validate_init_data(init_data: str, bot_token: str):
     """Validate Telegram Mini App initData exactly as a query string.
@@ -1493,30 +1791,6 @@ def calculate_iq(answers):
 
 def public_iq_questions():
     return [{k:v for k,v in q.items() if k != "correct"} for q in IQ_QUESTIONS]
-
-
-def normalize_test_questions(raw, test_type: str, lang: str):
-    """Return a valid question list even when an old DB row contains JSON encoded twice.
-
-    Legacy deployments occasionally stored the JSONB question payload as a JSON string.
-    asyncpg then returns that string, so the browser sees string.length (for example
-    16973) instead of the real question count. This helper unwraps that safely and
-    falls back to the canonical question set when the payload is malformed.
-    """
-    expected = 18 if test_type == "IQ" else 6
-    value = raw
-    for _ in range(3):
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except (TypeError, ValueError, json.JSONDecodeError):
-                value = None
-                break
-        else:
-            break
-    if not isinstance(value, list) or len(value) != expected:
-        return public_iq_questions() if test_type == "IQ" else localized_behavior_questions(test_type, lang)
-    return value
 
 def new_session():
     # Always pass UUIDs to asyncpg as strings. PostgreSQL casts them explicitly
@@ -1785,7 +2059,32 @@ async def api_bootstrap(request: Request):
             "holder": pending_payment["holder"],
             "bank": pending_payment["bank"],
         } if pending_payment["card_number"] else None
-    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"language_selected":bool(row["language_selected"]),"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions(),"pending_payment":pending_payload}
+    active=await db_fetchrow("SELECT session_id,test_type,questions,answers,current_index,started_at,expires_at,status FROM test_sessions WHERE user_id=$1 AND status='active' AND expires_at>NOW() ORDER BY started_at DESC LIMIT 1",uid)
+    active_payload=None
+    if active:
+        lang=row["language"] if row["language"] in TRANSLATIONS else "uz"
+        aq=normalize_test_questions(active["questions"],active["test_type"],lang)
+        ai=max(0,min(int(active["current_index"] or 0),len(aq)-1))
+        active_payload={"session_id":str(active["session_id"]),"test_type":active["test_type"],"questions":aq,"answers":active["answers"] if isinstance(active["answers"],dict) else {},"current_index":ai,"started_at":active["started_at"].isoformat(),"expires_at":active["expires_at"].isoformat()}
+    stats=await db_fetchrow("""
+        SELECT
+          MAX(score) FILTER (WHERE test_type='IQ') AS iq_best,
+          MAX(score) FILTER (WHERE test_type='EQ') AS eq_best,
+          MAX(score) FILTER (WHERE test_type='PQ') AS pq_best,
+          COUNT(*) AS total_tests,
+          COUNT(*) FILTER (WHERE test_type='IQ') AS iq_attempts,
+          COUNT(*) FILTER (WHERE test_type='EQ') AS eq_attempts,
+          COUNT(*) FILTER (WHERE test_type='PQ') AS pq_attempts
+        FROM results WHERE user_id=$1
+    """,uid)
+    iq_rank=await db_fetchrow("""
+        SELECT COUNT(*)+1 AS position FROM (
+          SELECT user_id, MAX(score) AS best_score FROM results WHERE test_type='IQ' GROUP BY user_id
+        ) ranked
+        WHERE best_score > COALESCE((SELECT MAX(score) FROM results WHERE user_id=$1 AND test_type='IQ'),-1)
+    """,uid)
+    profile_stats={"iq_best":int(stats["iq_best"]) if stats and stats["iq_best"] is not None else None,"eq_best":int(stats["eq_best"]) if stats and stats["eq_best"] is not None else None,"pq_best":int(stats["pq_best"]) if stats and stats["pq_best"] is not None else None,"total_tests":int(stats["total_tests"] or 0) if stats else 0,"iq_attempts":int(stats["iq_attempts"] or 0) if stats else 0,"eq_attempts":int(stats["eq_attempts"] or 0) if stats else 0,"pq_attempts":int(stats["pq_attempts"] or 0) if stats else 0,"iq_rank":int(iq_rank["position"]) if iq_rank else None}
+    return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"language_selected":bool(row["language_selected"]),"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions(),"pending_payment":pending_payload,"active_test":active_payload,"profile_stats":profile_stats}
 
 @app.post("/api/profile/save")
 async def profile_save(request: Request):
@@ -1837,21 +2136,20 @@ async def test_start(request: Request):
     retry_key={"IQ":"iq_retry_price","EQ":"eq_retry_price","PQ":"pq_retry_price"}[typ]
     has_previous=bool(await db_fetchrow("SELECT 1 FROM results WHERE user_id=$1 AND test_type=$2 LIMIT 1",uid,typ))
     price=await setting_int(retry_key if has_previous else price_key,0)
-    active=await db_fetchrow("SELECT session_id,test_type,questions,answers,started_at,expires_at,price,is_retry FROM test_sessions WHERE user_id=$1 AND test_type=$2 AND status='active' AND expires_at>NOW() ORDER BY started_at DESC LIMIT 1",uid,typ)
+    active=await db_fetchrow("SELECT session_id,test_type,questions,answers,current_index,started_at,expires_at,price,is_retry FROM test_sessions WHERE user_id=$1 AND test_type=$2 AND status='active' AND expires_at>NOW() ORDER BY started_at DESC LIMIT 1",uid,typ)
     if active:
-        # Always normalize the persisted payload. Older deployments could have
-        # saved JSON twice, making the browser treat the JSON string as an array
-        # of thousands of characters (e.g. Q3/16973).
+        # Never trust the raw DB JSON shape here. Older versions could store
+        # JSONB as a JSON string, which made the frontend display Q3/16973.
         active_questions = normalize_test_questions(active["questions"], typ, lang)
-        await db_execute(
-            "UPDATE test_sessions SET questions=$1::jsonb WHERE session_id=$2::uuid",
-            json.dumps(active_questions), str(active["session_id"])
-        )
         answers = active["answers"] if isinstance(active["answers"], dict) else {}
-        # Never keep answer indexes outside the canonical question range.
-        answers = {str(k): int(v) for k, v in answers.items()
+        answers = {str(k): int(v) for k,v in answers.items()
                    if str(k).isdigit() and 0 <= int(v) <= 3 and 1 <= int(k) <= len(active_questions)}
-        return {"ok":True,"session_id":str(active["session_id"]),"test_type":active["test_type"],"questions":active_questions,"answers":answers,"started_at":active["started_at"].isoformat(),"expires_at":active["expires_at"].isoformat(),"price":int(active["price"] or 0),"is_retry":bool(active["is_retry"]),"resumed":True}
+        current_index = max(0, min(int(active["current_index"] or 0), len(active_questions)-1))
+        await db_execute(
+            "UPDATE test_sessions SET questions=$1::jsonb,answers=$2::jsonb,current_index=$3 WHERE session_id=$4::uuid",
+            json.dumps(active_questions), json.dumps(answers), current_index, str(active["session_id"])
+        )
+        return {"ok":True,"session_id":str(active["session_id"]),"test_type":active["test_type"],"questions":active_questions,"answers":answers,"current_index":current_index,"started_at":active["started_at"].isoformat(),"expires_at":active["expires_at"].isoformat(),"price":int(active["price"] or 0),"is_retry":bool(active["is_retry"]),"resumed":True}
     sid=new_session()
     expires=datetime.now(timezone.utc)+timedelta(minutes=30)
     if typ=="IQ":
@@ -1862,7 +2160,7 @@ async def test_start(request: Request):
         "INSERT INTO test_sessions(session_id,user_id,test_type,status,questions,expires_at,price,is_retry) VALUES($1,$2,$3,'active',$4,$5,$6,$7)",
         sid,uid,typ,json.dumps(questions),expires,price,has_previous
     )
-    return {"ok":True,"session_id":str(sid),"test_type":typ,"questions":questions,"expires_at":expires.isoformat(),"price":price,"is_retry":has_previous}
+    return {"ok":True,"session_id":str(sid),"test_type":typ,"questions":questions,"current_index":0,"answers":{},"expires_at":expires.isoformat(),"price":price,"is_retry":has_previous}
 
 @app.post("/api/test/{session_id}/submit")
 async def test_submit(session_id: str, request: Request):
@@ -1927,15 +2225,49 @@ async def test_submit(session_id: str, request: Request):
         return {"ok":True,"payment_required":True,"attempt_id":attempt["id"],"payment_id":payment_id,"amount":price,"card":dict(card) if card else None}
     return {"ok":True,"payment_required":False,"attempt_id":attempt["id"],"score":attempt["score"],"level":attempt["level"],"correct_count":attempt["correct_count"]}
 
+@app.post("/api/test/{session_id}/progress")
+async def test_progress(session_id: str, request: Request):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
+    data=await request.json()
+    answers=data.get("answers") or {}
+    if not isinstance(answers, dict):
+        return json_error("Javoblar formati noto‘g‘ri",400)
+    try:
+        requested_index=int(data.get("current_index",0))
+    except (TypeError,ValueError):
+        requested_index=0
+    session=await db_fetchrow("SELECT test_type,questions,status,expires_at FROM test_sessions WHERE session_id=$1::uuid AND user_id=$2",session_id,uid)
+    if not session:
+        return json_error("Session topilmadi",404)
+    if session["status"] != "active":
+        return json_error("Test allaqachon yakunlangan",409)
+    if session["expires_at"] < datetime.now(timezone.utc):
+        await db_execute("UPDATE test_sessions SET status='expired' WHERE session_id=$1::uuid AND user_id=$2 AND status='active'",session_id,uid)
+        return json_error("Test vaqti tugagan",409)
+    lang_row=await db_fetchrow("SELECT language FROM users WHERE user_id=$1",uid)
+    lang=lang_row["language"] if lang_row and lang_row["language"] in TRANSLATIONS else "uz"
+    questions=normalize_test_questions(session["questions"],session["test_type"],lang)
+    max_index=max(0,len(questions)-1)
+    current_index=max(0,min(requested_index,max_index))
+    clean_answers={str(k):int(v) for k,v in answers.items() if str(k).isdigit() and 0 <= int(v) <= 3 and 1 <= int(k) <= len(questions)}
+    await db_execute("UPDATE test_sessions SET current_index=$1, answers=$2::jsonb, questions=$3::jsonb WHERE session_id=$4::uuid AND user_id=$5 AND status='active'",current_index,json.dumps(clean_answers),json.dumps(questions),session_id,uid)
+    return {"ok":True,"current_index":current_index}
+
 @app.get("/api/test/{session_id}/resume")
 async def test_resume(session_id: str, request: Request):
     user=await authenticated_user(request); uid=int(user["id"])
     s=await db_fetchrow("SELECT * FROM test_sessions WHERE session_id=$1 AND user_id=$2",session_id,uid)
     if not s: return json_error("Session topilmadi",404)
+    lang_row=await db_fetchrow("SELECT language FROM users WHERE user_id=$1",uid)
+    lang=lang_row["language"] if lang_row and lang_row["language"] in TRANSLATIONS else "uz"
+    questions=normalize_test_questions(s["questions"],s["test_type"],lang)
     if s["status"]=="active" and s["expires_at"] < datetime.now(timezone.utc):
         await db_execute("UPDATE test_sessions SET status='expired' WHERE session_id=$1::uuid AND user_id=$2 AND status='active'",session_id,uid)
-        return {"ok":True,"status":"expired","test_type":s["test_type"],"questions":s["questions"],"answers":s["answers"]}
-    return {"ok":True,"status":s["status"],"test_type":s["test_type"],"questions":s["questions"],"answers":s["answers"]}
+        return {"ok":True,"status":"expired","test_type":s["test_type"],"questions":questions,"answers":s["answers"],"current_index":int(s["current_index"] or 0)}
+    current_index=max(0,min(int(s["current_index"] or 0),len(questions)-1))
+    await db_execute("UPDATE test_sessions SET questions=$1::jsonb,current_index=$2 WHERE session_id=$3::uuid AND user_id=$4",json.dumps(questions),current_index,session_id,uid)
+    return {"ok":True,"status":s["status"],"test_type":s["test_type"],"questions":questions,"answers":s["answers"],"current_index":current_index,"started_at":s["started_at"].isoformat(),"expires_at":s["expires_at"].isoformat()}
 
 @app.get("/api/result/{attempt_id}")
 async def get_result(attempt_id:int,request:Request):
@@ -2229,16 +2561,24 @@ async def certificate_png_endpoint(certificate_id:str,request:Request):
 async def api_ranking(request:Request):
     user=await authenticated_user(request); uid=int(user["id"])
     rows=await db_fetch("""
-        SELECT u.full_name,r.score,r.level
-        FROM results r JOIN users u ON u.user_id=r.user_id
-        WHERE r.test_type='IQ'
-        ORDER BY r.score DESC,r.created_at ASC LIMIT 100
+        SELECT u.full_name,b.score,b.level
+        FROM (
+          SELECT DISTINCT ON (user_id) user_id,score,level,created_at
+          FROM results
+          WHERE test_type='IQ'
+          ORDER BY user_id,score DESC,created_at ASC
+        ) b
+        JOIN users u ON u.user_id=b.user_id
+        ORDER BY b.score DESC,b.created_at ASC
+        LIMIT 100
     """)
     items=[{"position":i+1,"name":r["full_name"] or "Foydalanuvchi","score":r["score"],"level":r["level"]} for i,r in enumerate(rows)]
     pos=next((x["position"] for x in items if x["name"] and False),None)
     mine=await db_fetchrow("""
-        SELECT COUNT(*)+1 AS position FROM results
-        WHERE test_type='IQ' AND score > COALESCE((SELECT MAX(score) FROM results WHERE user_id=$1 AND test_type='IQ'),-1)
+        SELECT COUNT(*)+1 AS position FROM (
+          SELECT user_id, MAX(score) AS best_score FROM results WHERE test_type='IQ' GROUP BY user_id
+        ) ranked
+        WHERE best_score > COALESCE((SELECT MAX(score) FROM results WHERE user_id=$1 AND test_type='IQ'),-1)
     """,uid)
     return {"ok":True,"ranking":items,"my_position":mine["position"] if mine else None}
 
