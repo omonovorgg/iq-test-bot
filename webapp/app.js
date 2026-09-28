@@ -472,9 +472,6 @@
     updateHomeLocks();
     renderPersonalProfile();
     show("homeScreen");
-    updateLive();
-    clearInterval(window.__liveTimer);
-    window.__liveTimer = setInterval(updateLive, 5000);
 
     if (d.pending_payment) {
       const p = d.pending_payment;
@@ -807,11 +804,19 @@
     if (state.paymentId && !$("#paymentScreen")?.classList.contains("hidden")) refreshPayment();
   }, 5000);
 
+  // Live counter is independent from bootstrap/test data. Start it immediately
+  // so a temporary bootstrap/API failure cannot leave the counter stuck on "—".
+  updateLive();
+  clearInterval(window.__liveTimer);
+  window.__liveTimer = setInterval(updateLive, 5000);
+
   (async () => {
     try {
       await loadHome();
     } catch (e) {
       show("homeScreen");
+      // Try the aggregate live endpoint once more even when bootstrap failed.
+      void updateLive();
       toast(e.message || "Mini App yuklanmadi");
     }
   })();
