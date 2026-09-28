@@ -21,7 +21,7 @@
   const screens = ["loadingScreen","homeScreen","profileScreen","testScreen","loadingResult","paymentScreen","resultScreen","rankingScreen","certificateScreen","battleScreen"];
   const I18N = {
     uz: {
-      home_greet:"Salom, {name} 👋", hero_pill:"18 TA MANTIQIY PUZZLE", hero_title:"IQ darajangizni sinab ko‘ring", hero_text:"Diqqat, naqsh va mantiq asosidagi test.", live_total:"Botga qo‘shilganlar", live_now:"Hozir", live_people:"kishi onlayn", tests:"Testlar", sequence:"ketma-ket ochiladi", iq_desc:"18 mantiqiy puzzle", eq_locked:"IQdan keyin ochiladi", eq_open:"Ochilgan", pq_locked:"EQdan keyin ochiladi", profile:"Shaxsiy profil", profile_after:"IQ + EQ + PQdan keyin", battle:"Battle", battle_desc:"Do‘stingiz bilan asynchronous duel", home:"Home", ranking:"Reyting", certificate:"Sertifikat", profile_nav:"Profil",
+      home_greet:"Salom, {name} 👋", hero_pill:"18 TA MANTIQIY PUZZLE", hero_title:"IQ darajangizni sinab ko‘ring", hero_text:"Diqqat, naqsh va mantiq asosidagi test.", live_total:"Botga qo‘shilganlar", live_now:"Hozir", live_people:"kishi onlayn", tests:"Testlar", sequence:"ketma-ket ochiladi", iq_desc:"Mantiqiy fikrlash darajangiz", eq_desc:"His-tuyg‘ularni tushunish qobiliyati", pq_desc:"Ishni keyinga surish odatingiz", eq_locked:"IQdan keyin ochiladi", eq_open:"Ochilgan", pq_locked:"EQdan keyin ochiladi", profile:"Shaxsiy profil", profile_after:"IQ + EQ + PQdan keyin", battle:"Battle", battle_desc:"Do‘stingiz bilan asynchronous duel", home:"Home", ranking:"Reyting", certificate:"Sertifikat", profile_nav:"Profil",
       profile_title:"Profil", name_label:"Ism / familiya", name_placeholder:"Ismingiz", gender_label:"Jins", select:"Tanlang", male:"O‘g‘il", female:"Qiz", age_label:"Yosh", country_label:"Davlat", save:"Saqlash",
       q_label:"Q", easy:"OSON", medium:"O‘RTA", hard:"QIYIN", battle_label:"BATTLE", matrix_q:"Qaysi variant matritsani to‘ldiradi?", question:"Savol", next:"Davom etish", see_result:"Natijani ko‘rish", loading_result:"Natija tayyorlanmoqda", checked:"✓ Javoblar tekshirildi", scoring:"✓ Ball hisoblanmoqda", profile_updated:"✓ Profil yangilanmoqda",
       payment:"To‘lov", payment_wait:"NATIJA UCHUN TO‘LOV", payment_text:"Natijangiz tayyor. Uni ochish uchun quyidagi to‘lovni amalga oshirib, chekni yuboring.", copy:"Nusxa", open_bot:"Telegram botini ochish", receipt:"To‘lov cheki", choose_file:"Fayl tanlang", send_receipt:"Receipt yuborish", pay_pending:"Receipt yuborildi. Admin tasdig‘i kutilmoqda.", pay_approved:"✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.", pay_rejected:"❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.", pay_waiting:"Receipt kutilmoqda.", next_result:"📊 Natijani ko‘rish", next_battle:"⚔️ Battle’ga o‘tish", home_btn:"🏠 Bosh sahifaga qaytish", retry_receipt:"🔄 Receiptni qayta yuborish", receipt_resend:"Receiptni qayta yuboring.",
@@ -33,7 +33,7 @@
       strengths:"Kuchli tomonlar", development:"Rivojlanish nuqtalari", cert_empty:"Sertifikat yo‘q", cert_empty_text:"IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.", cert_open:"PNG ochish",
     },
     ru: {
-      home_greet:"Привет, {name} 👋", hero_pill:"18 ЛОГИЧЕСКИХ ЗАДАЧ", hero_title:"Проверьте свой уровень IQ", hero_text:"Тест на внимание, закономерности и логику.", live_total:"Всего участников", live_now:"Сейчас", live_people:"человек онлайн", tests:"Тесты", sequence:"открываются по порядку", iq_desc:"18 логических задач", eq_locked:"После IQ", eq_open:"Открыт", pq_locked:"После EQ", profile:"Личный профиль", profile_after:"После IQ + EQ + PQ", battle:"Battle", battle_desc:"Асинхронная дуэль с другом", home:"Главная", ranking:"Рейтинг", certificate:"Сертификат", profile_nav:"Профиль",
+      home_greet:"Привет, {name} 👋", hero_pill:"18 ЛОГИЧЕСКИХ ЗАДАЧ", hero_title:"Проверьте свой уровень IQ", hero_text:"Тест на внимание, закономерности и логику.", live_total:"Всего участников", live_now:"Сейчас", live_people:"человек онлайн", tests:"Тесты", sequence:"открываются по порядку", iq_desc:"Ваш уровень логического мышления", eq_desc:"Способность понимать эмоции", pq_desc:"Склонность откладывать дела", eq_locked:"После IQ", eq_open:"Открыт", pq_locked:"После EQ", profile:"Личный профиль", profile_after:"После IQ + EQ + PQ", battle:"Battle", battle_desc:"Асинхронная дуэль с другом", home:"Главная", ranking:"Рейтинг", certificate:"Сертификат", profile_nav:"Профиль",
       profile_title:"Профиль", name_label:"Имя / фамилия", name_placeholder:"Ваше имя", gender_label:"Пол", select:"Выберите", male:"Мужской", female:"Женский", age_label:"Возраст", country_label:"Страна", save:"Сохранить",
       q_label:"В", easy:"ЛЕГКО", medium:"СРЕДНЕ", hard:"СЛОЖНО", battle_label:"BATTLE", matrix_q:"Какой вариант заполнит матрицу?", question:"Вопрос", next:"Продолжить", see_result:"Посмотреть результат", loading_result:"Готовим результат", checked:"✓ Ответы проверены", scoring:"✓ Баллы рассчитаны", profile_updated:"✓ Профиль обновлён",
       payment:"Оплата", payment_wait:"ОПЛАТА ДЛЯ ОТКРЫТИЯ РЕЗУЛЬТАТА", payment_text:"Ваш результат готов. Чтобы открыть его, выполните оплату ниже и отправьте чек.", copy:"Копировать", open_bot:"Открыть Telegram-бота", receipt:"Чек оплаты", choose_file:"Выбрать файл", send_receipt:"Отправить чек", pay_pending:"Чек отправлен. Ожидается подтверждение администратора.", pay_approved:"✅ Оплата подтверждена. Следующий этап открыт.", pay_rejected:"❌ Оплата не подтверждена. Администратор отклонил чек.", pay_waiting:"Ожидается чек.", next_result:"📊 Посмотреть результат", next_battle:"⚔️ Перейти в Battle", home_btn:"🏠 На главную", retry_receipt:"🔄 Отправить чек снова", receipt_resend:"Отправьте чек повторно.",
@@ -44,7 +44,7 @@
       personal_wait:"Анализ откроется после завершения IQ + EQ + PQ.", strengths:"Сильные стороны", development:"Точки развития", cert_empty:"Сертификата нет", cert_empty_text:"Завершите IQ тест — сертификат появится после открытия результата.", cert_open:"Открыть PNG",
     },
     en: {
-      home_greet:"Hi, {name} 👋", hero_pill:"18 LOGIC PUZZLES", hero_title:"Test your IQ level", hero_text:"A test of attention, patterns and logic.", live_total:"Total participants", live_now:"Now", live_people:"people online", tests:"Tests", sequence:"unlock in sequence", iq_desc:"18 logic puzzles", eq_locked:"After IQ", eq_open:"Open", pq_locked:"After EQ", profile:"Personal profile", profile_after:"After IQ + EQ + PQ", battle:"Battle", battle_desc:"Asynchronous duel with a friend", home:"Home", ranking:"Ranking", certificate:"Certificate", profile_nav:"Profile",
+      home_greet:"Hi, {name} 👋", hero_pill:"18 LOGIC PUZZLES", hero_title:"Test your IQ level", hero_text:"A test of attention, patterns and logic.", live_total:"Total participants", live_now:"Now", live_people:"people online", tests:"Tests", sequence:"unlock in sequence", iq_desc:"Your logical thinking level", eq_desc:"Ability to understand emotions", pq_desc:"Tendency to postpone tasks", eq_locked:"After IQ", eq_open:"Open", pq_locked:"After EQ", profile:"Personal profile", profile_after:"After IQ + EQ + PQ", battle:"Battle", battle_desc:"Asynchronous duel with a friend", home:"Home", ranking:"Ranking", certificate:"Certificate", profile_nav:"Profile",
       profile_title:"Profile", name_label:"Name / surname", name_placeholder:"Your name", gender_label:"Gender", select:"Select", male:"Male", female:"Female", age_label:"Age", country_label:"Country", save:"Save",
       q_label:"Q", easy:"EASY", medium:"MEDIUM", hard:"HARD", battle_label:"BATTLE", matrix_q:"Which option completes the matrix?", question:"Question", next:"Continue", see_result:"View result", loading_result:"Preparing result", checked:"✓ Answers checked", scoring:"✓ Score calculated", profile_updated:"✓ Profile updated",
       payment:"Payment", payment_wait:"PAYMENT TO UNLOCK RESULT", payment_text:"Your result is ready. Complete the payment below and send the receipt to unlock it.", copy:"Copy", open_bot:"Open Telegram bot", receipt:"Payment receipt", choose_file:"Choose file", send_receipt:"Send receipt", pay_pending:"Receipt sent. Waiting for admin approval.", pay_approved:"✅ Payment approved. Next step is open.", pay_rejected:"❌ Payment not approved. The admin rejected the receipt.", pay_waiting:"Waiting for receipt.", next_result:"📊 View result", next_battle:"⚔️ Go to Battle", home_btn:"🏠 Back to home", retry_receipt:"🔄 Send receipt again", receipt_resend:"Please send the receipt again.",
@@ -84,12 +84,12 @@
       setText(".hero-copy h2", tx("hero_title")); setText(".hero-copy p", tx("hero_text"));
       setText(".live-card > div:first-child small", tx("live_total")); setText(".online div small:first-child", tx("live_now")); setText(".online div small:last-child", tx("live_people"));
       setText(".section-title h3", tx("tests")); setText(".section-title span", tx("sequence"));
-      setText(".test-card.iq small", tx("iq_desc")); setText("#eqState", state.user?.hasIQ ? tx("eq_open") : tx("eq_locked")); setText("#pqState", state.user?.hasEQ ? tx("eq_open") : tx("pq_locked"));
+      setText(".test-card.iq small", tx("iq_desc")); setText("#eqState", tx("eq_desc")); setText("#pqState", tx("pq_desc"));
       setText("#profileCard b", tx("profile")); setText("#profileCard small", tx("profile_after")); setText("#battleCard b", tx("battle")); setText("#battleCard small", tx("battle_desc"));
       const nav = $$('[data-nav]'); if (nav[0]) nav[0].querySelector('small').textContent=tx('home'); if(nav[1])nav[1].querySelector('small').textContent=tx('ranking'); if(nav[2])nav[2].querySelector('small').textContent=tx('certificate'); if(nav[3])nav[3].querySelector('small').textContent=tx('profile_nav');
     }
     text("#profileScreen .subbar h2", "profile_title"); text("#saveProfile", "save");
-    const labels = $("#profileScreen"); if(labels){ const ls=labels.querySelectorAll('label'); if(ls[0])ls[0].firstChild.textContent=tx('name_label'); if(ls[1])ls[1].firstChild.textContent=tx('gender_label'); if(ls[2])ls[2].firstChild.textContent=tx('age_label'); if(ls[3])ls[3].firstChild.textContent=tx('country_label'); $("#fullName").placeholder=tx('name_placeholder'); }
+    const labels = $("#profileEditForm"); if(labels){ const ls=labels.querySelectorAll('label'); if(ls[0])ls[0].firstChild.textContent=tx('name_label'); if(ls[1])ls[1].firstChild.textContent=tx('gender_label'); if(ls[2])ls[2].firstChild.textContent=tx('age_label'); if(ls[3])ls[3].firstChild.textContent=tx('country_label'); $("#fullName").placeholder=tx('name_placeholder'); }
     const g=$("#gender"); if(g){g.options[0].text=tx('select');g.options[1].text=tx('male');g.options[2].text=tx('female');}
     const c=$("#country"); if(c && c.options[0])c.options[0].text=tx('select');
     text("#paymentScreen .subbar h2","payment"); text("#paymentScreen .payment-card .pill","payment_wait"); setText("#paymentScreen .payment-card p",tx('payment_text')); text("#copyCard","copy"); text("#sharePayment","open_bot"); const fileLabel=$("#paymentScreen .file-label"); if(fileLabel && fileLabel.firstChild) fileLabel.firstChild.textContent=tx('receipt'); text("#sendReceipt","send_receipt");
@@ -502,11 +502,7 @@
       state.user?.age && state.user?.country
     );
     if (!profileReady && !profileConfirmed) {
-      state.pendingType = type;
-      fillProfileFields();
-      $("#profileOverview")?.classList.add("hidden");
-      $("#profileEditor")?.classList.remove("hidden");
-      show("profileScreen");
+      openInitialProfileSetup(type);
       return;
     }
 
@@ -617,7 +613,10 @@
     const accuracy = Math.max(0, Math.min(100, Number(d.accuracy ?? (questionCount ? Math.round(correct / questionCount * 100) : 0))));
     const duration = Math.max(0, Number(d.duration || 0));
     const avg = Number(d.avg_time || (questionCount && duration ? duration / questionCount : 0));
-    const score = Number(d.score || 0);
+    // The result screen always shows THIS attempt. The ranking/profile use the
+    // user's best result separately; never replace the current score with the
+    // historical best.
+    const score = Number(d.score ?? 0);
 
     $("#resultBadge").textContent = state.testType === "IQ" ? tx("iq_done") : state.testType === "EQ" ? tx("eq_done") : tx("pq_done");
     $("#resultUnit").textContent = state.testType === "IQ" ? "IQ" : "%";
@@ -841,11 +840,25 @@
   }
 
   function updateHomeLocks() {
-    $("#eqState").textContent = state.user.hasIQ ? tx("eq_open") : tx("eq_locked");
-    $("#pqState").textContent = state.user.hasEQ ? tx("eq_open") : tx("pq_locked");
-    $(".test-card[data-test=EQ]")?.classList.toggle("locked", !state.user.hasIQ);
-    $(".test-card[data-test=PQ]")?.classList.toggle("locked", !state.user.hasEQ);
-    $("#profileCard")?.classList.toggle("locked", !state.user.hasPQ);
+    const eqLocked = !state.user?.hasIQ;
+    const pqLocked = !state.user?.hasEQ;
+    const profileLocked = !state.user?.hasPQ;
+
+    $("#eqState").textContent = tx("eq_desc");
+    $("#pqState").textContent = tx("pq_desc");
+
+    const setCardState = (selector, locked) => {
+      const card = $(selector);
+      if (!card) return;
+      card.classList.toggle("locked", locked);
+      const action = card.querySelector(".card-action");
+      if (action) action.textContent = locked ? "🔒" : "›";
+    };
+
+    setCardState('.test-card[data-test="IQ"]', false);
+    setCardState('.test-card[data-test="EQ"]', eqLocked);
+    setCardState('.test-card[data-test="PQ"]', pqLocked);
+    setCardState("#profileCard", profileLocked);
   }
 
   async function restoreServerActive(active) {
@@ -908,6 +921,60 @@
     $("#country").value = state.user?.country || "";
   }
 
+  function openInitialProfileSetup(type) {
+    state.pendingType = type;
+    fillProfileFields();
+    $("#profileOverview")?.classList.add("hidden");
+    $("#profileEditForm")?.classList.add("hidden");
+    $("#profileSetup")?.classList.remove("hidden");
+    $("#profileSetupName")?.classList.remove("hidden");
+    $("#profileSetupDetails")?.classList.add("hidden");
+    $("#setupFullName").value = state.user?.full_name || "";
+    $("#setupAge").value = state.user?.age || "";
+    $("#setupGender").value = state.user?.gender || "";
+    $("#setupCountry").value = state.user?.country || "";
+    $$(".gender-option").forEach((b) => b.classList.toggle("selected", b.dataset.gender === $("#setupGender").value));
+    $$(".country-option").forEach((b) => b.classList.toggle("selected", b.dataset.country === $("#setupCountry").value));
+    show("profileScreen");
+    window.scrollTo({ top:0, behavior:"instant" });
+  }
+
+  function openInitialProfileDetails() {
+    const name = $("#setupFullName")?.value.trim() || "";
+    if (!name) { toast(tx("error_profile")); return; }
+    $("#profileSetupName")?.classList.add("hidden");
+    $("#profileSetupDetails")?.classList.remove("hidden");
+    window.scrollTo({ top:0, behavior:"instant" });
+  }
+
+  async function saveInitialProfileAndStart() {
+    const full_name = $("#setupFullName")?.value.trim() || "";
+    const gender = $("#setupGender")?.value || "";
+    const age = Number($("#setupAge")?.value);
+    const country = $("#setupCountry")?.value || "";
+    if (!full_name || !gender || !country || !Number.isInteger(age) || age < 10 || age > 120) {
+      toast(tx("error_profile")); return;
+    }
+    const pending = state.pendingType;
+    if (!pending) return;
+    try {
+      state.busy = true;
+      await api("/api/profile/save", { method:"POST", body:JSON.stringify({full_name, gender, age, country}) });
+      state.user = { ...state.user, full_name, gender, age, country };
+      updateHomeLocks();
+      $("#profileSetup")?.classList.add("hidden");
+      state.pendingType = null;
+      // startTest has its own busy guard, so release this save operation
+      // before handing control to the actual test start.
+      state.busy = false;
+      await startTest(pending, true, true);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      state.busy = false;
+    }
+  }
+
   async function saveProfile() {
     const age = Number($("#age").value);
     const body = {
@@ -930,10 +997,13 @@
       if (pending) setTimeout(() => startTest(pending, true, true), 250);
       else if (state.user?.hasPQ) {
         $("#profileEditor")?.classList.add("hidden");
+        $("#profileEditForm")?.classList.add("hidden");
         $("#profileOverview")?.classList.remove("hidden");
         show("profileScreen");
       } else {
         $("#profileOverview")?.classList.add("hidden");
+        $("#profileSetup")?.classList.add("hidden");
+        $("#profileEditForm")?.classList.remove("hidden");
         $("#profileEditor")?.classList.remove("hidden");
         show("profileScreen");
       }
@@ -1177,6 +1247,19 @@
       renderQuestion();
     } else finishTest();
   });
+  $("#setupNameNext")?.addEventListener("click", openInitialProfileDetails);
+  $("#setupNameBack")?.addEventListener("click", () => { state.pendingType = null; $("#profileSetup")?.classList.add("hidden"); show("homeScreen"); });
+  $("#setupDetailsBack")?.addEventListener("click", () => { $("#profileSetupDetails")?.classList.add("hidden"); $("#profileSetupName")?.classList.remove("hidden"); });
+  $("#setupDetailsBackText")?.addEventListener("click", () => { $("#profileSetupDetails")?.classList.add("hidden"); $("#profileSetupName")?.classList.remove("hidden"); });
+  $$(".gender-option").forEach((button) => button.addEventListener("click", () => {
+    $("#setupGender").value = button.dataset.gender || "";
+    $$(".gender-option").forEach((b) => b.classList.toggle("selected", b === button));
+  }));
+  $$(".country-option").forEach((button) => button.addEventListener("click", () => {
+    $("#setupCountry").value = button.dataset.country || "";
+    $$(".country-option").forEach((b) => b.classList.toggle("selected", b === button));
+  }));
+  $("#setupStartTest")?.addEventListener("click", saveInitialProfileAndStart);
   $("#saveProfile")?.addEventListener("click", saveProfile);
   $("#copyCard")?.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast(tx("copied")); }
@@ -1216,6 +1299,8 @@
   $("#editProfileBtn")?.addEventListener("click", () => {
     fillProfileFields();
     $("#profileOverview")?.classList.add("hidden");
+    $("#profileSetup")?.classList.add("hidden");
+    $("#profileEditForm")?.classList.remove("hidden");
     $("#profileEditor")?.classList.remove("hidden");
     show("profileScreen");
   });
