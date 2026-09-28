@@ -547,15 +547,17 @@ async def migrate():
         UPDATE fake_ranking
         SET name = split_part(name, ' ', 1) || ' ' ||
             CASE
-                WHEN split_part(name, ' ', 2) LIKE '%yev' THEN split_part(name, ' ', 2) || 'a'
-                WHEN split_part(name, ' ', 2) LIKE '%ov' THEN split_part(name, ' ', 2) || 'a'
-                ELSE split_part(name, ' ', 2)
+                WHEN split_part(name, ' ', 2) ~ '(ova|yeva)$' THEN split_part(name, ' ', 2)
+                WHEN split_part(name, ' ', 2) ~ 'yev$' THEN split_part(name, ' ', 2) || 'a'
+                WHEN split_part(name, ' ', 2) ~ 'ov$' THEN split_part(name, ' ', 2) || 'a'
+                ELSE split_part(name, ' ', 2) || 'ova'
             END,
             gender = 'female'
         WHERE split_part(name, ' ', 1) IN (
             'Madina','Malika','Zarina','Sevinch','Dilnoza','Shahnoza','Nilufar','Mohira',
-            'Diyora','Sabina','Gulnoza','Rayhona','Munisa','Feruza'
-        ) AND split_part(name, ' ', 2) !~ '(ova|yeva)$'
+            'Diyora','Sabina','Gulnoza','Rayhona','Munisa','Feruza','Nargiza','Shahzoda',
+            'Maftuna','Aziza','Zebo','Mubina'
+        )
     """)
     await db_execute("""
         UPDATE fake_ranking
@@ -2712,7 +2714,7 @@ async def api_ranking(request:Request):
         SELECT name,score,level,created_at
         FROM fake_ranking
         ORDER BY score DESC, name ASC, created_at ASC
-        LIMIT 10
+        LIMIT 100
     """)
     items=[{
         "position":i+1,
