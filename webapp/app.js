@@ -14,7 +14,8 @@
     sessionId: null, testType: null, mode: "NORMAL",
     index: 0, answers: {}, selected: null, startedAt: 0,
     attemptId: null, paymentId: null, paymentAttemptId: null,
-    battleId: null, battlePolling: null, paymentPolling: null, busy: false
+    battleId: null, battlePolling: null, paymentPolling: null, busy: false,
+    profileStats: {}, recovery: null
   };
 
   const screens = ["loadingScreen","homeScreen","profileScreen","testScreen","loadingResult","paymentScreen","resultScreen","rankingScreen","certificateScreen","battleScreen"];
@@ -158,6 +159,97 @@
     return String(value ?? "").replace(/[&<>"']/g, (m) => ({
       "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
     }[m]));
+  }
+
+  function ensureRecoveryModal() {
+    let modal = $("#recoveryModal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "recoveryModal";
+    modal.className = "recovery-modal hidden";
+    modal.innerHTML = `
+      <div class="recovery-backdrop"></div>
+      <div class="recovery-dialog" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
+        <div class="recovery-icon">↻</div>
+        <span class="eyebrow" id="recoveryKicker">DAVOM ETTIRISH</span>
+        <h2 id="recoveryTitle">Sizda yakunlanmagan jarayon bor</h2>
+        <p id="recoveryText"></p>
+        <div class="recovery-actions">
+          <button id="recoveryCancel" class="secondary">Bekor qilish</button>
+          <button id="recoveryContinue" class="primary">Davom etish</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    $("#recoveryCancel").onclick = async () => { await cancelRecovery(); };
+    $("#recoveryContinue").onclick = async () => { await continueRecovery(); };
+    return modal;
+  }
+
+  function showRecoveryModal(kind, payload) {
+    state.recovery = { kind, payload };
+    const modal = ensureRecoveryModal();
+    const title = $("#recoveryTitle");
+    const text = $("#recoveryText");
+    const continueBtn = $("#recoveryContinue");
+    const cancelBtn = $("#recoveryCancel");
+    if (kind === "payment") {
+      title.textContent = "Sizda yakunlanmagan to‘lov bor";
+      text.textContent = `To‘lov (${Number(payload.amount || 0).toLocaleString("uz-UZ")} so‘m) yakunlanmagan. To‘lovni davom ettirasizmi yoki bekor qilasizmi?`;
+      continueBtn.textContent = "To‘lovni davom ettirish";
+      cancelBtn.textContent = "To‘lovni bekor qilish";
+    } else {
+      const type = payload.test_type || "IQ";
+      title.textContent = "Sizda yakunlanmagan test bor";
+      text.textContent = `${type} testi ${Number(payload.current_index || 0) + 1}-savoldan davom etadi. Testni davom ettirasizmi yoki butunlay bekor qilasizmi?`;
+      continueBtn.textContent = "Testni davom ettirish";
+      cancelBtn.textContent = "Testni bekor qilish";
+    }
+    modal.classList.remove("hidden");
+  }
+
+  function hideRecoveryModal() {
+    const modal = $("#recoveryModal");
+    if (modal) modal.classList.add("hidden");
+    state.recovery = null;
+  }
+
+  async function continueRecovery() {
+    const recovery = state.recovery;
+    if (!recovery || state.busy) return;
+    try {
+      state.busy = true;
+      hideRecoveryModal();
+      if (recovery.kind === "payment") {
+        const p = recovery.payload;
+        state.paymentId = p.id; state.paymentAttemptId = p.attempt_id; state.battleId = p.battle_id || null;
+        await renderPayment(p);
+        show("paymentScreen");
+      } else {
+        await restoreServerActive(recovery.payload);
+      }
+    } catch (e) {
+      toast(e.message || "Davom ettirib bo‘lmadi");
+    } finally { state.busy = false; }
+  }
+
+  async function cancelRecovery() {
+    const recovery = state.recovery;
+    if (!recovery || state.busy) return;
+    try {
+      state.busy = true;
+      if (recovery.kind === "payment") {
+        await api(`/api/payment/${recovery.payload.id}/cancel`, { method:"POST", body:"{}" });
+        if (Number(state.paymentId) === Number(recovery.payload.id)) { state.paymentId = null; state.paymentAttemptId = null; }
+      } else {
+        await api(`/api/test/${encodeURIComponent(recovery.payload.session_id)}/cancel`, { method:"POST", body:"{}" });
+        if (String(state.sessionId) === String(recovery.payload.session_id)) { clearProgress(); state.sessionId = null; state.questions = []; state.answers = {}; }
+      }
+      hideRecoveryModal();
+      show("homeScreen");
+      toast("Bekor qilindi. Keyingi safar bu jarayon qayta ochilmaydi.");
+    } catch (e) {
+      toast(e.message || "Bekor qilib bo‘lmadi");
+    } finally { state.busy = false; }
   }
 
   function saveProgress() {
@@ -341,10 +433,9 @@
     );
     if (!profileReady && !profileConfirmed) {
       state.pendingType = type;
-      $("#fullName").value = state.user?.full_name || "";
-      $("#gender").value = state.user?.gender || "";
-      $("#age").value = state.user?.age || "";
-      $("#country").value = state.user?.country || "";
+      fillProfileFields();
+      $("#profileOverview")?.classList.add("hidden");
+      $("#profileEditor")?.classList.remove("hidden");
       show("profileScreen");
       return;
     }
@@ -444,6 +535,13 @@
     state.attemptId = attemptId;
     state.paymentAttemptId = attemptId;
     state.testType = d.test_type || state.testType || "IQ";
+    // Refresh authoritative completion/profile statistics after every visible result.
+    try {
+      const fresh = await api("/api/bootstrap");
+      state.user = fresh.user || state.user;
+      state.profileStats = fresh.profile_stats || state.profileStats || {};
+      updateHomeLocks();
+    } catch (_) {}
     const questionCount = Number(d.question_count || (state.testType === "IQ" ? 18 : 6));
     const correct = Number(d.correct_count || 0);
     const accuracy = Math.max(0, Math.min(100, Number(d.accuracy ?? (questionCount ? Math.round(correct / questionCount * 100) : 0))));
@@ -632,6 +730,7 @@
     applyLanguage(state.lang);
     state.prices = d.prices || {};
     state.questions = d.questions || [];
+    state.profileStats = d.profile_stats || {};
     setText("#userName", d.user?.first_name || "Do‘st");
     $("#fullName").value = d.user.full_name || "";
     $("#gender").value = d.user.gender || "";
@@ -644,29 +743,18 @@
     clearInterval(window.__liveTimer);
     window.__liveTimer = setInterval(updateLive, 5000);
 
-    // Payment state must survive closing/reopening the Mini App.
-    // Bootstrap returns the latest pending payment, so the user is placed
-    // straight back on the receipt screen instead of losing the flow.
+    // Do not force the user back into an unfinished flow. Ask once per active
+    // server-side process; if they choose cancel, the server marks it cancelled
+    // so the prompt will not return after reopening the Mini App.
+    // Always ask before restoring an unfinished server-side process. The
+    // server payload is authoritative, so an old localStorage snapshot can
+    // never silently reopen the test.
     if (d.pending_payment) {
-      const p = d.pending_payment;
-      state.paymentId = p.id;
-      state.paymentAttemptId = p.attempt_id;
-      state.battleId = p.battle_id || null;
-      await renderPayment({
-        payment_id: p.id,
-        attempt_id: p.attempt_id,
-        battle_id: p.battle_id || null,
-        amount: p.amount,
-        status: p.status,
-        receipt_file_id: p.receipt_file_id,
-        card: p.card
-      });
-      show("paymentScreen");
+      showRecoveryModal("payment", d.pending_payment);
+    } else if (d.active_test?.session_id) {
+      showRecoveryModal("test", d.active_test);
     } else {
-      const restored = await restoreProgress();
-      if (!restored && d.active_test?.session_id) {
-        await restoreServerActive(d.active_test);
-      }
+      clearProgress();
     }
   }
 
@@ -675,6 +763,7 @@
     $("#pqState").textContent = state.user.hasEQ ? tx("eq_open") : tx("pq_locked");
     $(".test-card[data-test=EQ]")?.classList.toggle("locked", !state.user.hasIQ);
     $(".test-card[data-test=PQ]")?.classList.toggle("locked", !state.user.hasEQ);
+    $("#profileCard")?.classList.toggle("locked", !state.user.hasPQ);
   }
 
   async function restoreServerActive(active) {
@@ -730,6 +819,13 @@
 
   function animateNumber(el, n) { if (el) el.textContent = Number(n || 0).toLocaleString("uz-UZ"); }
 
+  function fillProfileFields() {
+    $("#fullName").value = state.user?.full_name || "";
+    $("#gender").value = state.user?.gender || "";
+    $("#age").value = state.user?.age || "";
+    $("#country").value = state.user?.country || "";
+  }
+
   async function saveProfile() {
     const age = Number($("#age").value);
     const body = {
@@ -744,14 +840,19 @@
       await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
       state.user = { ...state.user, ...body };
       setText("#userName", state.user?.first_name || "Do‘st");
+      updateHomeLocks();
       renderPersonalProfile();
       toast(tx("saved"));
       const pending = state.pendingType;
       delete state.pendingType;
       if (pending) setTimeout(() => startTest(pending, true), 250);
-      else {
+      else if (state.user?.hasPQ) {
         $("#profileEditor")?.classList.add("hidden");
         $("#profileOverview")?.classList.remove("hidden");
+        show("profileScreen");
+      } else {
+        $("#profileOverview")?.classList.add("hidden");
+        $("#profileEditor")?.classList.remove("hidden");
         show("profileScreen");
       }
     } catch (e) { toast(e.message); }
@@ -762,38 +863,64 @@
     const box = $("#personalSummary");
     if (!box || !state.user) return;
     const st = state.profileStats || {};
+    if (!state.user.hasPQ) {
+      box.innerHTML = `
+        <div class="profile-locked-card">
+          <div class="profile-lock-icon">🔒</div>
+          <span class="eyebrow">MAXSUS TAHLIL</span>
+          <h3>Siz qanday insonsiz?</h3>
+          <p>IQ, EQ va PQ natijalaringiz birlashtirilgach, bu yerda sizning fikrlash uslubingiz, kuchli tomonlaringiz, rivojlanish nuqtalaringiz va shaxsiy statistikangiz ochiladi.</p>
+          <div class="profile-lock-progress"><i style="width:${state.user.hasEQ ? 66 : state.user.hasIQ ? 33 : 0}%"></i></div>
+          <small>PQ testini yakunlang — shaxsiy tahlil ochiladi.</small>
+        </div>`;
+      return;
+    }
+
     const initials = (state.user.full_name || state.user.first_name || "U").trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join("") || "U";
     setText("#profileAvatar", initials);
     setText("#profileDisplayName", state.user.full_name || state.user.first_name || "Foydalanuvchi");
-    setText("#profileMeta", [state.user.country, state.user.age ? `${state.user.age} yosh` : ""].filter(Boolean).join(" • ") || "Profil ma’lumotlari saqlangan");
+    setText("#profileMeta", [state.user.country, state.user.age ? `${state.user.age} yosh` : ""].filter(Boolean).join(" • ") || "Profil");
 
     const iq = st.iq_best == null ? "—" : st.iq_best;
     const eq = st.eq_best == null ? "—" : `${st.eq_best}%`;
     const pq = st.pq_best == null ? "—" : `${st.pq_best}%`;
-    const completed = Number(st.total_tests || 0);
-    const hasAny = st.iq_best != null || st.eq_best != null || st.pq_best != null;
-    const status = state.user.hasPQ ? "🏆 Barcha testlar yakunlangan" : state.user.hasEQ ? "⚡ PQ bosqichi ochiq" : state.user.hasIQ ? "🎯 EQ bosqichi ochiq" : "🚀 Birinchi testni boshlash vaqti";
+    const avg = Number(st.avg_percent || 0);
+    const accuracy = Number(st.overall_accuracy || 0);
+    const totalCorrect = Number(st.total_correct || 0);
+    const totalQuestions = Number(st.total_questions || 0);
+    const avgTime = Number(st.avg_duration || 0);
+    const iqRank = st.iq_rank ? `#${st.iq_rank}` : "—";
+
+    let styleTitle = "Muvozanatli fikrlovchi";
+    let styleText = "Sizda mantiq, hissiy anglash va amaliy qarorlar bir-birini to‘ldiradi.";
+    if (Number(st.iq_best || 0) >= 120) { styleTitle = "Kuchli analitik"; styleText = "Murakkab naqshlarni ko‘rish va mantiqiy bog‘lanishlarni topish sizning ajralib turadigan jihatlaringizdan biri."; }
+    else if (Number(st.eq_best || 0) >= 85) { styleTitle = "Kuchli empatik fikrlovchi"; styleText = "Vaziyat va odamlarning hissiy tomonini hisobga olish sizning kuchli jihatlaringizdan biri."; }
+    else if (Number(st.pq_best || 0) >= 85) { styleTitle = "Amaliy strateg"; styleText = "Vazifalarni tartiblash va harakatni rejalashtirish sizning kuchli jihatlaringizdan biri."; }
+
+    const compliment = avg >= 90 ? "Siz testlarni shunchaki topshirmagansiz — uch xil fikrlash yo‘nalishida ham yuqori darajada ishlagansiz." : avg >= 75 ? "Natijalaringiz yaxshi muvozanatlangan. Eng muhimi, siz uch xil yo‘nalishni ham oxirigacha sinab ko‘rdingiz." : "Siz barcha bosqichlarni yakunladingiz. Bu profil endi keyingi natijalarni taqqoslash uchun sizning shaxsiy nuqtangiz bo‘lib xizmat qiladi.";
 
     box.innerHTML = `
-      <div class="profile-results-title"><span>Natijalarim</span><small>${completed} ta yakunlangan test</small></div>
-      <div class="profile-result-grid">
-        <div class="profile-result-card iq"><small>🧠 IQ</small><strong>${iq}</strong><span>${st.iq_attempts || 0} ta urinish</span></div>
-        <div class="profile-result-card eq"><small>🎭 EQ</small><strong>${eq}</strong><span>${st.eq_attempts || 0} ta urinish</span></div>
-        <div class="profile-result-card pq"><small>🧩 PQ</small><strong>${pq}</strong><span>${st.pq_attempts || 0} ta urinish</span></div>
+      <div class="profile-section-head"><span>SHAXSIY TAHLIL</span><small>IQ + EQ + PQ</small></div>
+      <div class="profile-compliment">
+        <div class="compliment-icon">✦</div>
+        <div><b>${styleTitle}</b><p>${compliment}</p></div>
       </div>
-      <div class="profile-personal-grid">
-        <div><small>JINS</small><b>${state.user.gender === "female" ? "Qiz" : "O‘g‘il"}</b></div>
-        <div><small>DAVLAT</small><b>${escapeHtml(state.user.country || "—")}</b></div>
-        <div><small>YOSH</small><b>${state.user.age ? `${state.user.age} yosh` : "—"}</b></div>
-        <div><small>REYTING</small><b>#${st.iq_rank || "—"}</b></div>
+      <div class="profile-stat-grid">
+        <div class="profile-big-stat"><small>🧠 IQ</small><strong>${iq}</strong><span>eng yuqori natija</span></div>
+        <div class="profile-big-stat"><small>🎭 EQ</small><strong>${eq}</strong><span>eng yuqori natija</span></div>
+        <div class="profile-big-stat"><small>🧩 PQ</small><strong>${pq}</strong><span>eng yuqori natija</span></div>
+        <div class="profile-big-stat"><small>⚡ UMUMIY</small><strong>${avg.toFixed(1)}%</strong><span>o‘rtacha ko‘rsatkich</span></div>
       </div>
-      <span class="profile-badge">${status}</span>
-      <div class="insight">
-        <b class="profile-card-title">${hasAny ? "Sizning rivojlanishingiz" : "Profil tayyor"}</b>
-        <p>${hasAny ? "Eng yuqori natijalaringiz shu yerda saqlanadi. Qayta topshirganda faqat yuqoriroq natija reytingdagi ko‘rsatkichingizni yaxshilaydi." : "Ma’lumotlaringiz saqlandi. IQ testini boshlang — natijalar shu profilga avtomatik biriktiriladi."}</p>
-      </div>`;
+      <div class="profile-mini-grid">
+        <div><small>JAMI JAVOB</small><b>${totalCorrect}/${totalQuestions}</b></div>
+        <div><small>ANIQLIK</small><b>${accuracy.toFixed(1)}%</b></div>
+        <div><small>IQ REYTING</small><b>${iqRank}</b></div>
+        <div><small>O‘RTACHA VAQT</small><b>${avgTime ? Math.round(avgTime) + " s" : "—"}</b></div>
+      </div>
+      <div class="profile-insight-card"><span>🧠</span><div><b>Fikrlash uslubingiz</b><h3>${styleTitle}</h3><p>${styleText}</p></div></div>
+      <div class="profile-insight-card"><span>📈</span><div><b>Rivojlanish nuqtasi</b><h3>Natijani mustahkamlash</h3><p>Qayta topshirganingizda natijalarni oldingi ko‘rsatkichlar bilan taqqoslab, qaysi yo‘nalishda o‘sayotganingizni kuzatish mumkin.</p></div></div>
+      <div class="profile-achievements"><div><b>🏆</b><span>Barcha 3 test</span><small>yakunlangan</small></div><div><b>🎯</b><span>${accuracy.toFixed(0)}%</span><small>umumiy aniqlik</small></div><div><b>⚡</b><span>${st.total_tests || 0}</span><small>natija</small></div></div>`;
   }
-
   async function loadRanking() {
     try {
       const d = await api("/api/ranking");
@@ -992,9 +1119,15 @@
   $("#createBattle")?.addEventListener("click", createBattle);
   $("#joinBattle")?.addEventListener("click", joinBattle);
   $("#profileTopBtn")?.addEventListener("click", () => {
-    renderPersonalProfile();
-    $("#profileOverview")?.classList.remove("hidden");
-    $("#profileEditor")?.classList.add("hidden");
+    if (state.user?.hasPQ) {
+      renderPersonalProfile();
+      $("#profileOverview")?.classList.remove("hidden");
+      $("#profileEditor")?.classList.add("hidden");
+    } else {
+      fillProfileFields();
+      $("#profileOverview")?.classList.add("hidden");
+      $("#profileEditor")?.classList.remove("hidden");
+    }
     show("profileScreen");
   });
   $("#editProfileBtn")?.addEventListener("click", () => {
@@ -1010,7 +1143,10 @@
   });
   $("#battleCard")?.addEventListener("click", () => show("battleScreen"));
   $("#profileCard")?.addEventListener("click", () => {
+    if (!state.user?.hasPQ) { toast("🔒 Shaxsiy tahlil PQ testidan keyin ochiladi."); return; }
     renderPersonalProfile();
+    $("#profileOverview")?.classList.remove("hidden");
+    $("#profileEditor")?.classList.add("hidden");
     show("profileScreen");
     $("#personalSummary")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
