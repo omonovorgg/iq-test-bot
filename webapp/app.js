@@ -20,8 +20,8 @@
   const screens = ["loadingScreen","homeScreen","profileScreen","testScreen","loadingResult","paymentScreen","resultScreen","rankingScreen","certificateScreen","battleScreen"];
   const I18N = {
     uz: {
-      home_greet:"Salom, {name} 👋", hero_pill:"18 TA MANTIQIY PUZZLE", hero_title:"IQ darajangizni sinab ko‘ring", hero_text:"Diqqat, naqsh va mantiq asosidagi test.", pretest_title:"Aql darajangizni aniqlang", pretest_subtitle:"18 ta tasviriy mantiq savoli orqali diqqat, naqsh va mantiqiy fikrlashingizni sinang.", pretest_q_count:"18 ta savol", pretest_time:"30 daqiqa", pretest_visual:"Tasviriy mantiq", pretest_result:"IQ natija", pretest_free_title:"Bepul jumboq", pretest_free_text:"Testdagi savollar qanday ko‘rinishini oldindan sinab ko‘ring.", pretest_puzzle_hint:"Qaysi shakl keyingi katakka mos keladi?", pretest_note:"Savollar bosqichma-bosqich murakkablashadi. Javobni tanlaganingizdan keyin keyingi savolga o‘tasiz.", pretest_start:"🚀 Testni boshlash", pretest_later:"Keyinroq", live_total:"Botga qo‘shilganlar", live_now:"Hozir", live_people:"kishi onlayn", tests:"Testlar", sequence:"ketma-ket ochiladi", iq_desc:"18 mantiqiy puzzle", eq_locked:"IQdan keyin ochiladi", eq_open:"Ochilgan", pq_locked:"EQdan keyin ochiladi", profile:"Shaxsiy profil", profile_after:"IQ + EQ + PQdan keyin", battle:"Battle", battle_desc:"Do‘stingiz bilan asynchronous duel", home:"Home", ranking:"Reyting", certificate:"Sertifikat", profile_nav:"Profil",
-      profile_title:"Profil", name_label:"Ism / familiya", name_placeholder:"Ismingiz", gender_label:"Jins", select:"Tanlang", male:"O‘g‘il", female:"Qiz", age_label:"Yosh", country_label:"Davlat", save:"Saqlash",
+      home_greet:"Salom, {name} 👋", hero_pill:"18 TA MANTIQIY PUZZLE", hero_title:"IQ darajangizni sinab ko‘ring", hero_text:"Diqqat, naqsh va mantiq asosidagi test.", iq_info_pill:"IQ TEST", iq_info_title:"Aql darajangizni aniqlang", iq_info_subtitle:"18 ta tasviriy mantiq savoli orqali diqqat, naqsh va mantiqiy fikrlashingizni sinang.", iq_info_count:"18 ta savol", iq_info_count_label:"Savollar", iq_info_time:"30 daqiqa", iq_info_time_label:"Vaqt", iq_info_visual:"Tasviriy mantiq", iq_info_visual_label:"Format", iq_info_result:"IQ natija", iq_info_result_label:"Natija", iq_info_note:"Savollar bosqichma-bosqich murakkablashadi. Har bir javobdan keyin keyingi savolga o‘tasiz.", live_total:"Botga qo‘shilganlar", live_now:"Hozir", live_people:"kishi onlayn", tests:"Testlar", sequence:"ketma-ket ochiladi", iq_desc:"18 mantiqiy puzzle", eq_locked:"IQdan keyin ochiladi", eq_open:"Ochilgan", pq_locked:"EQdan keyin ochiladi", profile:"Shaxsiy profil", profile_after:"IQ + EQ + PQdan keyin", battle:"Battle", battle_desc:"Do‘stingiz bilan asynchronous duel", home:"Home", ranking:"Reyting", certificate:"Sertifikat", profile_nav:"Profil",
+      profile_title:"Profil", test_profile_title:"Testni boshlashdan oldin", test_profile_subtitle:"Natija va sertifikatda ishlatiladigan ma’lumotlaringizni bir marta kiriting.", test_profile_note:"Bu ma’lumotlar profilingizga saqlanadi. Keyingi testlarda qayta so‘ralmaydi.", test_profile_start:"🚀 Testni boshlash", name_label:"Ism / familiya", name_placeholder:"Ismingiz", gender_label:"Jins", select:"Tanlang", male:"O‘g‘il", female:"Qiz", age_label:"Yosh", country_label:"Davlat", save:"Saqlash",
       q_label:"Q", easy:"OSON", medium:"O‘RTA", hard:"QIYIN", battle_label:"BATTLE", matrix_q:"Qaysi variant matritsani to‘ldiradi?", question:"Savol", next:"Davom etish", see_result:"Natijani ko‘rish", loading_result:"Natija tayyorlanmoqda", checked:"✓ Javoblar tekshirildi", scoring:"✓ Ball hisoblanmoqda", profile_updated:"✓ Profil yangilanmoqda",
       payment:"To‘lov", payment_wait:"TO‘LOV KUTILMOQDA", payment_text:"Quyidagi kartaga to‘lov qiling va receipt rasmini shu yerga yuklang.", copy:"Nusxa", open_bot:"Telegram botini ochish", receipt:"To‘lov cheki", choose_file:"Fayl tanlang", send_receipt:"Receipt yuborish", pay_pending:"Receipt yuborildi. Admin tasdig‘i kutilmoqda.", pay_approved:"✅ To‘lov tasdiqlandi. Keyingi bosqich ochildi.", pay_rejected:"❌ To‘lov tasdiqlanmadi. Admin receiptni rad etdi.", pay_waiting:"Receipt kutilmoqda.", next_result:"📊 Natijani ko‘rish", next_battle:"⚔️ Battle’ga o‘tish", home_btn:"🏠 Bosh sahifaga qaytish", retry_receipt:"🔄 Receiptni qayta yuborish", receipt_resend:"Receiptni qayta yuboring.",
       result:"Natija", iq_done:"IQ TEST YAKUNLANDI", eq_done:"EQ TEST YAKUNLANDI", pq_done:"PQ TEST YAKUNLANDI", score_indicator:"Test ko‘rsatkichi", question_stat:"savol", correct:"to‘g‘ri", time:"vaqt", per_question:"s/savol", accuracy:"Aniqlik", rank:"Reytingdagi o‘rningiz", rank_compare:"Natijalar bilan taqqoslash", your_result:"Sizning natijangiz", next_stage:"Keyingi bosqich", eq_open_title:"EQ testi ochildi", eq_open_text:"Emotsional intellekt bo‘yicha testni ham topshirib ko‘ring.", start_eq:"🎭 EQ testini boshlash", pq_open_title:"PQ testi ochildi", pq_open_text:"Rejalashtirish va amaliy fikrlash bo‘yicha testni topshiring.", start_pq:"🧩 PQ testini boshlash", profile_open_title:"Shaxsiy profil ochildi", profile_open_text:"IQ, EQ va PQ natijalaringiz asosida profilingizni ko‘ring.", open_profile:"⭐ Profilni ko‘rish", no_next:"Barcha testlar yakunlandi", certificate_btn:"📄 Sertifikatni olish", share:"↗ Natijani ulashish", retry:"↻  Qayta topshirish", ranking_first:"Birinchi natijangiz", ranking_total:"{n} ta natija ichida", no_ranking:"Reyting hali shakllanmagan",
@@ -32,8 +32,8 @@
       strengths:"Kuchli tomonlar", development:"Rivojlanish nuqtalari", cert_empty:"Sertifikat yo‘q", cert_empty_text:"IQ testini yakunlang va natija ochilgach sertifikat yaratiladi.", cert_open:"PNG ochish",
     },
     ru: {
-      home_greet:"Привет, {name} 👋", hero_pill:"18 ЛОГИЧЕСКИХ ЗАДАЧ", hero_title:"Проверьте свой уровень IQ", hero_text:"Тест на внимание, закономерности и логику.", pretest_title:"Определите свой уровень интеллекта", pretest_subtitle:"18 визуальных логических вопросов на внимание, закономерности и мышление.", pretest_q_count:"18 вопросов", pretest_time:"30 минут", pretest_visual:"Визуальная логика", pretest_result:"Результат IQ", pretest_free_title:"Бесплатная задача", pretest_free_text:"Сначала попробуйте пример того, как выглядят задания теста.", pretest_puzzle_hint:"Какая фигура подходит в следующую ячейку?", pretest_note:"Вопросы постепенно усложняются. После выбора ответа вы переходите к следующему вопросу.", pretest_start:"🚀 Начать тест", pretest_later:"Позже", live_total:"Всего участников", live_now:"Сейчас", live_people:"человек онлайн", tests:"Тесты", sequence:"открываются по порядку", iq_desc:"18 логических задач", eq_locked:"После IQ", eq_open:"Открыт", pq_locked:"После EQ", profile:"Личный профиль", profile_after:"После IQ + EQ + PQ", battle:"Battle", battle_desc:"Асинхронная дуэль с другом", home:"Главная", ranking:"Рейтинг", certificate:"Сертификат", profile_nav:"Профиль",
-      profile_title:"Профиль", name_label:"Имя / фамилия", name_placeholder:"Ваше имя", gender_label:"Пол", select:"Выберите", male:"Мужской", female:"Женский", age_label:"Возраст", country_label:"Страна", save:"Сохранить",
+      home_greet:"Привет, {name} 👋", hero_pill:"18 ЛОГИЧЕСКИХ ЗАДАЧ", hero_title:"Проверьте свой уровень IQ", hero_text:"Тест на внимание, закономерности и логику.", iq_info_pill:"IQ ТЕСТ", iq_info_title:"Определите свой уровень интеллекта", iq_info_subtitle:"18 визуальных логических вопросов на внимание, закономерности и мышление.", iq_info_count:"18 вопросов", iq_info_count_label:"Вопросы", iq_info_time:"30 минут", iq_info_time_label:"Время", iq_info_visual:"Визуальная логика", iq_info_visual_label:"Формат", iq_info_result:"Результат IQ", iq_info_result_label:"Результат", iq_info_note:"Вопросы постепенно усложняются. После каждого ответа вы переходите к следующему вопросу.", live_total:"Всего участников", live_now:"Сейчас", live_people:"человек онлайн", tests:"Тесты", sequence:"открываются по порядку", iq_desc:"18 логических задач", eq_locked:"После IQ", eq_open:"Открыт", pq_locked:"После EQ", profile:"Личный профиль", profile_after:"После IQ + EQ + PQ", battle:"Battle", battle_desc:"Асинхронная дуэль с другом", home:"Главная", ranking:"Рейтинг", certificate:"Сертификат", profile_nav:"Профиль",
+      profile_title:"Профиль", test_profile_title:"Перед началом теста", test_profile_subtitle:"Введите данные, которые будут использованы в результате и сертификате. Это нужно сделать один раз.", test_profile_note:"Данные сохраняются в профиле и больше не будут запрашиваться перед следующими тестами.", test_profile_start:"🚀 Начать тест", name_label:"Имя / фамилия", name_placeholder:"Ваше имя", gender_label:"Пол", select:"Выберите", male:"Мужской", female:"Женский", age_label:"Возраст", country_label:"Страна", save:"Сохранить",
       q_label:"В", easy:"ЛЕГКО", medium:"СРЕДНЕ", hard:"СЛОЖНО", battle_label:"BATTLE", matrix_q:"Какой вариант заполнит матрицу?", question:"Вопрос", next:"Продолжить", see_result:"Посмотреть результат", loading_result:"Готовим результат", checked:"✓ Ответы проверены", scoring:"✓ Баллы рассчитаны", profile_updated:"✓ Профиль обновлён",
       payment:"Оплата", payment_wait:"ОЖИДАЕТСЯ ОПЛАТА", payment_text:"Оплатите на указанную карту и загрузите сюда чек.", copy:"Копировать", open_bot:"Открыть Telegram-бота", receipt:"Чек оплаты", choose_file:"Выбрать файл", send_receipt:"Отправить чек", pay_pending:"Чек отправлен. Ожидается подтверждение администратора.", pay_approved:"✅ Оплата подтверждена. Следующий этап открыт.", pay_rejected:"❌ Оплата не подтверждена. Администратор отклонил чек.", pay_waiting:"Ожидается чек.", next_result:"📊 Посмотреть результат", next_battle:"⚔️ Перейти в Battle", home_btn:"🏠 На главную", retry_receipt:"🔄 Отправить чек снова", receipt_resend:"Отправьте чек повторно.",
       result:"Результат", iq_done:"IQ ТЕСТ ЗАВЕРШЁН", eq_done:"EQ ТЕСТ ЗАВЕРШЁН", pq_done:"PQ ТЕСТ ЗАВЕРШЁН", score_indicator:"Показатель теста", question_stat:"вопросов", correct:"верно", time:"время", per_question:"сек/вопрос", accuracy:"Точность", rank:"Место в рейтинге", rank_compare:"Сравнение с результатами", your_result:"Ваш результат", next_stage:"Следующий этап", eq_open_title:"EQ тест открыт", eq_open_text:"Проверьте также свой эмоциональный интеллект.", start_eq:"🎭 Начать EQ тест", pq_open_title:"PQ тест открыт", pq_open_text:"Пройдите тест на планирование и практическое мышление.", start_pq:"🧩 Начать PQ тест", profile_open_title:"Личный профиль открыт", profile_open_text:"Посмотрите профиль на основе результатов IQ, EQ и PQ.", open_profile:"⭐ Открыть профиль", no_next:"Все тесты завершены", certificate_btn:"📄 Получить сертификат", share:"↗ Поделиться результатом", retry:"↻  Пройти ещё раз", ranking_first:"Ваш первый результат", ranking_total:"Среди {n} результатов", no_ranking:"Рейтинг пока не сформирован",
@@ -43,8 +43,8 @@
       personal_wait:"Анализ откроется после завершения IQ + EQ + PQ.", profile_edit:"✏️ Редактировать данные", profile_save_note:"Данные профиля можно изменить в любое время.", profile_identity:"Личные данные", profile_stats:"Результаты тестов", profile_member:"Дата регистрации", profile_id:"Telegram ID", profile_username:"Username", profile_gender:"Пол", profile_country:"Страна", profile_age:"Возраст", best_score:"Лучший результат", attempts:"Попытки", last_test:"Последний тест", not_done:"Ещё не пройден", cert_status:"Статус сертификата", verified:"Подтверждён", no_cert_short:"Нет", profile_rank:"Место в IQ рейтинге", certificate_details:"Детали сертификата", certificate_id:"ID сертификата", verification:"Код верификации", issued:"Дата выдачи", score:"Результат", level:"Уровень", open_png:"🖼 Открыть PNG сертификат", share_cert:"↗ Поделиться сертификатом", profile_close_edit:"✕ Закрыть редактирование", strengths:"Сильные стороны", development:"Точки развития", cert_empty:"Сертификата нет", cert_empty_text:"Завершите IQ тест — сертификат появится после открытия результата.", cert_open:"Открыть PNG",
     },
     en: {
-      home_greet:"Hi, {name} 👋", hero_pill:"18 LOGIC PUZZLES", hero_title:"Test your IQ level", hero_text:"A test of attention, patterns and logic.", pretest_title:"Find out your reasoning level", pretest_subtitle:"18 visual logic questions focused on attention, patterns and logical thinking.", pretest_q_count:"18 questions", pretest_time:"30 minutes", pretest_visual:"Visual logic", pretest_result:"IQ result", pretest_free_title:"Free puzzle", pretest_free_text:"Try a sample first to see how the test questions look.", pretest_puzzle_hint:"Which shape fits the next cell?", pretest_note:"The questions gradually become harder. Choose an answer to move to the next question.", pretest_start:"🚀 Start the test", pretest_later:"Later", live_total:"Total participants", live_now:"Now", live_people:"people online", tests:"Tests", sequence:"unlock in sequence", iq_desc:"18 logic puzzles", eq_locked:"After IQ", eq_open:"Open", pq_locked:"After EQ", profile:"Personal profile", profile_after:"After IQ + EQ + PQ", battle:"Battle", battle_desc:"Asynchronous duel with a friend", home:"Home", ranking:"Ranking", certificate:"Certificate", profile_nav:"Profile",
-      profile_title:"Profile", name_label:"Name / surname", name_placeholder:"Your name", gender_label:"Gender", select:"Select", male:"Male", female:"Female", age_label:"Age", country_label:"Country", save:"Save",
+      home_greet:"Hi, {name} 👋", hero_pill:"18 LOGIC PUZZLES", hero_title:"Test your IQ level", hero_text:"A test of attention, patterns and logic.", iq_info_pill:"IQ TEST", iq_info_title:"Find out your reasoning level", iq_info_subtitle:"18 visual logic questions focused on attention, patterns and logical thinking.", iq_info_count:"18 questions", iq_info_count_label:"Questions", iq_info_time:"30 minutes", iq_info_time_label:"Time", iq_info_visual:"Visual logic", iq_info_visual_label:"Format", iq_info_result:"IQ result", iq_info_result_label:"Result", iq_info_note:"The questions gradually become harder. After each answer, you move to the next question.", live_total:"Total participants", live_now:"Now", live_people:"people online", tests:"Tests", sequence:"unlock in sequence", iq_desc:"18 logic puzzles", eq_locked:"After IQ", eq_open:"Open", pq_locked:"After EQ", profile:"Personal profile", profile_after:"After IQ + EQ + PQ", battle:"Battle", battle_desc:"Asynchronous duel with a friend", home:"Home", ranking:"Ranking", certificate:"Certificate", profile_nav:"Profile",
+      profile_title:"Profile", test_profile_title:"Before you start", test_profile_subtitle:"Enter the details used for your result and certificate. You only need to do this once.", test_profile_note:"These details are saved to your profile and will not be requested again before future tests.", test_profile_start:"🚀 Start test", name_label:"Name / surname", name_placeholder:"Your name", gender_label:"Gender", select:"Select", male:"Male", female:"Female", age_label:"Age", country_label:"Country", save:"Save",
       q_label:"Q", easy:"EASY", medium:"MEDIUM", hard:"HARD", battle_label:"BATTLE", matrix_q:"Which option completes the matrix?", question:"Question", next:"Continue", see_result:"View result", loading_result:"Preparing result", checked:"✓ Answers checked", scoring:"✓ Score calculated", profile_updated:"✓ Profile updated",
       payment:"Payment", payment_wait:"PAYMENT PENDING", payment_text:"Pay to the card below and upload the receipt here.", copy:"Copy", open_bot:"Open Telegram bot", receipt:"Payment receipt", choose_file:"Choose file", send_receipt:"Send receipt", pay_pending:"Receipt sent. Waiting for admin approval.", pay_approved:"✅ Payment approved. Next step is open.", pay_rejected:"❌ Payment not approved. The admin rejected the receipt.", pay_waiting:"Waiting for receipt.", next_result:"📊 View result", next_battle:"⚔️ Go to Battle", home_btn:"🏠 Back to home", retry_receipt:"🔄 Send receipt again", receipt_resend:"Please send the receipt again.",
       result:"Result", iq_done:"IQ TEST COMPLETED", eq_done:"EQ TEST COMPLETED", pq_done:"PQ TEST COMPLETED", score_indicator:"Test indicator", question_stat:"questions", correct:"correct", time:"time", per_question:"sec/question", accuracy:"Accuracy", rank:"Your ranking", rank_compare:"Compared with results", your_result:"Your result", next_stage:"Next stage", eq_open_title:"EQ test unlocked", eq_open_text:"You can also test your emotional intelligence.", start_eq:"🎭 Start EQ test", pq_open_title:"PQ test unlocked", pq_open_text:"Take the planning and practical thinking test.", start_pq:"🧩 Start PQ test", profile_open_title:"Personal profile unlocked", profile_open_text:"View your profile based on IQ, EQ and PQ results.", open_profile:"⭐ View profile", no_next:"All tests completed", certificate_btn:"📄 Get certificate", share:"↗ Share result", retry:"↻  Retake test", ranking_first:"Your first result", ranking_total:"Among {n} results", no_ranking:"Ranking is not formed yet",
@@ -83,14 +83,19 @@
       setText(".hero-copy h2", tx("hero_title")); setText(".hero-copy p", tx("hero_text"));
       setText(".live-card > div:first-child small", tx("live_total")); setText(".online div small:first-child", tx("live_now")); setText(".online div small:last-child", tx("live_people"));
       setText(".section-title h3", tx("tests")); setText(".section-title span", tx("sequence"));
-      setText("#preTestTitle", tx("pretest_title")); setText("#preTestSubtitle", tx("pretest_subtitle"));
-      const pc=$("#preTestOverlay")?.querySelectorAll(".pretest-chips span") || []; if(pc[0])pc[0].textContent=tx("pretest_q_count"); if(pc[1])pc[1].textContent=tx("pretest_time"); if(pc[2])pc[2].textContent=tx("pretest_visual"); if(pc[3])pc[3].textContent=tx("pretest_result");
-      setText("#preTestFreeTitle", tx("pretest_free_title")); setText("#preTestFreeText", tx("pretest_free_text")); setText("#preTestPuzzleHint", tx("pretest_puzzle_hint")); setText("#preTestNote", tx("pretest_note")); setText("#preTestContinue", tx("pretest_start")); setText("#preTestLater", tx("pretest_later"));
       setText(".test-card.iq small", tx("iq_desc")); setText("#eqState", state.user?.hasIQ ? tx("eq_open") : tx("eq_locked")); setText("#pqState", state.user?.hasEQ ? tx("eq_open") : tx("pq_locked"));
       setText("#profileCard b", tx("profile")); setText("#profileCard small", tx("profile_after")); setText("#battleCard b", tx("battle")); setText("#battleCard small", tx("battle_desc"));
       const nav = $$('[data-nav]'); if (nav[0]) nav[0].querySelector('small').textContent=tx('home'); if(nav[1])nav[1].querySelector('small').textContent=tx('ranking'); if(nav[2])nav[2].querySelector('small').textContent=tx('certificate'); if(nav[3])nav[3].querySelector('small').textContent=tx('profile_nav');
     }
     text("#profileScreen .subbar h2", "profile_title"); text("#saveProfile", "save");
+    text("#testProfileTitle", "test_profile_title"); text("#testProfileSubtitle", "test_profile_subtitle"); text("#saveTestProfile", "test_profile_start");
+    setText("#iqInfoPill", tx("iq_info_pill")); setText("#iqInfoTitle", tx("iq_info_title")); setText("#iqInfoSubtitle", tx("iq_info_subtitle"));
+    setText("#iqInfoCount", tx("iq_info_count")); setText("#iqInfoCountLabel", tx("iq_info_count_label"));
+    setText("#iqInfoTime", tx("iq_info_time")); setText("#iqInfoTimeLabel", tx("iq_info_time_label"));
+    setText("#iqInfoVisual", tx("iq_info_visual")); setText("#iqInfoVisualLabel", tx("iq_info_visual_label"));
+    setText("#iqInfoResult", tx("iq_info_result")); setText("#iqInfoResultLabel", tx("iq_info_result_label")); setText("#iqInfoNote", tx("iq_info_note"));
+    setText("#continueIqInfo", tx("test_profile_start"));
+    const tpf=$("#testProfileOverlay"); if(tpf){ const ls=tpf.querySelectorAll("label"); if(ls[0])ls[0].firstChild.textContent=tx("name_label"); if(ls[1])ls[1].firstChild.textContent=tx("gender_label"); if(ls[2])ls[2].firstChild.textContent=tx("age_label"); if(ls[3])ls[3].firstChild.textContent=tx("country_label"); const note=tpf.querySelector(".test-profile-note span:last-child"); if(note)note.textContent=tx("test_profile_note"); $("#testFullName").placeholder=tx("name_placeholder"); const tgx=$("#testGender"); if(tgx){tgx.options[0].text=tx("select");tgx.options[1].text=tx("male");tgx.options[2].text=tx("female");} const tcx=$("#testCountry"); if(tcx?.options[0])tcx.options[0].text=tx("select"); }
     setText("#profileEditBtn", $("#profileEditor")?.classList.contains("hidden") ? tx("profile_edit") : tx("profile_close_edit"));
     setText("#profileEditorTitle", tx("profile_identity")); setText("#profileEditorNote", tx("profile_save_note"));
     const labels = $("#profileScreen"); if(labels){ const ls=labels.querySelectorAll('label'); if(ls[0])ls[0].firstChild.textContent=tx('name_label'); if(ls[1])ls[1].firstChild.textContent=tx('gender_label'); if(ls[2])ls[2].firstChild.textContent=tx('age_label'); if(ls[3])ls[3].firstChild.textContent=tx('country_label'); $("#fullName").placeholder=tx('name_placeholder'); }
@@ -335,49 +340,106 @@
     if(btn) btn.textContent=tx("profile_edit");
   }
 
-  function openPreTestIntro(type) {
-    if (type !== "IQ") return false;
-    const overlay=$("#preTestOverlay");
-    if (!overlay) return false;
-    state.pendingType = type;
+  function profileIsComplete() {
+    const u = state.user || {};
+    return Boolean(
+      String(u.full_name || "").trim() &&
+      (u.gender === "male" || u.gender === "female") &&
+      Number.isInteger(Number(u.age)) && Number(u.age) >= 10 && Number(u.age) <= 120 &&
+      String(u.country || "").trim()
+    );
+  }
+
+  function openIqInfo() {
+    const overlay = $("#iqInfoOverlay");
+    if (!overlay) return;
     applyLanguage(state.lang);
     overlay.classList.remove("hidden");
     overlay.setAttribute("aria-hidden", "false");
-    document.body.classList.add("pretest-open");
-    return true;
+    document.body.classList.add("test-info-open");
   }
 
-  function closePreTestIntro() {
-    const overlay=$("#preTestOverlay");
+  function closeIqInfo() {
+    const overlay = $("#iqInfoOverlay");
     if (!overlay) return;
     overlay.classList.add("hidden");
     overlay.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("pretest-open");
+    document.body.classList.remove("test-info-open");
   }
 
-  function continueFromPreTest() {
-    const type=state.pendingType || "IQ";
-    closePreTestIntro();
-    state.pendingType=type;
-    setTimeout(()=>startTest(type, false, true), 80);
+  async function continueIqInfo() {
+    closeIqInfo();
+    if (profileIsComplete()) {
+      await startTest("IQ", true);
+    } else {
+      openTestProfilePrompt("IQ");
+    }
   }
 
-  async function startTest(type, profileConfirmed = false, introConfirmed = false) {
+  function openTestProfilePrompt(type) {
+    const overlay = $("#testProfileOverlay");
+    if (!overlay) return false;
+    state.pendingType = type;
+    $("#testFullName").value = state.user?.full_name || "";
+    $("#testGender").value = state.user?.gender || "";
+    $("#testAge").value = state.user?.age || "";
+    $("#testCountry").value = state.user?.country || "";
+    applyLanguage(state.lang);
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("test-profile-open");
+    setTimeout(() => $("#testFullName")?.focus(), 50);
+    return true;
+  }
+
+  function closeTestProfilePrompt() {
+    const overlay = $("#testProfileOverlay");
+    if (!overlay) return;
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("test-profile-open");
+  }
+
+  async function saveTestProfile() {
+    if (state.busy) return;
+    const age = Number($("#testAge")?.value);
+    const body = {
+      full_name: $("#testFullName")?.value.trim() || "",
+      gender: $("#testGender")?.value || "",
+      age,
+      country: $("#testCountry")?.value || ""
+    };
+    if (!body.full_name || !body.gender || !body.country || !Number.isInteger(age) || age < 10 || age > 120) {
+      toast(tx("error_profile"));
+      return;
+    }
+    try {
+      state.busy = true;
+      await api("/api/profile/save", { method:"POST", body:JSON.stringify(body) });
+      state.user = { ...state.user, ...body };
+      $("#fullName").value = body.full_name;
+      $("#gender").value = body.gender;
+      $("#age").value = body.age;
+      $("#country").value = body.country;
+      closeTestProfilePrompt();
+      const pending = state.pendingType;
+      delete state.pendingType;
+      if (pending) setTimeout(() => startTest(pending, true), 100);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  async function startTest(type, profileConfirmed = false) {
     if (state.busy) return;
 
-    // IQ first shows a short introduction; only after Continue do we open the profile form.
-    if (type === "IQ" && !introConfirmed && !profileConfirmed) {
-      if (openPreTestIntro(type)) return;
-    }
-    // Profile must be confirmed before every test. Existing values are prefilled.
-    // profileConfirmed=true is used only after /api/profile/save succeeds.
-    if (!profileConfirmed) {
-      state.pendingType = type;
-      $("#fullName").value = state.user?.full_name || "";
-      $("#gender").value = state.user?.gender || "";
-      $("#age").value = state.user?.age || "";
-      $("#country").value = state.user?.country || "";
-      openProfileEditor();
+    // The first time a user starts a test, ask for the required identity data
+    // in a small test-specific dialog. Once saved, it is stored in the profile
+    // and future tests start directly without asking again.
+    if (!profileConfirmed && !profileIsComplete()) {
+      openTestProfilePrompt(type);
       return;
     }
     if (type === "EQ" && !state.user.hasIQ) { toast(state.lang === "ru" ? "Сначала завершите IQ тест" : state.lang === "en" ? "Complete the IQ test first" : "Avval IQ testni yakunlang"); return; }
@@ -967,22 +1029,6 @@ ${localizeLevel(c.level||"")}
     toast("Opponent natijasini kutish davom etmoqda.");
   }
 
-  $("#preTestClose")?.addEventListener("click", () => {
-    state.pendingType = null;
-    closePreTestIntro();
-  });
-  $("#preTestLater")?.addEventListener("click", () => {
-    state.pendingType = null;
-    closePreTestIntro();
-  });
-  $("#preTestContinue")?.addEventListener("click", continueFromPreTest);
-  $("#preTestOverlay")?.addEventListener("click", (e) => {
-    if (e.target?.id === "preTestOverlay") {
-      state.pendingType = null;
-      closePreTestIntro();
-    }
-  });
-
   $("#nextQuestion")?.addEventListener("click", () => {
     if (state.selected === null || state.busy) return;
     state.answers[String(state.index + 1)] = state.selected;
@@ -993,6 +1039,14 @@ ${localizeLevel(c.level||"")}
     } else finishTest();
   });
   $("#saveProfile")?.addEventListener("click", saveProfile);
+  $("#saveTestProfile")?.addEventListener("click", saveTestProfile);
+  $("#continueIqInfo")?.addEventListener("click", continueIqInfo);
+  $("#closeIqInfo")?.addEventListener("click", closeIqInfo);
+  $("#iqInfoOverlay")?.addEventListener("click", (e) => { if (e.target?.id === "iqInfoOverlay") closeIqInfo(); });
+  $("#cancelTestProfile")?.addEventListener("click", () => { state.pendingType = null; closeTestProfilePrompt(); });
+  $("#testProfileOverlay")?.addEventListener("click", (e) => {
+    if (e.target?.id === "testProfileOverlay") { state.pendingType = null; closeTestProfilePrompt(); }
+  });
   $("#copyCard")?.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("#cardNumber").textContent); toast(tx("copied")); }
     catch (_) { toast(tx("copy_fail")); }
@@ -1029,7 +1083,11 @@ ${localizeLevel(c.level||"")}
     show("homeScreen");
   });
   $("[data-back]") && $$('[data-back]').forEach((b) => b.addEventListener("click", () => show("homeScreen")));
-  $$(".test-card[data-test]").forEach((b) => b.addEventListener("click", () => startTest(b.dataset.test)));
+  $$(".test-card[data-test]").forEach((b) => b.addEventListener("click", () => {
+    const type = b.dataset.test;
+    if (type === "IQ") openIqInfo();
+    else startTest(type);
+  }));
   $$('[data-nav]').forEach((b) => b.addEventListener("click", () => {
     const n = b.dataset.nav;
     if (n === "home") show("homeScreen");
