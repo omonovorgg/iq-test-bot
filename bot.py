@@ -791,6 +791,21 @@ async def migrate():
 
     # Final schema verification/self-healing pass.
     # Every runtime column used by the test flow is explicitly ensured here.
+    # This is intentionally idempotent: old production databases may have been
+    # created by earlier versions and CREATE TABLE IF NOT EXISTS does not add
+    # columns to an existing table.
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS test_type TEXT")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS user_id BIGINT")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS session_id UUID")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS score INTEGER")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS correct_count INTEGER")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS duration INTEGER")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'not_required'")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS result_visible BOOLEAN NOT NULL DEFAULT FALSE")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS level TEXT")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb")
+    await db_execute("ALTER TABLE test_attempts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+
     await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS test_type TEXT")
     await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'")
     await db_execute("ALTER TABLE test_sessions ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb")
