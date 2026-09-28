@@ -32,10 +32,10 @@
       <div class="live-card glass"><div><small>Botga qo‘shilganlar</small><strong id="liveTotal">—</strong></div><div class="online"><span></span><div><small>Hozir</small><strong id="liveOnline">—</strong><small>kishi onlayn</small></div></div></div>
       <div class="section-title"><h3>Testlar</h3><span>ketma-ket ochiladi</span></div>
       <div class="test-grid">
-        <button class="test-card iq" data-test="IQ"><span class="card-icon">🧠</span><span><b>IQ</b><small>18 mantiqiy puzzle</small></span><em>›</em></button>
-        <button class="test-card locked" data-test="EQ"><span class="card-icon">🎭</span><span><b>EQ</b><small id="eqState">IQdan keyin ochiladi</small></span><em>›</em></button>
-        <button class="test-card locked" data-test="PQ"><span class="card-icon">⏳</span><span><b>PQ</b><small id="pqState">EQdan keyin ochiladi</small></span><em>›</em></button>
-        <button id="profileCard" class="test-card locked"><span class="card-icon">⭐</span><span><b>Shaxsiy profil</b><small>IQ + EQ + PQdan keyin</small></span><em>›</em></button>
+        <button class="test-card iq" data-test="IQ"><span class="card-icon">🧠</span><span><b>IQ</b><small>Mantiqiy fikrlash darajangiz</small></span><em class="card-action">›</em></button>
+        <button class="test-card locked" data-test="EQ"><span class="card-icon">🎭</span><span><b>EQ</b><small id="eqState">His-tuyg‘ularni tushunish qobiliyati</small></span><em class="card-action">🔒</em></button>
+        <button class="test-card locked" data-test="PQ"><span class="card-icon">⏳</span><span><b>PQ</b><small id="pqState">Ishni keyinga surish odatingiz</small></span><em class="card-action">🔒</em></button>
+        <button id="profileCard" class="test-card locked"><span class="card-icon">⭐</span><span><b>Shaxsiy profil</b><small>IQ + EQ + PQdan keyin</small></span><em class="card-action">🔒</em></button>
       </div>
       <button id="battleCard" class="battle-card"><span>⚔️</span><div><b>Battle</b><small>Do‘stingiz bilan asynchronous duel</small></div><em>›</em></button>
       <nav class="bottom-nav"><button class="active" data-nav="home">⌂<small>Home</small></button><button data-nav="ranking">♛<small>Reyting</small></button><button data-nav="certificate">▣<small>Sertifikat</small></button><button data-nav="profile">◎<small>Profil</small></button></nav>
@@ -53,12 +53,62 @@
       </div>
 
       <div id="profileEditor" class="form-card glass hidden">
-        <div class="editor-head"><div><span class="eyebrow">PROFIL</span><h3>Ma’lumotlarni tahrirlash</h3></div><button id="profileCancel" class="small-btn">Bekor qilish</button></div>
-        <label>Ism / familiya<input id="fullName" maxlength="120" placeholder="Ismingiz va familiyangiz"></label>
-        <label>Jins<select id="gender"><option value="">Tanlang</option><option value="male">O‘g‘il</option><option value="female">Qiz</option></select></label>
-        <label>Yosh<input id="age" type="number" min="10" max="120" inputmode="numeric" placeholder="20"></label>
-        <label>Davlat<select id="country"><option value="">Tanlang</option><option>O‘zbekiston</option><option>Rossiya</option><option>Qozog‘iston</option><option>Qirg‘iziston</option><option>Turkiya</option><option>AQSH</option><option>Buyuk Britaniya</option><option>Germaniya</option><option>Boshqa</option></select></label>
-        <button id="saveProfile" class="primary">Saqlash</button>
+        <div id="profileSetup" class="profile-setup hidden">
+          <div id="profileSetupName" class="profile-setup-step">
+            <div class="setup-icon">👤</div>
+            <h2>Ism va Familiya</h2>
+            <p>Sertifikatda ko‘rsatish uchun to‘liq ismingizni kiriting.</p>
+            <label class="setup-label">ISM VA FAMILIYA<input id="setupFullName" maxlength="120" placeholder="Masalan: Shoxrux To‘lanov" autocomplete="off"></label>
+            <button id="setupNameNext" class="primary">Davom Etish →</button>
+            <button id="setupNameBack" class="setup-text-btn">← Orqaga</button>
+          </div>
+
+          <div id="profileSetupDetails" class="profile-setup-step hidden">
+            <button id="setupDetailsBack" class="setup-back-btn" type="button">←</button>
+            <div class="setup-icon">📋</div>
+            <h2>Bir oz ma’lumot</h2>
+            <p>Natijani aniqroq taqqoslash uchun.</p>
+
+            <div class="setup-group">
+              <span class="setup-label-text">JINS</span>
+              <div class="setup-option-grid gender-grid">
+                <button type="button" class="setup-option gender-option" data-gender="male"><span>👦</span><b>O‘g‘il bola</b></button>
+                <button type="button" class="setup-option gender-option" data-gender="female"><span>👧</span><b>Qiz bola</b></button>
+              </div>
+            </div>
+
+            <div class="setup-group">
+              <span class="setup-label-text">YOSH</span>
+              <input id="setupAge" class="setup-input" type="number" min="10" max="120" inputmode="numeric" placeholder="Masalan: 23">
+            </div>
+
+            <div class="setup-group">
+              <span class="setup-label-text">DAVLAT</span>
+              <div class="setup-option-grid country-grid">
+                <button type="button" class="setup-option country-option" data-country="O‘zbekiston"><span>🇺🇿</span><b>O‘zbekiston</b></button>
+                <button type="button" class="setup-option country-option" data-country="Rossiya"><span>🇷🇺</span><b>Rossiya</b></button>
+                <button type="button" class="setup-option country-option" data-country="Buyuk Britaniya"><span>🇬🇧</span><b>English</b></button>
+                <button type="button" class="setup-option country-option" data-country="Qozog‘iston"><span>🇰🇿</span><b>Qozog‘iston</b></button>
+                <button type="button" class="setup-option country-option" data-country="Qirg‘iziston"><span>🇰🇬</span><b>Qirg‘iziston</b></button>
+                <button type="button" class="setup-option country-option" data-country="Turkiya"><span>🇹🇷</span><b>Turkiya</b></button>
+              </div>
+            </div>
+
+            <input id="setupGender" type="hidden" value="">
+            <input id="setupCountry" type="hidden" value="">
+            <button id="setupStartTest" class="primary">Testni Boshlash →</button>
+            <button id="setupDetailsBackText" class="setup-text-btn" type="button">← Orqaga</button>
+          </div>
+        </div>
+
+        <div id="profileEditForm">
+          <div class="editor-head"><div><span class="eyebrow">PROFIL</span><h3>Ma’lumotlarni tahrirlash</h3></div><button id="profileCancel" class="small-btn">Bekor qilish</button></div>
+          <label>Ism / familiya<input id="fullName" maxlength="120" placeholder="Ismingiz va familiyangiz"></label>
+          <label>Jins<select id="gender"><option value="">Tanlang</option><option value="male">O‘g‘il</option><option value="female">Qiz</option></select></label>
+          <label>Yosh<input id="age" type="number" min="10" max="120" inputmode="numeric" placeholder="20"></label>
+          <label>Davlat<select id="country"><option value="">Tanlang</option><option>O‘zbekiston</option><option>Rossiya</option><option>Qozog‘iston</option><option>Qirg‘iziston</option><option>Turkiya</option><option>AQSH</option><option>Buyuk Britaniya</option><option>Germaniya</option><option>Boshqa</option></select></label>
+          <button id="saveProfile" class="primary">Saqlash</button>
+        </div>
       </div>
     </section>
 
