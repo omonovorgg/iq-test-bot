@@ -1773,6 +1773,8 @@ async def submit_iq_internal(user_id, session_id, answers, duration=0):
                 raise ValueError("session_not_found")
             if session["status"] == "completed":
                 return await conn.fetchrow("SELECT * FROM test_attempts WHERE session_id=$1", session_id)
+            if session["status"] != "active":
+                raise ValueError("test_cancelled")
             if session["expires_at"] < datetime.now(timezone.utc):
                 raise ValueError("session_expired")
             score, correct_count, _ = calculate_iq(answers)
@@ -1902,14 +1904,20 @@ async def api_bootstrap(request: Request):
         active_payload={"session_id":str(active["session_id"]),"test_type":active["test_type"],"questions":aq,"answers":active["answers"] if isinstance(active["answers"],dict) else {},"current_index":ai,"started_at":active["started_at"].isoformat(),"expires_at":active["expires_at"].isoformat()}
     stats=await db_fetchrow("""
         SELECT
-          MAX(score) FILTER (WHERE test_type='IQ') AS iq_best,
-          MAX(score) FILTER (WHERE test_type='EQ') AS eq_best,
-          MAX(score) FILTER (WHERE test_type='PQ') AS pq_best,
-          COUNT(*) AS total_tests,
-          COUNT(*) FILTER (WHERE test_type='IQ') AS iq_attempts,
-          COUNT(*) FILTER (WHERE test_type='EQ') AS eq_attempts,
-          COUNT(*) FILTER (WHERE test_type='PQ') AS pq_attempts
-        FROM results WHERE user_id=$1
+          MAX(r.score) FILTER (WHERE r.test_type='IQ') AS iq_best,
+          MAX(r.score) FILTER (WHERE r.test_type='EQ') AS eq_best,
+          MAX(r.score) FILTER (WHERE r.test_type='PQ') AS pq_best,
+          COUNT(r.id) AS total_tests,
+          COUNT(r.id) FILTER (WHERE r.test_type='IQ') AS iq_attempts,
+          COUNT(r.id) FILTER (WHERE r.test_type='EQ') AS eq_attempts,
+          COUNT(r.id) FILTER (WHERE r.test_type='PQ') AS pq_attempts,
+          COALESCE(SUM(a.correct_count),0) AS total_correct,
+          COALESCE(SUM(CASE WHEN r.test_type='IQ' THEN 18 ELSE 6 END),0) AS total_questions,
+          COALESCE(AVG(a.duration),0) AS avg_duration,
+          COALESCE(AVG(CASE WHEN r.test_type='IQ' THEN ((r.score-70.0)/60.0)*100.0 ELSE r.score END),0) AS avg_percent
+        FROM results r
+        LEFT JOIN test_attempts a ON a.id=r.attempt_id
+        WHERE r.user_id=$1
     """,uid)
     iq_rank=await db_fetchrow("""
         SELECT COUNT(*)+1 AS position FROM (
@@ -1917,7 +1925,23 @@ async def api_bootstrap(request: Request):
         ) ranked
         WHERE best_score > COALESCE((SELECT MAX(score) FROM results WHERE user_id=$1 AND test_type='IQ'),-1)
     """,uid)
-    profile_stats={"iq_best":int(stats["iq_best"]) if stats and stats["iq_best"] is not None else None,"eq_best":int(stats["eq_best"]) if stats and stats["eq_best"] is not None else None,"pq_best":int(stats["pq_best"]) if stats and stats["pq_best"] is not None else None,"total_tests":int(stats["total_tests"] or 0) if stats else 0,"iq_attempts":int(stats["iq_attempts"] or 0) if stats else 0,"eq_attempts":int(stats["eq_attempts"] or 0) if stats else 0,"pq_attempts":int(stats["pq_attempts"] or 0) if stats else 0,"iq_rank":int(iq_rank["position"]) if iq_rank else None}
+    total_questions=int(stats["total_questions"] or 0) if stats else 0
+    total_correct=int(stats["total_correct"] or 0) if stats else 0
+    profile_stats={
+        "iq_best":int(stats["iq_best"]) if stats and stats["iq_best"] is not None else None,
+        "eq_best":int(stats["eq_best"]) if stats and stats["eq_best"] is not None else None,
+        "pq_best":int(stats["pq_best"]) if stats and stats["pq_best"] is not None else None,
+        "total_tests":int(stats["total_tests"] or 0) if stats else 0,
+        "iq_attempts":int(stats["iq_attempts"] or 0) if stats else 0,
+        "eq_attempts":int(stats["eq_attempts"] or 0) if stats else 0,
+        "pq_attempts":int(stats["pq_attempts"] or 0) if stats else 0,
+        "total_correct":total_correct,
+        "total_questions":total_questions,
+        "overall_accuracy":round((total_correct/total_questions)*100,1) if total_questions else 0,
+        "avg_duration":round(float(stats["avg_duration"] or 0),1) if stats else 0,
+        "avg_percent":round(float(stats["avg_percent"] or 0),1) if stats else 0,
+        "iq_rank":int(iq_rank["position"]) if iq_rank else None
+    }
     return {"ok":True,"user":{"id":uid,"username":row["username"],"first_name":row["first_name"],"language":row["language"],"language_selected":bool(row["language_selected"]),"full_name":row["full_name"],"gender":row["gender"],"age":row["age"],"country":row["country"],"hasIQ":iq_done,"hasEQ":eq_done,"hasPQ":pq_done},"prices":prices,"questions":public_iq_questions(),"pending_payment":pending_payload,"active_test":active_payload,"profile_stats":profile_stats}
 
 @app.post("/api/profile/save")
@@ -2009,6 +2033,8 @@ async def test_submit(session_id: str, request: Request):
     if session["status"] == "completed":
         attempt=await db_fetchrow("SELECT * FROM test_attempts WHERE session_id=$1::uuid",session_id)
         if not attempt: return json_error("Session holati noto‘g‘ri",409)
+    elif session["status"] != "active":
+        return json_error("Bu test bekor qilingan",409)
     elif session["expires_at"] < datetime.now(timezone.utc):
         return json_error("Test vaqti tugagan",409)
     elif session["test_type"]=="IQ":
@@ -2088,6 +2114,24 @@ async def test_progress(session_id: str, request: Request):
     await db_execute("UPDATE test_sessions SET current_index=$1, answers=$2::jsonb, questions=$3::jsonb WHERE session_id=$4::uuid AND user_id=$5 AND status='active'",current_index,json.dumps(clean_answers),json.dumps(questions),session_id,uid)
     return {"ok":True,"current_index":current_index}
 
+@app.post("/api/test/{session_id}/cancel")
+async def test_cancel(session_id: str, request: Request):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
+    row=await db_fetchrow(
+        "SELECT session_id,status FROM test_sessions WHERE session_id=$1::uuid AND user_id=$2",
+        session_id, uid
+    )
+    if not row:
+        return json_error("Test topilmadi",404)
+    if row["status"] == "completed":
+        return json_error("Test allaqachon yakunlangan",409)
+    await db_execute(
+        "UPDATE test_sessions SET status='cancelled' WHERE session_id=$1::uuid AND user_id=$2 AND status='active'",
+        session_id, uid
+    )
+    return {"ok":True,"status":"cancelled"}
+
 @app.get("/api/test/{session_id}/resume")
 async def test_resume(session_id: str, request: Request):
     user=await authenticated_user(request); uid=int(user["id"])
@@ -2163,6 +2207,26 @@ async def payment_create(request:Request):
     p=await db_fetchrow("INSERT INTO payments(user_id,attempt_id,payment_type,amount,card_id,status) VALUES($1,$2,$3,$4,$5,'pending') RETURNING id",uid,int(attempt_id),payment_type,amount,card["id"] if card else None)
     return {"ok":True,"payment_id":p["id"],"status":"pending","amount":amount,"card":dict(card) if card else None}
 
+@app.post("/api/payment/{payment_id}/cancel")
+async def payment_cancel(payment_id:int, request:Request):
+    user=await authenticated_user(request)
+    uid=int(user["id"])
+    p=await db_fetchrow("SELECT id,attempt_id,status FROM payments WHERE id=$1 AND user_id=$2",payment_id,uid)
+    if not p:
+        return json_error("Payment topilmadi",404)
+    if p["status"] == "approved":
+        return json_error("Tasdiqlangan to‘lovni bekor qilib bo‘lmaydi",409)
+    await db_execute(
+        "UPDATE payments SET status='cancelled',updated_at=NOW() WHERE id=$1 AND user_id=$2 AND status IN ('pending','rejected')",
+        payment_id, uid
+    )
+    if p["attempt_id"]:
+        await db_execute(
+            "UPDATE test_attempts SET payment_status='cancelled' WHERE id=$1 AND user_id=$2 AND payment_status <> 'approved'",
+            p["attempt_id"], uid
+        )
+    return {"ok":True,"status":"cancelled"}
+
 @app.post("/api/payment/{payment_id}/receipt")
 async def payment_receipt(payment_id:int,request:Request,receipt:UploadFile|None=File(default=None)):
     user=await authenticated_user(request)
@@ -2170,6 +2234,7 @@ async def payment_receipt(payment_id:int,request:Request,receipt:UploadFile|None
     p=await db_fetchrow("SELECT * FROM payments WHERE id=$1 AND user_id=$2",payment_id,uid)
     if not p: return json_error("Payment topilmadi",404)
     if p["status"]=="approved": return {"ok":True,"status":"approved"}
+    if p["status"]=="cancelled": return json_error("Bu to‘lov bekor qilingan",409)
     file_id=None
     if receipt is not None:
         if not receipt.content_type or not receipt.content_type.startswith("image/"):
@@ -2252,6 +2317,8 @@ async def approve_payment_record(payment_id:int):
                 return p, "already"
             if p["status"] == "rejected":
                 return p, "rejected"
+            if p["status"] == "cancelled":
+                return p, "cancelled"
 
             battle=None
             approved_count=0
@@ -2332,6 +2399,7 @@ async def admin_approve_payment(payment_id:int,request:Request):
     p,status=await approve_payment_record(payment_id)
     if not p: return json_error("Payment topilmadi",404)
     if status == "rejected": return json_error("Payment avval rad etilgan",409)
+    if status == "cancelled": return json_error("Payment foydalanuvchi tomonidan bekor qilingan",409)
     if status == "already": return {"ok":True,"status":"already"}
     try:
         lang = await get_user_language(int(p["user_id"]))
@@ -2352,6 +2420,7 @@ async def admin_reject_payment(payment_id:int,request:Request):
     p=await db_fetchrow("SELECT * FROM payments WHERE id=$1",payment_id)
     if not p: return json_error("Payment topilmadi",404)
     if p["status"] == "approved": return json_error("Tasdiqlangan paymentni rad etib bo‘lmaydi",409)
+    if p["status"] == "cancelled": return json_error("Payment foydalanuvchi tomonidan bekor qilingan",409)
     await db_execute("UPDATE payments SET status='rejected',updated_at=NOW() WHERE id=$1",payment_id)
     if p["attempt_id"]:
         await db_execute("UPDATE test_attempts SET payment_status='rejected',result_visible=FALSE WHERE id=$1",p["attempt_id"])
