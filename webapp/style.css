@@ -16,30 +16,41 @@
 @media(max-width:380px){.profile-identity-card{grid-template-columns:48px 1fr}.profile-avatar{width:48px;height:48px}.profile-edit-btn{grid-column:1/-1;width:100%}.profile-results-grid{grid-template-columns:1fr}.certificate-actions{grid-template-columns:1fr}}
 
 
-/* Pre-test introduction — shown before the profile form for IQ. */
-body.pretest-open{overflow:hidden}
-.pretest-overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:rgba(3,6,15,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-.pretest-overlay.hidden{display:none!important}
-.pretest-sheet{position:relative;width:min(100%,560px);max-height:calc(100vh - 24px);overflow:auto;padding:22px 18px calc(18px + env(safe-area-inset-bottom));border:1px solid rgba(151,163,201,.18);border-radius:30px 30px 22px 22px;background:linear-gradient(150deg,#171d32f7 0%,#0b1020fa 72%,#10152afa 100%);box-shadow:0 -18px 70px rgba(0,0,0,.5),inset 0 1px rgba(255,255,255,.055);animation:pretestUp .22s ease-out}
-@keyframes pretestUp{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
-.pretest-close{position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:13px;border:1px solid #303a58;background:#11182b;color:#cbd3e8;font-size:25px;line-height:1;cursor:pointer}
-.pretest-hero-icon{width:66px;height:66px;margin:2px auto 10px;border-radius:21px;display:grid;place-items:center;font-size:35px;background:radial-gradient(circle,#7c5cff44,#16213d 68%);border:1px solid #6e5bd655;box-shadow:0 0 34px #7359ff24}
-.pretest-pill{display:flex;width:max-content;margin:0 auto;font-size:9px}
-.pretest-sheet h2{text-align:center;font-size:29px;line-height:1.08;letter-spacing:-.03em;margin:11px 35px 8px}
-.pretest-subtitle{text-align:center;color:#909ab5;font-size:12px;line-height:1.5;max-width:470px;margin:0 auto}
-.pretest-chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:16px}
-.pretest-chips span{min-width:0;text-align:center;padding:9px 5px;border-radius:12px;background:#1a2136;border:1px solid #2b3552;color:#cfd6e8;font-size:9px;font-weight:800}
-.pretest-free{margin-top:13px;border-radius:20px;padding:13px;background:linear-gradient(145deg,rgba(26,33,53,.88),rgba(13,19,34,.92))}
-.pretest-free-head{display:flex;gap:10px;align-items:center}
-.pretest-free-icon{width:39px;height:39px;flex:none;border-radius:12px;display:grid;place-items:center;background:#241b45;color:#d3b9ff;font-size:20px}
-.pretest-free-head b{display:block;font-size:14px}.pretest-free-head small{display:block;color:#7f8aa5;font-size:9px;line-height:1.35;margin-top:3px}
-.pretest-puzzle{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:5px;margin-top:10px;border-radius:15px;background:#2b3347}
-.sample-cell{position:relative;aspect-ratio:1;border-radius:9px;background:#eef1f7;overflow:hidden;display:grid;place-items:center}
-.sample-cell:before{content:"";width:31%;height:31%;clip-path:polygon(50% 0,100% 100%,0 100%);background:#18213a;display:block;transform-origin:center}
-.sample-outline:before{background:transparent;border:3px solid #18213a;clip-path:none;width:31%;height:31%;transform:rotate(0deg);box-sizing:border-box}
-.triangle-left:before{transform:rotate(-90deg)}.triangle-up:before{transform:rotate(0deg)}.triangle-right:before{transform:rotate(90deg)}.triangle-down:before{transform:rotate(180deg)}
-.sample-question:before{display:none}.sample-question{font-size:31px;font-weight:900;color:#6958e8;background:repeating-linear-gradient(45deg,#eef1f7,#eef1f7 9px,#e3e7f0 9px,#e3e7f0 18px)}
-.pretest-puzzle-hint{margin:8px 2px 0;text-align:center;color:#8b96af;font-size:10px}
-.pretest-note{display:flex;gap:9px;align-items:flex-start;margin:12px 2px 0;color:#8e99b3}.pretest-note>span{color:#43d7a2;font-size:15px}.pretest-note p{margin:0;font-size:9px;line-height:1.45}
-.pretest-start{margin-top:13px;width:100%;font-size:14px}.pretest-later{display:block;width:100%;border:0;background:none;color:#78839e;padding:11px 8px 2px;font-size:10px;font-weight:700}
-@media(max-width:380px){.pretest-sheet{padding-left:14px;padding-right:14px}.pretest-sheet h2{font-size:25px}.pretest-chips{grid-template-columns:repeat(2,1fr)}.pretest-puzzle{gap:4px}}
+/* One-time test profile prompt. This is intentionally separate from the full
+   professional Profile screen so starting a test never navigates into editing. */
+.test-profile-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center;padding:18px;background:rgba(3,6,15,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.test-profile-overlay.hidden{display:none}
+.test-profile-sheet{width:min(100%,560px);max-height:92vh;overflow:auto;padding:22px;border:1px solid rgba(130,150,220,.22);border-radius:30px;background:linear-gradient(180deg,rgba(19,25,45,.98),rgba(10,15,29,.99));box-shadow:0 28px 80px rgba(0,0,0,.45)}
+.test-profile-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.test-profile-close{width:38px;height:38px;border-radius:13px;border:1px solid #303a58;background:#11182b;color:#cbd3e8;font-size:25px;line-height:1;cursor:pointer}
+.test-profile-icon{width:54px;height:54px;display:grid;place-items:center;border-radius:18px;background:linear-gradient(135deg,rgba(123,72,255,.25),rgba(44,111,255,.18));border:1px solid rgba(151,130,255,.25);font-size:28px}
+.test-profile-subtitle{margin:8px 0 18px;color:#98a3bd;line-height:1.5}
+.test-profile-form{display:grid;gap:13px}
+.test-profile-form label{display:grid;gap:7px;color:#aeb8d0;font-size:14px;font-weight:600}
+.test-profile-form input,.test-profile-form select{width:100%;box-sizing:border-box;border:1px solid rgba(120,143,210,.25);border-radius:17px;background:#0b1122;color:#f3f5ff;padding:15px 16px;font:inherit;outline:none}
+.test-profile-form input:focus,.test-profile-form select:focus{border-color:rgba(116,95,255,.75);box-shadow:0 0 0 3px rgba(116,95,255,.12)}
+.test-profile-note{display:flex;gap:10px;align-items:flex-start;margin:15px 0;color:#8995b1;font-size:13px;line-height:1.45}
+.test-profile-note span:first-child{color:#66e6a1;font-weight:800}
+.test-profile-sheet>.primary{width:100%;margin-top:4px}
+body.test-profile-open{overflow:hidden}
+
+/* IQ test information sheet: no sample/free puzzle is shown here. */
+body.test-info-open{overflow:hidden}
+.test-info-overlay{position:fixed;inset:0;z-index:101;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:rgba(3,6,15,.74);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px)}
+.test-info-overlay.hidden{display:none!important}
+.test-info-sheet{position:relative;width:min(100%,560px);max-height:calc(100vh - 24px);overflow:auto;padding:28px 20px calc(20px + env(safe-area-inset-bottom));border:1px solid rgba(151,163,201,.2);border-radius:30px 30px 22px 22px;background:linear-gradient(150deg,#171d32f7 0%,#0b1020fa 72%,#10152afa 100%);box-shadow:0 -18px 70px rgba(0,0,0,.52),inset 0 1px rgba(255,255,255,.055);animation:testInfoUp .22s ease-out}
+@keyframes testInfoUp{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
+.test-info-close{position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:13px;border:1px solid #303a58;background:#11182b;color:#cbd3e8;font-size:25px;line-height:1;cursor:pointer}
+.test-info-icon{width:74px;height:74px;margin:0 auto 12px;border-radius:23px;display:grid;place-items:center;font-size:40px;background:radial-gradient(circle,#7c5cff44,#16213d 68%);border:1px solid #6e5bd655;box-shadow:0 0 34px #7359ff24}
+.test-info-sheet>.pill{display:flex;width:max-content;margin:0 auto;font-size:9px}
+.test-info-sheet h2{text-align:center;font-size:29px;line-height:1.08;letter-spacing:-.03em;margin:12px 38px 8px}
+.test-info-subtitle{text-align:center;color:#909ab5;font-size:13px;line-height:1.55;max-width:470px;margin:0 auto}
+.test-info-chips{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:18px}
+.test-info-chips span{min-width:0;padding:12px 9px;text-align:center;border-radius:15px;background:#1a2136;border:1px solid #2b3552}
+.test-info-chips b{display:block;color:#eef2ff;font-size:13px;line-height:1.2}
+.test-info-chips small{display:block;color:#7f8aa5;font-size:9px;margin-top:4px}
+.test-info-note{display:flex;gap:10px;align-items:flex-start;margin:15px 2px 0;color:#8e99b3}
+.test-info-note>span{color:#43d7a2;font-size:17px;line-height:1.2}
+.test-info-note p{margin:0;font-size:10px;line-height:1.5}
+.test-info-sheet .primary{width:100%;margin-top:16px}
+@media(max-width:380px){.test-info-sheet{padding-left:14px;padding-right:14px}.test-info-sheet h2{font-size:25px}}
