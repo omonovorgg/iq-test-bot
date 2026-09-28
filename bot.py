@@ -1599,6 +1599,33 @@ def calculate_iq(answers):
 def public_iq_questions():
     return [{k:v for k,v in q.items() if k != "correct"} for q in IQ_QUESTIONS]
 
+def normalize_test_questions(raw, test_type: str, lang: str):
+    """Normalize question payloads from PostgreSQL before sending them to the Mini App.
+
+    Older deployments could save the JSONB question list as a JSON-encoded
+    string. asyncpg then returns that string, which makes the frontend treat
+    the string length as the number of questions (for example Q3/16973).
+    Unwrap at most three times and fall back to the canonical question set if
+    the stored payload is malformed or has the wrong number of questions.
+    """
+    expected = 18 if test_type == "IQ" else 6
+    value = raw
+
+    for _ in range(3):
+        if not isinstance(value, str):
+            break
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            value = None
+            break
+
+    if not isinstance(value, list) or len(value) != expected:
+        return public_iq_questions() if test_type == "IQ" else localized_behavior_questions(test_type, lang)
+
+    return value
+
+
 def new_session():
     # Always pass UUIDs to asyncpg as strings. PostgreSQL casts them explicitly
     # in the test/battle queries, and this also keeps legacy TEXT schemas from
